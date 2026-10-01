@@ -7,7 +7,7 @@ import type { StageKey } from "@/types";
 export function JourneyTracker({ stage, compact = false }: { stage: StageKey; compact?: boolean }) {
   const stages = getStages();
   const current = stageIndex(stage);
-  const cur = stages[current];
+  const cur = stages[Math.max(current, 0)]!;
   const pct = Math.round((current / (stages.length - 1)) * 100);
 
   return (
