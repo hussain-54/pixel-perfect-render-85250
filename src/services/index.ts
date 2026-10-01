@@ -23,7 +23,7 @@ export const getUniversities = () => delay(db.universities);
 export const getScholarships = () => delay(db.scholarships);
 export const getNotifications = (audience: "student" | "staff" | "admin") =>
   delay(db.notifications.filter((n) => n.audience === audience));
-export const getActivity = (studentId: string) => delay(db.activity[studentId] ?? db.activity.s1);
+export const getActivity = (studentId: string) => delay(db.activity[studentId] ?? db.activity['s1'] ?? []);
 export const getAuditLogs = () => delay(db.auditLogs);
 export const getMonthlyStats = () => delay(db.monthlyLeads);
 

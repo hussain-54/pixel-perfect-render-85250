@@ -28,8 +28,8 @@ export const consultants: Consultant[] = [
 
 const s = (id: number, name: string, destination: string, program: string, level: string, stage: Student["stage"], consultantId: string, lastActivity: string): Student => ({
   id: `s${id}`, caseId: `GR-${1020 + id}`, name,
-  email: `${name.split(" ")[0].toLowerCase()}@example.com`, phone: `+92 3${id}0 55${id}0${id}12`, whatsapp: `+92 3${id}0 55${id}0${id}12`,
-  city: ["Lahore", "Karachi", "Islamabad", "Faisalabad", "Multan"][id % 5], dob: `199${id % 9}-0${(id % 9) + 1}-14`,
+  email: `${(name.split(" ")[0] ?? "").toLowerCase()}@example.com`, phone: `+92 3${id}0 55${id}0${id}12`, whatsapp: `+92 3${id}0 55${id}0${id}12`,
+  city: ["Lahore", "Karachi", "Islamabad", "Faisalabad", "Multan"][id % 5] ?? "Lahore", dob: `199${id % 9}-0${(id % 9) + 1}-14`,
   destination, program, studyLevel: level, stage, consultantId, lastActivity,
   qualification: level === "Master's" ? "BS Computer Science" : "FSc Pre-Engineering",
   institution: level === "Master's" ? "University of the Punjab" : "Punjab College", grade: level === "Master's" ? "CGPA 3.4 / 4.0" : "86%",
