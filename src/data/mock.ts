@@ -1,0 +1,169 @@
+import type {
+  Stage, Consultant, Student, Appointment, StudentDocument, Application, Lead,
+  University, Scholarship, Notification, ActivityItem, AuditLog,
+} from "@/types";
+
+export const STAGES: Stage[] = [
+  { key: "profile_submitted", label: "Profile Submitted", nextAction: "Book your free consultation" },
+  { key: "consultation_completed", label: "Consultation Completed", nextAction: "Upload your required documents" },
+  { key: "documents_submitted", label: "Documents Submitted", nextAction: "Our team will begin reviewing your documents" },
+  { key: "documents_under_review", label: "Documents Under Review", nextAction: "Your documents are currently being reviewed by our team." },
+  { key: "university_shortlisting", label: "University Shortlisting", nextAction: "Review and confirm your university shortlist" },
+  { key: "application_submitted", label: "Application Submitted", nextAction: "Wait for university decisions" },
+  { key: "offer_received", label: "Offer Received", nextAction: "Accept your offer and pay the deposit" },
+  { key: "visa_preparation", label: "Visa Preparation", nextAction: "Prepare your financial documents for visa" },
+  { key: "visa_submitted", label: "Visa Submitted", nextAction: "Wait for the embassy decision" },
+  { key: "visa_approved", label: "Visa Approved", nextAction: "Book flights and accommodation" },
+  { key: "travel_preparation", label: "Travel Preparation", nextAction: "Attend your pre-departure briefing" },
+  { key: "completed", label: "Completed", nextAction: "Welcome to your new university!" },
+];
+
+export const consultants: Consultant[] = [
+  { id: "c1", name: "Ayesha Khan", role: "Senior Consultant", department: "UK & Europe", email: "ayesha@globalroots.pk", phone: "+92 300 1112233", status: "Active", metrics: { students: 42, appointmentsCompleted: 61, applicationsSubmitted: 28, offers: 18, visaCases: 12, completedCases: 9 } },
+  { id: "c2", name: "Bilal Ahmed", role: "Consultant", department: "Canada & USA", email: "bilal@globalroots.pk", phone: "+92 301 4445566", status: "Active", metrics: { students: 37, appointmentsCompleted: 54, applicationsSubmitted: 24, offers: 15, visaCases: 10, completedCases: 7 } },
+  { id: "c3", name: "Sana Malik", role: "Visa Officer", department: "Visa Services", email: "sana@globalroots.pk", phone: "+92 302 7778899", status: "Active", metrics: { students: 29, appointmentsCompleted: 40, applicationsSubmitted: 14, offers: 9, visaCases: 22, completedCases: 11 } },
+  { id: "c4", name: "Usman Tariq", role: "Consultant", department: "Australia & NZ", email: "usman@globalroots.pk", phone: "+92 303 1231234", status: "Active", metrics: { students: 33, appointmentsCompleted: 45, applicationsSubmitted: 21, offers: 13, visaCases: 8, completedCases: 6 } },
+  { id: "c5", name: "Hira Siddiqui", role: "Junior Consultant", department: "Asia", email: "hira@globalroots.pk", phone: "+92 304 9876543", status: "Inactive", metrics: { students: 18, appointmentsCompleted: 22, applicationsSubmitted: 9, offers: 5, visaCases: 3, completedCases: 2 } },
+];
+
+const s = (id: number, name: string, destination: string, program: string, level: string, stage: Student["stage"], consultantId: string, lastActivity: string): Student => ({
+  id: `s${id}`, caseId: `GR-${1020 + id}`, name,
+  email: `${name.split(" ")[0].toLowerCase()}@example.com`, phone: `+92 3${id}0 55${id}0${id}12`, whatsapp: `+92 3${id}0 55${id}0${id}12`,
+  city: ["Lahore", "Karachi", "Islamabad", "Faisalabad", "Multan"][id % 5], dob: `199${id % 9}-0${(id % 9) + 1}-14`,
+  destination, program, studyLevel: level, stage, consultantId, lastActivity,
+  qualification: level === "Master's" ? "BS Computer Science" : "FSc Pre-Engineering",
+  institution: level === "Master's" ? "University of the Punjab" : "Punjab College", grade: level === "Master's" ? "CGPA 3.4 / 4.0" : "86%",
+  englishTest: "IELTS 7.0",
+});
+
+export const students: Student[] = [
+  s(1, "Ali Raza", "UK", "MSc Data Science", "Master's", "documents_under_review", "c1", "2026-10-01"),
+  s(2, "Fatima Noor", "Canada", "BBA", "Bachelor's", "application_submitted", "c2", "2026-09-30"),
+  s(3, "Hamza Iqbal", "Australia", "MEng Civil", "Master's", "offer_received", "c4", "2026-09-29"),
+  s(4, "Zainab Shah", "Germany", "MSc Mechanical", "Master's", "university_shortlisting", "c1", "2026-09-28"),
+  s(5, "Omar Farooq", "USA", "MS Computer Science", "Master's", "visa_preparation", "c2", "2026-09-27"),
+  s(6, "Maryam Javed", "UK", "LLM", "Master's", "visa_approved", "c3", "2026-09-26"),
+  s(7, "Saad Hussain", "Malaysia", "BSc IT", "Bachelor's", "consultation_completed", "c5", "2026-09-25"),
+  s(8, "Amna Rehman", "Italy", "MA Design", "Master's", "documents_submitted", "c1", "2026-09-24"),
+  s(9, "Hassan Ali", "Canada", "PG Diploma Hospitality", "Diploma", "visa_submitted", "c3", "2026-09-22"),
+  s(10, "Ayesha Butt", "Finland", "BSc Nursing", "Bachelor's", "profile_submitted", "c4", "2026-09-20"),
+];
+
+export const appointments: Appointment[] = [
+  { id: "a1", studentId: "s1", type: "Application Review", date: "2026-10-01", time: "11:00", consultantId: "c1", destination: "UK", studyLevel: "Master's", status: "Confirmed" },
+  { id: "a2", studentId: "s4", type: "University Counseling", date: "2026-10-01", time: "14:30", consultantId: "c1", destination: "Germany", studyLevel: "Master's", status: "Requested" },
+  { id: "a3", studentId: "s5", type: "Visa Consultation", date: "2026-10-01", time: "16:00", consultantId: "c2", destination: "USA", studyLevel: "Master's", status: "Confirmed" },
+  { id: "a4", studentId: "s1", type: "Scholarship Consultation", date: "2026-10-06", time: "12:00", consultantId: "c1", destination: "UK", studyLevel: "Master's", status: "Confirmed" },
+  { id: "a5", studentId: "s10", type: "Free Consultation", date: "2026-10-03", time: "10:00", consultantId: "c4", destination: "Finland", studyLevel: "Bachelor's", status: "Rescheduled" },
+  { id: "a6", studentId: "s1", type: "Free Consultation", date: "2026-09-12", time: "15:00", consultantId: "c1", destination: "UK", studyLevel: "Master's", status: "Completed", notes: "Strong profile. Shortlist Russell Group universities." },
+  { id: "a7", studentId: "s7", type: "Free Consultation", date: "2026-09-20", time: "13:00", consultantId: "c5", destination: "Malaysia", studyLevel: "Bachelor's", status: "Completed" },
+  { id: "a8", studentId: "s2", type: "Application Review", date: "2026-09-18", time: "11:30", consultantId: "c2", destination: "Canada", studyLevel: "Bachelor's", status: "Cancelled" },
+];
+
+export const documents: StudentDocument[] = [
+  { id: "d1", studentId: "s1", name: "Passport.pdf", category: "Passport", uploaded: "2026-09-14", status: "Approved", reviewer: "Ayesha Khan" },
+  { id: "d2", studentId: "s1", name: "CNIC_front_back.pdf", category: "CNIC", uploaded: "2026-09-14", status: "Approved", reviewer: "Ayesha Khan" },
+  { id: "d3", studentId: "s1", name: "BS_Degree.pdf", category: "Academic Certificates", uploaded: "2026-09-15", status: "Pending Review" },
+  { id: "d4", studentId: "s1", name: "BS_Transcript.pdf", category: "Academic Transcripts", uploaded: "2026-09-15", status: "Pending Review" },
+  { id: "d5", studentId: "s1", name: "IELTS_TRF.pdf", category: "IELTS / English Test", uploaded: "2026-09-16", status: "Approved", reviewer: "Ayesha Khan" },
+  { id: "d6", studentId: "s1", name: "SOP_draft_v1.docx", category: "SOP", uploaded: "2026-09-18", status: "Needs Correction", comment: "Please expand your career goals section and mention why you chose the UK.", reviewer: "Ayesha Khan" },
+  { id: "d7", studentId: "s1", name: "Bank_Statement.pdf", category: "Financial Documents", uploaded: "2026-09-20", status: "Rejected", comment: "Statement must cover the last 6 months and be bank-stamped.", reviewer: "Sana Malik" },
+  { id: "d8", studentId: "s2", name: "Passport.pdf", category: "Passport", uploaded: "2026-09-10", status: "Approved", reviewer: "Bilal Ahmed" },
+  { id: "d9", studentId: "s2", name: "Inter_Marksheet.pdf", category: "Academic Transcripts", uploaded: "2026-09-11", status: "Approved", reviewer: "Bilal Ahmed" },
+  { id: "d10", studentId: "s4", name: "CV_2026.pdf", category: "CV", uploaded: "2026-09-27", status: "Pending Review" },
+  { id: "d11", studentId: "s4", name: "Recommendation_Prof.pdf", category: "Recommendation Letter", uploaded: "2026-09-27", status: "Pending Review" },
+  { id: "d12", studentId: "s5", name: "I-20.pdf", category: "Other", uploaded: "2026-09-25", status: "Approved", reviewer: "Bilal Ahmed" },
+  { id: "d13", studentId: "s8", name: "Portfolio.pdf", category: "Other", uploaded: "2026-09-24", status: "Pending Review" },
+  { id: "d14", studentId: "s8", name: "Photo.jpg", category: "Photographs", uploaded: "2026-09-24", status: "Needs Correction", comment: "Use a white background, 35x45mm.", reviewer: "Ayesha Khan" },
+  { id: "d15", studentId: "s9", name: "Sponsor_Letter.pdf", category: "Financial Documents", uploaded: "2026-09-19", status: "Approved", reviewer: "Sana Malik" },
+];
+
+export const applications: Application[] = [
+  { id: "APP-3001", studentId: "s1", university: "University of Manchester", country: "UK", program: "MSc Data Science", intake: "Jan 2027", appliedOn: "—", deadline: "2026-11-15", status: "Ready", officerId: "c1" },
+  { id: "APP-3002", studentId: "s1", university: "University of Leeds", country: "UK", program: "MSc Data Science & Analytics", intake: "Jan 2027", appliedOn: "—", deadline: "2026-11-30", status: "Draft", officerId: "c1" },
+  { id: "APP-3003", studentId: "s2", university: "University of Toronto", country: "Canada", program: "BBA", intake: "Sep 2027", appliedOn: "2026-09-21", deadline: "2027-01-15", status: "Submitted", officerId: "c2" },
+  { id: "APP-3004", studentId: "s2", university: "York University", country: "Canada", program: "BBA", intake: "Sep 2027", appliedOn: "2026-09-22", deadline: "2027-02-01", status: "Under Review", officerId: "c2" },
+  { id: "APP-3005", studentId: "s3", university: "University of Melbourne", country: "Australia", program: "MEng Civil", intake: "Feb 2027", appliedOn: "2026-08-10", deadline: "2026-10-31", status: "Offer Received", officerId: "c4" },
+  { id: "APP-3006", studentId: "s5", university: "Arizona State University", country: "USA", program: "MS Computer Science", intake: "Jan 2027", appliedOn: "2026-07-02", deadline: "2026-09-01", status: "Offer Received", officerId: "c2" },
+  { id: "APP-3007", studentId: "s6", university: "King's College London", country: "UK", program: "LLM", intake: "Sep 2026", appliedOn: "2026-03-11", deadline: "2026-05-01", status: "Offer Received", officerId: "c3" },
+  { id: "APP-3008", studentId: "s4", university: "TU Munich", country: "Germany", program: "MSc Mechanical", intake: "Apr 2027", appliedOn: "—", deadline: "2026-12-15", status: "Draft", officerId: "c1" },
+  { id: "APP-3009", studentId: "s9", university: "Humber College", country: "Canada", program: "PG Diploma Hospitality", intake: "Jan 2027", appliedOn: "2026-08-01", deadline: "2026-09-15", status: "Offer Received", officerId: "c3" },
+  { id: "APP-3010", studentId: "s3", university: "Monash University", country: "Australia", program: "MEng Civil", intake: "Feb 2027", appliedOn: "2026-08-12", deadline: "2026-10-31", status: "Rejected", officerId: "c4" },
+];
+
+export const leads: Lead[] = [
+  { id: "L-501", name: "Ahmed Nawaz", email: "ahmed.n@example.com", phone: "+92 321 1234567", country: "UK", program: "MBA", source: "Website", consultantId: null, status: "New", created: "2026-10-01" },
+  { id: "L-502", name: "Rabia Aslam", email: "rabia@example.com", phone: "+92 322 2345678", country: "Canada", program: "BSc Nursing", source: "Facebook", consultantId: "c2", status: "Contacted", created: "2026-09-30" },
+  { id: "L-503", name: "Danish Mehmood", email: "danish@example.com", phone: "+92 323 3456789", country: "Australia", program: "MIT", source: "Instagram", consultantId: "c4", status: "Consultation Booked", created: "2026-09-29" },
+  { id: "L-504", name: "Iqra Saleem", email: "iqra@example.com", phone: "+92 324 4567890", country: "Germany", program: "MSc AI", source: "Referral", consultantId: "c1", status: "Qualified", created: "2026-09-27" },
+  { id: "L-505", name: "Talha Riaz", email: "talha@example.com", phone: "+92 325 5678901", country: "USA", program: "MS Data Science", source: "Website", consultantId: "c2", status: "Converted", created: "2026-09-22" },
+  { id: "L-506", name: "Mahnoor Ali", email: "mahnoor@example.com", phone: "+92 326 6789012", country: "France", program: "MBA", source: "Walk-in", consultantId: null, status: "New", created: "2026-09-30" },
+  { id: "L-507", name: "Faizan Qureshi", email: "faizan@example.com", phone: "+92 327 7890123", country: "Japan", program: "MEng Robotics", source: "LinkedIn", consultantId: "c5", status: "Lost", created: "2026-09-15" },
+  { id: "L-508", name: "Sobia Khalid", email: "sobia@example.com", phone: "+92 328 8901234", country: "Italy", program: "MA Fashion", source: "Expo", consultantId: "c1", status: "Contacted", created: "2026-09-26" },
+];
+
+export const universities: University[] = [
+  { id: "u1", name: "University of Manchester", country: "UK", city: "Manchester", levels: ["Bachelor's", "Master's", "PhD"], programs: ["Business", "Data Science", "Engineering"], scholarship: true, ranking: "QS #34" },
+  { id: "u2", name: "King's College London", country: "UK", city: "London", levels: ["Bachelor's", "Master's"], programs: ["Law", "Medicine", "Social Sciences"], scholarship: true, ranking: "QS #40" },
+  { id: "u3", name: "University of Toronto", country: "Canada", city: "Toronto", levels: ["Bachelor's", "Master's", "PhD"], programs: ["Business", "Computer Science", "Engineering"], scholarship: true, ranking: "QS #25" },
+  { id: "u4", name: "University of Melbourne", country: "Australia", city: "Melbourne", levels: ["Bachelor's", "Master's"], programs: ["Engineering", "Medicine", "Arts"], scholarship: true, ranking: "QS #13" },
+  { id: "u5", name: "TU Munich", country: "Germany", city: "Munich", levels: ["Bachelor's", "Master's"], programs: ["Engineering", "Computer Science"], scholarship: false, ranking: "QS #28" },
+  { id: "u6", name: "Arizona State University", country: "USA", city: "Tempe", levels: ["Bachelor's", "Master's"], programs: ["Computer Science", "Business", "Data Science"], scholarship: true, ranking: "QS #200" },
+  { id: "u7", name: "Politecnico di Milano", country: "Italy", city: "Milan", levels: ["Bachelor's", "Master's"], programs: ["Arts & Design", "Engineering"], scholarship: true, ranking: "QS #111" },
+  { id: "u8", name: "Sciences Po", country: "France", city: "Paris", levels: ["Master's"], programs: ["Social Sciences", "Business"], scholarship: false, ranking: "QS #319" },
+  { id: "u9", name: "University of Malaya", country: "Malaysia", city: "Kuala Lumpur", levels: ["Bachelor's", "Master's", "PhD"], programs: ["Computer Science", "Medicine"], scholarship: true, ranking: "QS #60" },
+  { id: "u10", name: "University of Helsinki", country: "Finland", city: "Helsinki", levels: ["Bachelor's", "Master's"], programs: ["Data Science", "Social Sciences"], scholarship: true, ranking: "QS #115" },
+];
+
+export const scholarships: Scholarship[] = [
+  { id: "sc1", name: "Chevening Scholarship", country: "UK", level: "Master's", funding: "Fully Funded", field: "Any", eligibility: "2+ years work experience, leadership potential", deadline: "2026-11-05" },
+  { id: "sc2", name: "Commonwealth Shared Scholarship", country: "UK", level: "Master's", funding: "Fully Funded", field: "Development", eligibility: "Commonwealth citizens, financial need", deadline: "2026-12-14" },
+  { id: "sc3", name: "DAAD EPOS", country: "Germany", level: "Master's", funding: "Fully Funded", field: "Engineering", eligibility: "Bachelor's + 2 years experience", deadline: "2026-10-31" },
+  { id: "sc4", name: "Lester B. Pearson", country: "Canada", level: "Bachelor's", funding: "Fully Funded", field: "Any", eligibility: "Exceptional academic record, school nomination", deadline: "2026-11-30" },
+  { id: "sc5", name: "Australia Awards", country: "Australia", level: "Master's", funding: "Fully Funded", field: "Any", eligibility: "Development-related careers", deadline: "2027-04-30" },
+  { id: "sc6", name: "Fulbright Program", country: "USA", level: "Master's", funding: "Fully Funded", field: "Any", eligibility: "Strong academics, 16 years education", deadline: "2027-02-15" },
+  { id: "sc7", name: "Invest Your Talent in Italy", country: "Italy", level: "Master's", funding: "Partial Funding", field: "Engineering", eligibility: "Selected programs only", deadline: "2027-03-01" },
+  { id: "sc8", name: "Eiffel Excellence", country: "France", level: "Master's", funding: "Partial Funding", field: "Social Sciences", eligibility: "Under 30, university nomination", deadline: "2027-01-08" },
+  { id: "sc9", name: "Vice-Chancellor's International", country: "UK", level: "Bachelor's", funding: "Tuition Waiver", field: "Business", eligibility: "AAA equivalent grades", deadline: "2027-05-31" },
+  { id: "sc10", name: "MEXT Scholarship", country: "Japan", level: "PhD", funding: "Fully Funded", field: "Data Science", eligibility: "Under 35, research proposal", deadline: "2027-05-15" },
+];
+
+export const notifications: Notification[] = [
+  { id: "n1", audience: "student", title: "Appointment confirmed", body: "Application Review with Ayesha Khan on 1 Oct, 11:00.", time: "2h ago", read: false },
+  { id: "n2", audience: "student", title: "Document needs correction", body: "Your SOP needs a few changes before approval.", time: "1d ago", read: false },
+  { id: "n3", audience: "student", title: "Document approved", body: "Passport has been approved.", time: "2d ago", read: true },
+  { id: "n4", audience: "student", title: "Consultant assigned", body: "Ayesha Khan is now your consultant.", time: "3w ago", read: true },
+  { id: "n5", audience: "staff", title: "New appointment", body: "Zainab Shah requested University Counseling.", time: "30m ago", read: false },
+  { id: "n6", audience: "staff", title: "New document", body: "Ali Raza uploaded BS_Transcript.pdf.", time: "3h ago", read: false },
+  { id: "n7", audience: "staff", title: "Assigned student", body: "Amna Rehman was assigned to you.", time: "1d ago", read: true },
+  { id: "n8", audience: "admin", title: "New lead", body: "Ahmed Nawaz enquired about MBA in the UK.", time: "10m ago", read: false },
+  { id: "n9", audience: "admin", title: "Important activity", body: "3 visa decisions received this week.", time: "5h ago", read: false },
+  { id: "n10", audience: "admin", title: "System update", body: "Reports module refreshed with Q3 data.", time: "2d ago", read: true },
+];
+
+export const activity: Record<string, ActivityItem[]> = {
+  s1: [
+    { date: "2026-09-10", title: "Profile submitted", by: "Ali Raza" },
+    { date: "2026-09-12", title: "Consultation completed", by: "Ayesha Khan" },
+    { date: "2026-09-14", title: "Passport uploaded", by: "Ali Raza" },
+    { date: "2026-09-15", title: "Transcript uploaded", by: "Ali Raza" },
+    { date: "2026-09-16", title: "Passport approved", by: "Ayesha Khan" },
+    { date: "2026-09-18", title: "SOP returned for correction", by: "Ayesha Khan" },
+    { date: "2026-09-25", title: "University shortlist updated", by: "Ayesha Khan" },
+  ],
+};
+
+export const auditLogs: AuditLog[] = [
+  { id: "al1", user: "Admin", action: "Updated student stage", entity: "Student", entityId: "GR-1021", date: "2026-10-01", time: "10:42" },
+  { id: "al2", user: "Ayesha Khan", action: "Approved document", entity: "Document", entityId: "d1", date: "2026-09-30", time: "16:05" },
+  { id: "al3", user: "Bilal Ahmed", action: "Submitted application", entity: "Application", entityId: "APP-3003", date: "2026-09-29", time: "12:18" },
+  { id: "al4", user: "Admin", action: "Assigned consultant", entity: "Lead", entityId: "L-504", date: "2026-09-28", time: "09:30" },
+  { id: "al5", user: "Sana Malik", action: "Rejected document", entity: "Document", entityId: "d7", date: "2026-09-27", time: "15:47" },
+  { id: "al6", user: "Admin", action: "Imported students (CSV)", entity: "Import", entityId: "IMP-07", date: "2026-09-25", time: "11:02" },
+];
+
+export const monthlyLeads = [
+  { month: "May", leads: 64, applications: 18 }, { month: "Jun", leads: 78, applications: 22 },
+  { month: "Jul", leads: 92, applications: 30 }, { month: "Aug", leads: 110, applications: 37 },
+  { month: "Sep", leads: 128, applications: 44 }, { month: "Oct", leads: 96, applications: 41 },
+];
