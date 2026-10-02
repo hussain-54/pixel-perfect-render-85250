@@ -57,8 +57,12 @@ export interface Student {
   englishTest: string;
 }
 
+<<<<<<< HEAD
 export type AppointmentStatus =
   "Requested" | "Confirmed" | "Rescheduled" | "Completed" | "Cancelled" | "No Show";
+=======
+export type AppointmentStatus = "Requested" | "Confirmed" | "Rescheduled" | "Completed" | "Cancelled" | "No Show";
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
 export type AppointmentType =
   | "Free Consultation"
   | "University Counseling"
@@ -92,7 +96,17 @@ export interface StudentDocument {
 }
 
 export type ApplicationStatus =
+<<<<<<< HEAD
   "Draft" | "Ready" | "Submitted" | "Under Review" | "Offer Received" | "Rejected" | "Withdrawn";
+=======
+  | "Draft"
+  | "Ready"
+  | "Submitted"
+  | "Under Review"
+  | "Offer Received"
+  | "Rejected"
+  | "Withdrawn";
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
 export interface Application {
   id: string;
   studentId: string;
@@ -106,8 +120,12 @@ export interface Application {
   officerId: string;
 }
 
+<<<<<<< HEAD
 export type LeadStatus =
   "New" | "Contacted" | "Consultation Booked" | "Qualified" | "Converted" | "Lost";
+=======
+export type LeadStatus = "New" | "Contacted" | "Consultation Booked" | "Qualified" | "Converted" | "Lost";
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
 export interface Lead {
   id: string;
   name: string;

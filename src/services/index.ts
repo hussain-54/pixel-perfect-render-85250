@@ -4,7 +4,11 @@
  */
 import * as db from "@/data/mock";
 
+<<<<<<< HEAD
 const delay = <T>(v: T): Promise<T> => new Promise((r) => setTimeout(() => r(v), 150));
+=======
+const delay = <T,>(v: T): Promise<T> => new Promise((r) => setTimeout(() => r(v), 150));
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
 
 export const getStages = () => db.STAGES;
 export const getStudents = () => delay(db.students);
@@ -23,8 +27,12 @@ export const getUniversities = () => delay(db.universities);
 export const getScholarships = () => delay(db.scholarships);
 export const getNotifications = (audience: "student" | "staff" | "admin") =>
   delay(db.notifications.filter((n) => n.audience === audience));
+<<<<<<< HEAD
 export const getActivity = (studentId: string) =>
   delay(db.activity[studentId] ?? db.activity["s1"] ?? []);
+=======
+export const getActivity = (studentId: string) => delay(db.activity[studentId] ?? db.activity['s1'] ?? []);
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
 export const getAuditLogs = () => delay(db.auditLogs);
 export const getMonthlyStats = () => delay(db.monthlyLeads);
 
@@ -35,5 +43,9 @@ export const stageIndex = (key: string) => db.STAGES.findIndex((s) => s.key === 
 export const stageLabel = (key: string) => db.STAGES.find((s) => s.key === key)?.label ?? key;
 
 /** Mock mutation — resolves successfully; wire to backend later. */
+<<<<<<< HEAD
 export const submitConsultationRequest = (_data: Record<string, string>) =>
   delay({ ok: true, ref: "REQ-" + Math.floor(Math.random() * 9000 + 1000) });
+=======
+export const submitConsultationRequest = (_data: Record<string, string>) => delay({ ok: true, ref: "REQ-" + Math.floor(Math.random() * 9000 + 1000) });
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d

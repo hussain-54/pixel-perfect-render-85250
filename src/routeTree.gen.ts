@@ -11,13 +11,17 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
+<<<<<<< HEAD
 import { Route as AdminRouteRouteImport } from './routes/admin/route'
+=======
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as DestinationsRouteImport } from './routes/destinations'
 import { Route as ProgramsRouteImport } from './routes/programs'
 import { Route as ResourcesRouteImport } from './routes/resources'
 import { Route as ScholarshipsRouteImport } from './routes/scholarships'
 import { Route as ServicesRouteImport } from './routes/services'
+<<<<<<< HEAD
 import { Route as StaffRouteRouteImport } from './routes/staff/route'
 import { Route as StudentRouteRouteImport } from './routes/student/route'
 import { Route as StudentVisaRouteImport } from './routes/student-visa'
@@ -55,6 +59,11 @@ import { Route as StudentDashboardRouteImport } from './routes/student/dashboard
 import { Route as StudentDocumentsRouteImport } from './routes/student/documents'
 import { Route as StudentNotificationsRouteImport } from './routes/student/notifications'
 import { Route as StudentProfileRouteImport } from './routes/student/profile'
+=======
+import { Route as StudentVisaRouteImport } from './routes/student-visa'
+import { Route as SuccessStoriesRouteImport } from './routes/success-stories'
+import { Route as UniversitiesRouteImport } from './routes/universities'
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -66,11 +75,14 @@ const AboutRoute = AboutRouteImport.update({
   path: '/about',
   getParentRoute: () => rootRouteImport,
 } as any)
+<<<<<<< HEAD
 const AdminRouteRoute = AdminRouteRouteImport.update({
   id: '/admin',
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
+=======
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
 const ContactRoute = ContactRouteImport.update({
   id: '/contact',
   path: '/contact',
@@ -101,6 +113,7 @@ const ServicesRoute = ServicesRouteImport.update({
   path: '/services',
   getParentRoute: () => rootRouteImport,
 } as any)
+<<<<<<< HEAD
 const StaffRouteRoute = StaffRouteRouteImport.update({
   id: '/staff',
   path: '/staff',
@@ -111,6 +124,8 @@ const StudentRouteRoute = StudentRouteRouteImport.update({
   path: '/student',
   getParentRoute: () => rootRouteImport,
 } as any)
+=======
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
 const StudentVisaRoute = StudentVisaRouteImport.update({
   id: '/student-visa',
   path: '/student-visa',
@@ -126,6 +141,7 @@ const UniversitiesRoute = UniversitiesRouteImport.update({
   path: '/universities',
   getParentRoute: () => rootRouteImport,
 } as any)
+<<<<<<< HEAD
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
@@ -292,6 +308,11 @@ export interface FileRoutesByFullPath {
   '/admin': typeof AdminRouteRouteWithChildren
   '/staff': typeof StaffRouteRouteWithChildren
   '/student': typeof StudentRouteRouteWithChildren
+=======
+
+export interface FileRoutesByFullPath {
+  '/': typeof IndexRoute
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
   '/about': typeof AboutRoute
   '/contact': typeof ContactRoute
   '/destinations': typeof DestinationsRoute
@@ -302,6 +323,7 @@ export interface FileRoutesByFullPath {
   '/student-visa': typeof StudentVisaRoute
   '/success-stories': typeof SuccessStoriesRoute
   '/universities': typeof UniversitiesRoute
+<<<<<<< HEAD
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
@@ -334,6 +356,8 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AdminIndexRoute
   '/staff/': typeof StaffIndexRoute
   '/student/': typeof StudentIndexRoute
+=======
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -347,6 +371,7 @@ export interface FileRoutesByTo {
   '/student-visa': typeof StudentVisaRoute
   '/success-stories': typeof SuccessStoriesRoute
   '/universities': typeof UniversitiesRoute
+<<<<<<< HEAD
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
@@ -379,13 +404,18 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/staff': typeof StaffIndexRoute
   '/student': typeof StudentIndexRoute
+=======
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+<<<<<<< HEAD
   '/admin': typeof AdminRouteRouteWithChildren
   '/staff': typeof StaffRouteRouteWithChildren
   '/student': typeof StudentRouteRouteWithChildren
+=======
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
   '/about': typeof AboutRoute
   '/contact': typeof ContactRoute
   '/destinations': typeof DestinationsRoute
@@ -396,6 +426,7 @@ export interface FileRoutesById {
   '/student-visa': typeof StudentVisaRoute
   '/success-stories': typeof SuccessStoriesRoute
   '/universities': typeof UniversitiesRoute
+<<<<<<< HEAD
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
@@ -428,14 +459,19 @@ export interface FileRoutesById {
   '/admin/': typeof AdminIndexRoute
   '/staff/': typeof StaffIndexRoute
   '/student/': typeof StudentIndexRoute
+=======
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+<<<<<<< HEAD
     | '/admin'
     | '/staff'
     | '/student'
+=======
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
     | '/about'
     | '/contact'
     | '/destinations'
@@ -446,6 +482,7 @@ export interface FileRouteTypes {
     | '/student-visa'
     | '/success-stories'
     | '/universities'
+<<<<<<< HEAD
     | '/admin/applications'
     | '/admin/appointments'
     | '/admin/audit-logs'
@@ -478,6 +515,8 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/staff/'
     | '/student/'
+=======
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -491,6 +530,7 @@ export interface FileRouteTypes {
     | '/student-visa'
     | '/success-stories'
     | '/universities'
+<<<<<<< HEAD
     | '/admin/applications'
     | '/admin/appointments'
     | '/admin/audit-logs'
@@ -529,6 +569,11 @@ export interface FileRouteTypes {
     | '/admin'
     | '/staff'
     | '/student'
+=======
+  id:
+    | '__root__'
+    | '/'
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
     | '/about'
     | '/contact'
     | '/destinations'
@@ -539,6 +584,7 @@ export interface FileRouteTypes {
     | '/student-visa'
     | '/success-stories'
     | '/universities'
+<<<<<<< HEAD
     | '/admin/applications'
     | '/admin/appointments'
     | '/admin/audit-logs'
@@ -571,13 +617,18 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/staff/'
     | '/student/'
+=======
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+<<<<<<< HEAD
   AdminRouteRoute: typeof AdminRouteRouteWithChildren
   StaffRouteRoute: typeof StaffRouteRouteWithChildren
   StudentRouteRoute: typeof StudentRouteRouteWithChildren
+=======
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
   AboutRoute: typeof AboutRoute
   ContactRoute: typeof ContactRoute
   DestinationsRoute: typeof DestinationsRoute
@@ -606,6 +657,7 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AboutRouteImport
       parentRoute: typeof rootRouteImport
     }
+<<<<<<< HEAD
     '/admin': {
       id: '/admin'
       path: '/admin'
@@ -613,6 +665,8 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
+=======
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
     '/contact': {
       id: '/contact'
       path: '/contact'
@@ -655,6 +709,7 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof ServicesRouteImport
       parentRoute: typeof rootRouteImport
     }
+<<<<<<< HEAD
     '/staff': {
       id: '/staff'
       path: '/staff'
@@ -669,6 +724,8 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StudentRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
+=======
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
     '/student-visa': {
       id: '/student-visa'
       path: '/student-visa'
@@ -690,6 +747,7 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof UniversitiesRouteImport
       parentRoute: typeof rootRouteImport
     }
+<<<<<<< HEAD
     '/admin/': {
       id: '/admin/'
       path: '/'
@@ -1016,6 +1074,13 @@ const rootRouteChildren: RootRouteChildren = {
   AdminRouteRoute: AdminRouteRouteWithChildren,
   StaffRouteRoute: StaffRouteRouteWithChildren,
   StudentRouteRoute: StudentRouteRouteWithChildren,
+=======
+  }
+}
+
+const rootRouteChildren: RootRouteChildren = {
+  IndexRoute: IndexRoute,
+>>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
   AboutRoute: AboutRoute,
   ContactRoute: ContactRoute,
   DestinationsRoute: DestinationsRoute,
