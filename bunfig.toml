@@ -1,0 +1,5 @@
+minimumReleaseAge = 432000 # 5 days, in seconds
+
+# Exclude packages that are updated frequently from the minimum release age check
+# These packages are known to be safe and their updates should not be delayed
+minimumReleaseAgeExcludes = ["@tanstack/react-start", "@tanstack/react-router", "@tanstack/router-plugin", "nitro", "vite"]
