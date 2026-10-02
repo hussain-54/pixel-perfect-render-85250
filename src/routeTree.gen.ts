@@ -10,33 +10,167 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AboutRouteImport } from './routes/about'
+import { Route as ContactRouteImport } from './routes/contact'
+import { Route as DestinationsRouteImport } from './routes/destinations'
+import { Route as ProgramsRouteImport } from './routes/programs'
+import { Route as ResourcesRouteImport } from './routes/resources'
+import { Route as ScholarshipsRouteImport } from './routes/scholarships'
+import { Route as ServicesRouteImport } from './routes/services'
+import { Route as StudentVisaRouteImport } from './routes/student-visa'
+import { Route as SuccessStoriesRouteImport } from './routes/success-stories'
+import { Route as UniversitiesRouteImport } from './routes/universities'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AboutRoute = AboutRouteImport.update({
+  id: '/about',
+  path: '/about',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ContactRoute = ContactRouteImport.update({
+  id: '/contact',
+  path: '/contact',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DestinationsRoute = DestinationsRouteImport.update({
+  id: '/destinations',
+  path: '/destinations',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ProgramsRoute = ProgramsRouteImport.update({
+  id: '/programs',
+  path: '/programs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResourcesRoute = ResourcesRouteImport.update({
+  id: '/resources',
+  path: '/resources',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ScholarshipsRoute = ScholarshipsRouteImport.update({
+  id: '/scholarships',
+  path: '/scholarships',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ServicesRoute = ServicesRouteImport.update({
+  id: '/services',
+  path: '/services',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StudentVisaRoute = StudentVisaRouteImport.update({
+  id: '/student-visa',
+  path: '/student-visa',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SuccessStoriesRoute = SuccessStoriesRouteImport.update({
+  id: '/success-stories',
+  path: '/success-stories',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const UniversitiesRoute = UniversitiesRouteImport.update({
+  id: '/universities',
+  path: '/universities',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/contact': typeof ContactRoute
+  '/destinations': typeof DestinationsRoute
+  '/programs': typeof ProgramsRoute
+  '/resources': typeof ResourcesRoute
+  '/scholarships': typeof ScholarshipsRoute
+  '/services': typeof ServicesRoute
+  '/student-visa': typeof StudentVisaRoute
+  '/success-stories': typeof SuccessStoriesRoute
+  '/universities': typeof UniversitiesRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/contact': typeof ContactRoute
+  '/destinations': typeof DestinationsRoute
+  '/programs': typeof ProgramsRoute
+  '/resources': typeof ResourcesRoute
+  '/scholarships': typeof ScholarshipsRoute
+  '/services': typeof ServicesRoute
+  '/student-visa': typeof StudentVisaRoute
+  '/success-stories': typeof SuccessStoriesRoute
+  '/universities': typeof UniversitiesRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/about': typeof AboutRoute
+  '/contact': typeof ContactRoute
+  '/destinations': typeof DestinationsRoute
+  '/programs': typeof ProgramsRoute
+  '/resources': typeof ResourcesRoute
+  '/scholarships': typeof ScholarshipsRoute
+  '/services': typeof ServicesRoute
+  '/student-visa': typeof StudentVisaRoute
+  '/success-stories': typeof SuccessStoriesRoute
+  '/universities': typeof UniversitiesRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/about'
+    | '/contact'
+    | '/destinations'
+    | '/programs'
+    | '/resources'
+    | '/scholarships'
+    | '/services'
+    | '/student-visa'
+    | '/success-stories'
+    | '/universities'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/about'
+    | '/contact'
+    | '/destinations'
+    | '/programs'
+    | '/resources'
+    | '/scholarships'
+    | '/services'
+    | '/student-visa'
+    | '/success-stories'
+    | '/universities'
+  id:
+    | '__root__'
+    | '/'
+    | '/about'
+    | '/contact'
+    | '/destinations'
+    | '/programs'
+    | '/resources'
+    | '/scholarships'
+    | '/services'
+    | '/student-visa'
+    | '/success-stories'
+    | '/universities'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AboutRoute: typeof AboutRoute
+  ContactRoute: typeof ContactRoute
+  DestinationsRoute: typeof DestinationsRoute
+  ProgramsRoute: typeof ProgramsRoute
+  ResourcesRoute: typeof ResourcesRoute
+  ScholarshipsRoute: typeof ScholarshipsRoute
+  ServicesRoute: typeof ServicesRoute
+  StudentVisaRoute: typeof StudentVisaRoute
+  SuccessStoriesRoute: typeof SuccessStoriesRoute
+  UniversitiesRoute: typeof UniversitiesRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +182,91 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/about': {
+      id: '/about'
+      path: '/about'
+      fullPath: '/about'
+      preLoaderRoute: typeof AboutRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/contact': {
+      id: '/contact'
+      path: '/contact'
+      fullPath: '/contact'
+      preLoaderRoute: typeof ContactRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/destinations': {
+      id: '/destinations'
+      path: '/destinations'
+      fullPath: '/destinations'
+      preLoaderRoute: typeof DestinationsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/programs': {
+      id: '/programs'
+      path: '/programs'
+      fullPath: '/programs'
+      preLoaderRoute: typeof ProgramsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/resources': {
+      id: '/resources'
+      path: '/resources'
+      fullPath: '/resources'
+      preLoaderRoute: typeof ResourcesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/scholarships': {
+      id: '/scholarships'
+      path: '/scholarships'
+      fullPath: '/scholarships'
+      preLoaderRoute: typeof ScholarshipsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/services': {
+      id: '/services'
+      path: '/services'
+      fullPath: '/services'
+      preLoaderRoute: typeof ServicesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/student-visa': {
+      id: '/student-visa'
+      path: '/student-visa'
+      fullPath: '/student-visa'
+      preLoaderRoute: typeof StudentVisaRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/success-stories': {
+      id: '/success-stories'
+      path: '/success-stories'
+      fullPath: '/success-stories'
+      preLoaderRoute: typeof SuccessStoriesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/universities': {
+      id: '/universities'
+      path: '/universities'
+      fullPath: '/universities'
+      preLoaderRoute: typeof UniversitiesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AboutRoute: AboutRoute,
+  ContactRoute: ContactRoute,
+  DestinationsRoute: DestinationsRoute,
+  ProgramsRoute: ProgramsRoute,
+  ResourcesRoute: ResourcesRoute,
+  ScholarshipsRoute: ScholarshipsRoute,
+  ServicesRoute: ServicesRoute,
+  StudentVisaRoute: StudentVisaRoute,
+  SuccessStoriesRoute: SuccessStoriesRoute,
+  UniversitiesRoute: UniversitiesRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
