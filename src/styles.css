@@ -4,29 +4,19 @@
 
 @custom-variant dark (&:is(.dark *));
 
-<<<<<<< HEAD
 /*
   Global Roots design system
   Brand: deep navy · royal blue · bright blue accent (controlled)
   Type: Manrope (UI) · Fraunces (display)
   Motion: restrained · Spacing: 4/8 rhythm
 */
-=======
-/* Global Roots design system — brand palette from the logo: navy, royal blue, bright blue. */
->>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
 
 @theme inline {
   --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
   --font-display: "Fraunces", Georgia, serif;
-<<<<<<< HEAD
   --radius-sm: calc(var(--radius) - 2px);
   --radius-md: var(--radius);
   --radius-lg: calc(var(--radius) + 2px);
-=======
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
->>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
   --radius-xl: calc(var(--radius) + 4px);
   --radius-2xl: calc(var(--radius) + 6px);
   --color-background: var(--background);
@@ -78,7 +68,6 @@
 }
 
 :root {
-<<<<<<< HEAD
   --radius: 0.5rem;
 
   --navy: oklch(0.22 0.075 258);
@@ -90,18 +79,6 @@
 
   --background: oklch(1 0 0);
   --foreground: oklch(0.2 0.03 262);
-=======
-  --radius: 0.625rem;
-  --navy: oklch(0.22 0.075 258);          /* #001A3F */
-  --navy-foreground: oklch(0.99 0 0);
-  --navy-soft: oklch(0.3 0.08 258);
-  --royal: oklch(0.5 0.19 257);           /* #005FCB */
-  --bright: oklch(0.63 0.17 245);         /* #008FEA */
-  --surface: oklch(0.982 0.004 250);      /* #F6F8FB */
-
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.17 0.03 262);     /* #0B1220 */
->>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
   --card: oklch(1 0 0);
   --card-foreground: var(--foreground);
   --popover: oklch(1 0 0);
@@ -110,7 +87,6 @@
   --primary-foreground: oklch(0.99 0 0);
   --secondary: var(--surface);
   --secondary-foreground: var(--navy);
-<<<<<<< HEAD
   --muted: oklch(0.97 0.006 250);
   --muted-foreground: oklch(0.5 0.03 257);
   --accent: oklch(0.965 0.018 250);
@@ -128,25 +104,6 @@
   --danger: oklch(0.52 0.18 27);
   --danger-soft: oklch(0.965 0.02 27);
   --info-soft: oklch(0.96 0.025 250);
-=======
-  --muted: var(--surface);
-  --muted-foreground: oklch(0.55 0.04 257); /* #64748B */
-  --accent: oklch(0.96 0.02 250);
-  --accent-foreground: var(--navy);
-  --destructive: oklch(0.55 0.2 27);
-  --destructive-foreground: oklch(0.99 0 0);
-  --border: oklch(0.93 0.013 255);         /* #E2E8F0 */
-  --input: oklch(0.93 0.013 255);
-  --ring: var(--bright);
-
-  --success: oklch(0.52 0.12 160);
-  --success-soft: oklch(0.96 0.03 160);
-  --warning: oklch(0.6 0.13 70);
-  --warning-soft: oklch(0.97 0.04 85);
-  --danger: oklch(0.55 0.2 27);
-  --danger-soft: oklch(0.96 0.025 27);
-  --info-soft: oklch(0.95 0.03 250);
->>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
 
   --chart-1: var(--royal);
   --chart-2: var(--bright);
@@ -155,11 +112,7 @@
   --chart-5: oklch(0.88 0.04 250);
 
   --sidebar: var(--navy);
-<<<<<<< HEAD
   --sidebar-foreground: oklch(0.88 0.02 255);
-=======
-  --sidebar-foreground: oklch(0.85 0.03 255);
->>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
   --sidebar-primary: var(--bright);
   --sidebar-primary-foreground: oklch(0.99 0 0);
   --sidebar-accent: var(--navy-soft);
@@ -167,7 +120,6 @@
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: var(--bright);
 
-<<<<<<< HEAD
   /* Lighter hero wash — keep photography readable */
   --gradient-hero: linear-gradient(
     105deg,
@@ -187,21 +139,10 @@
   html {
     scroll-behavior: smooth;
   }
-=======
-  --gradient-hero: linear-gradient(90deg, oklch(0.22 0.075 258 / 0.92) 0%, oklch(0.22 0.075 258 / 0.7) 45%, oklch(0.22 0.075 258 / 0.1) 100%);
-  --gradient-card: linear-gradient(180deg, transparent 35%, oklch(0.22 0.075 258 / 0.88) 100%);
-  --shadow-soft: 0 1px 2px oklch(0.22 0.075 258 / 0.04), 0 8px 24px -12px oklch(0.22 0.075 258 / 0.12);
-}
-
-@layer base {
-  * { border-color: var(--color-border); }
-  html { scroll-behavior: smooth; }
->>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
     font-family: var(--font-sans);
-<<<<<<< HEAD
     font-size: 0.9375rem;
     line-height: 1.6;
     -webkit-font-smoothing: antialiased;
@@ -220,16 +161,10 @@
     outline: 2px solid var(--color-ring);
     outline-offset: 2px;
   }
-=======
-    -webkit-font-smoothing: antialiased;
-  }
-  h1, h2, h3, .font-display { font-family: var(--font-display); letter-spacing: -0.02em; }
->>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
 }
 
 @utility container-page {
   width: 100%;
-<<<<<<< HEAD
   max-width: 76rem;
   margin-inline: auto;
   padding-inline: 1.25rem;
@@ -284,26 +219,4 @@
 
 @utility prose-measure {
   max-width: 42rem;
-=======
-  max-width: 80rem;
-  margin-inline: auto;
-  padding-inline: 1.25rem;
-  @media (min-width: 768px) { padding-inline: 2rem; }
-}
-@utility eyebrow {
-  font-family: var(--font-sans);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--bright);
-}
-@utility bg-hero-overlay { background-image: var(--gradient-hero); }
-@utility bg-card-overlay { background-image: var(--gradient-card); }
-@utility shadow-soft { box-shadow: var(--shadow-soft); }
-@utility panel {
-  background: var(--card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-xl);
->>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
 }

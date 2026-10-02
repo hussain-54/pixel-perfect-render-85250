@@ -1,9 +1,5 @@
 {
-<<<<<<< HEAD
   "name": "global-roots-consultants",
-=======
-  "name": "tanstack_start_ts",
->>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
   "private": true,
   "sideEffects": false,
   "type": "module",
@@ -74,10 +70,6 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.32.0",
-<<<<<<< HEAD
-=======
-    "@lovable.dev/vite-tanstack-config": "^2.24.0",
->>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
     "@types/node": "^22.16.5",
     "@types/react": "^19.2.0",
     "@types/react-dom": "^19.2.0",

@@ -1,13 +1,10 @@
 # Logs
 logs
 *.log
-<<<<<<< HEAD
 build-log*.txt
 build-header.txt
 install-log.txt
 vite-build-out.txt
-=======
->>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*

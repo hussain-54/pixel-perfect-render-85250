@@ -7,7 +7,6 @@ export const Route = createFileRoute("/contact")({
   head: () => ({
     meta: [
       { title: "Book a Free Consultation — Global Roots Consultants" },
-<<<<<<< HEAD
       {
         name: "description",
         content:
@@ -18,11 +17,6 @@ export const Route = createFileRoute("/contact")({
         property: "og:description",
         content: "Speak with a senior education and visa consultant for free.",
       },
-=======
-      { name: "description", content: "Book a free study-abroad consultation or contact our Lahore, Karachi and Islamabad offices." },
-      { property: "og:title", content: "Book a Free Consultation — Global Roots Consultants" },
-      { property: "og:description", content: "Speak with a senior education and visa consultant for free." },
->>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
     ],
   }),
   component: Page,
@@ -38,7 +32,6 @@ function Page() {
   ];
   return (
     <SiteLayout>
-<<<<<<< HEAD
       <PageHero
         eyebrow="Contact"
         title="Book your free consultation"
@@ -57,15 +50,6 @@ function Page() {
                 </p>
                 <p className="mt-0.5 font-semibold text-navy">{i.value}</p>
               </div>
-=======
-      <PageHero eyebrow="Contact" title="Book your free consultation" body="Tell us about your plans. A senior consultant will call you within one working day." />
-      <section className="container-page grid gap-10 py-16 lg:grid-cols-[1fr_2fr]">
-        <ul className="space-y-5">
-          {items.map((i) => (
-            <li key={i.label} className="flex gap-4">
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-accent text-royal"><i.icon className="h-4 w-4" /></span>
-              <div><p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{i.label}</p><p className="font-semibold text-navy">{i.value}</p></div>
->>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
             </li>
           ))}
         </ul>

@@ -13,14 +13,10 @@ export const Route = createFileRoute("/universities")({
   head: () => ({
     meta: [
       { title: "Universities — Global Roots Consultants" },
-<<<<<<< HEAD
       {
         name: "description",
         content: "Search partner universities by country, study level and program.",
       },
-=======
-      { name: "description", content: "Search partner universities by country, study level and program." },
->>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
       { property: "og:title", content: "Universities — Global Roots Consultants" },
       { property: "og:description", content: "Discover 1,500+ partner universities worldwide." },
     ],
@@ -36,7 +32,6 @@ function Page() {
   const [level, setLevel] = useState("");
   const [program, setProgram] = useState("");
   const all = data ?? [];
-<<<<<<< HEAD
   const list = all.filter(
     (u) =>
       (!q || u.name.toLowerCase().includes(q.toLowerCase())) &&
@@ -96,27 +91,6 @@ function Page() {
               <UniversityCard key={u.id} u={u} />
             ))}
           </div>
-=======
-  const list = all.filter((u) =>
-    (!q || u.name.toLowerCase().includes(q.toLowerCase())) && (!country || u.country === country) &&
-    (!level || u.levels.includes(level)) && (!program || u.programs.includes(program)));
-  const uniq = (xs: string[]) => [...new Set(xs)].sort();
-  return (
-    <SiteLayout>
-      <PageHero eyebrow="Universities" title="Find your university" body="Search our partner institutions and filter by what matters to you." />
-      <section className="container-page py-12">
-        <div className="panel mb-8 flex flex-wrap gap-3 p-4">
-          <div className="relative min-w-[220px] flex-1">
-            <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search universities" className="h-10 w-full rounded-md border border-input pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
-          </div>
-          <FilterSelect label="Country" value={country} onChange={setCountry} options={uniq(all.map((u) => u.country))} />
-          <FilterSelect label="Level" value={level} onChange={setLevel} options={uniq(all.flatMap((u) => u.levels))} />
-          <FilterSelect label="Program" value={program} onChange={setProgram} options={uniq(all.flatMap((u) => u.programs))} />
-        </div>
-        {isLoading ? <LoadingRows rows={6} /> : list.length === 0 ? <EmptyState title="No universities match" body="Try clearing a filter." /> : (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">{list.map((u) => <UniversityCard key={u.id} u={u} />)}</div>
->>>>>>> 9423b22b15d0fc187256137b3f5cacc91d5f572d
         )}
       </section>
       <CtaBand />
