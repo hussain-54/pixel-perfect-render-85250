@@ -22,9 +22,9 @@ export function RoleSwitcher({ current, light = false }: { current: string; ligh
         <DropdownMenuLabel>Switch demo view</DropdownMenuLabel>
         <DropdownMenuSeparator />
         <DropdownMenuItem asChild><Link to="/">Public website</Link></DropdownMenuItem>
-        <DropdownMenuItem asChild><Link to="/student/dashboard">Student portal</Link></DropdownMenuItem>
-        <DropdownMenuItem asChild><Link to="/staff/dashboard">Consultant portal</Link></DropdownMenuItem>
-        <DropdownMenuItem asChild><Link to="/admin/dashboard">Admin panel</Link></DropdownMenuItem>
+        <DropdownMenuItem disabled>Student portal (coming soon)</DropdownMenuItem>
+        <DropdownMenuItem disabled>Consultant portal (coming soon)</DropdownMenuItem>
+        <DropdownMenuItem disabled>Admin panel (coming soon)</DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );

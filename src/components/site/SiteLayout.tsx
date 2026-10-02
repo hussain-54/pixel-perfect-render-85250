@@ -5,7 +5,7 @@ import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
 import { RoleSwitcher } from "./RoleSwitcher";
 
-const nav: { to: LinkProps["to"]; label: string }[] = [
+const nav: { to: NonNullable<LinkProps["to"]>; label: string }[] = [
   { to: "/", label: "Home" },
   { to: "/destinations", label: "Study Destinations" },
   { to: "/universities", label: "Universities" },
