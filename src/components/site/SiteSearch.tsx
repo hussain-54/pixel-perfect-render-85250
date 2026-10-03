@@ -32,7 +32,7 @@ export function SiteSearch({
         aria-label="Open search"
         onClick={() => onOpenChange(true)}
         className={cn(
-          "inline-flex h-9 w-9 items-center justify-center rounded-md text-navy transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md text-navy transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           className,
         )}
       >
