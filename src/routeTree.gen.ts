@@ -14,10 +14,13 @@ import { Route as AboutRouteImport } from './routes/about'
 import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as DestinationsRouteImport } from './routes/destinations'
+import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as ProgramsRouteImport } from './routes/programs'
 import { Route as ResourcesRouteImport } from './routes/resources'
 import { Route as ScholarshipsRouteImport } from './routes/scholarships'
 import { Route as ServicesRouteImport } from './routes/services'
+import { Route as SignInRouteImport } from './routes/sign-in'
+import { Route as SignUpRouteImport } from './routes/sign-up'
 import { Route as StaffRouteRouteImport } from './routes/staff/route'
 import { Route as StudentRouteRouteImport } from './routes/student/route'
 import { Route as StudentVisaRouteImport } from './routes/student-visa'
@@ -81,6 +84,11 @@ const DestinationsRoute = DestinationsRouteImport.update({
   path: '/destinations',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
+  id: '/forgot-password',
+  path: '/forgot-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProgramsRoute = ProgramsRouteImport.update({
   id: '/programs',
   path: '/programs',
@@ -99,6 +107,16 @@ const ScholarshipsRoute = ScholarshipsRouteImport.update({
 const ServicesRoute = ServicesRouteImport.update({
   id: '/services',
   path: '/services',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignInRoute = SignInRouteImport.update({
+  id: '/sign-in',
+  path: '/sign-in',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignUpRoute = SignUpRouteImport.update({
+  id: '/sign-up',
+  path: '/sign-up',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StaffRouteRoute = StaffRouteRouteImport.update({
@@ -295,10 +313,13 @@ export interface FileRoutesByFullPath {
   '/about': typeof AboutRoute
   '/contact': typeof ContactRoute
   '/destinations': typeof DestinationsRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/programs': typeof ProgramsRoute
   '/resources': typeof ResourcesRoute
   '/scholarships': typeof ScholarshipsRoute
   '/services': typeof ServicesRoute
+  '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/student-visa': typeof StudentVisaRoute
   '/success-stories': typeof SuccessStoriesRoute
   '/universities': typeof UniversitiesRoute
@@ -340,10 +361,13 @@ export interface FileRoutesByTo {
   '/about': typeof AboutRoute
   '/contact': typeof ContactRoute
   '/destinations': typeof DestinationsRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/programs': typeof ProgramsRoute
   '/resources': typeof ResourcesRoute
   '/scholarships': typeof ScholarshipsRoute
   '/services': typeof ServicesRoute
+  '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/student-visa': typeof StudentVisaRoute
   '/success-stories': typeof SuccessStoriesRoute
   '/universities': typeof UniversitiesRoute
@@ -389,10 +413,13 @@ export interface FileRoutesById {
   '/about': typeof AboutRoute
   '/contact': typeof ContactRoute
   '/destinations': typeof DestinationsRoute
+  '/forgot-password': typeof ForgotPasswordRoute
   '/programs': typeof ProgramsRoute
   '/resources': typeof ResourcesRoute
   '/scholarships': typeof ScholarshipsRoute
   '/services': typeof ServicesRoute
+  '/sign-in': typeof SignInRoute
+  '/sign-up': typeof SignUpRoute
   '/student-visa': typeof StudentVisaRoute
   '/success-stories': typeof SuccessStoriesRoute
   '/universities': typeof UniversitiesRoute
@@ -439,10 +466,13 @@ export interface FileRouteTypes {
     | '/about'
     | '/contact'
     | '/destinations'
+    | '/forgot-password'
     | '/programs'
     | '/resources'
     | '/scholarships'
     | '/services'
+    | '/sign-in'
+    | '/sign-up'
     | '/student-visa'
     | '/success-stories'
     | '/universities'
@@ -484,10 +514,13 @@ export interface FileRouteTypes {
     | '/about'
     | '/contact'
     | '/destinations'
+    | '/forgot-password'
     | '/programs'
     | '/resources'
     | '/scholarships'
     | '/services'
+    | '/sign-in'
+    | '/sign-up'
     | '/student-visa'
     | '/success-stories'
     | '/universities'
@@ -532,10 +565,13 @@ export interface FileRouteTypes {
     | '/about'
     | '/contact'
     | '/destinations'
+    | '/forgot-password'
     | '/programs'
     | '/resources'
     | '/scholarships'
     | '/services'
+    | '/sign-in'
+    | '/sign-up'
     | '/student-visa'
     | '/success-stories'
     | '/universities'
@@ -581,10 +617,13 @@ export interface RootRouteChildren {
   AboutRoute: typeof AboutRoute
   ContactRoute: typeof ContactRoute
   DestinationsRoute: typeof DestinationsRoute
+  ForgotPasswordRoute: typeof ForgotPasswordRoute
   ProgramsRoute: typeof ProgramsRoute
   ResourcesRoute: typeof ResourcesRoute
   ScholarshipsRoute: typeof ScholarshipsRoute
   ServicesRoute: typeof ServicesRoute
+  SignInRoute: typeof SignInRoute
+  SignUpRoute: typeof SignUpRoute
   StudentVisaRoute: typeof StudentVisaRoute
   SuccessStoriesRoute: typeof SuccessStoriesRoute
   UniversitiesRoute: typeof UniversitiesRoute
@@ -627,6 +666,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DestinationsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/forgot-password': {
+      id: '/forgot-password'
+      path: '/forgot-password'
+      fullPath: '/forgot-password'
+      preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/programs': {
       id: '/programs'
       path: '/programs'
@@ -653,6 +699,20 @@ declare module '@tanstack/react-router' {
       path: '/services'
       fullPath: '/services'
       preLoaderRoute: typeof ServicesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-in': {
+      id: '/sign-in'
+      path: '/sign-in'
+      fullPath: '/sign-in'
+      preLoaderRoute: typeof SignInRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/sign-up': {
+      id: '/sign-up'
+      path: '/sign-up'
+      fullPath: '/sign-up'
+      preLoaderRoute: typeof SignUpRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/staff': {
@@ -1019,10 +1079,13 @@ const rootRouteChildren: RootRouteChildren = {
   AboutRoute: AboutRoute,
   ContactRoute: ContactRoute,
   DestinationsRoute: DestinationsRoute,
+  ForgotPasswordRoute: ForgotPasswordRoute,
   ProgramsRoute: ProgramsRoute,
   ResourcesRoute: ResourcesRoute,
   ScholarshipsRoute: ScholarshipsRoute,
   ServicesRoute: ServicesRoute,
+  SignInRoute: SignInRoute,
+  SignUpRoute: SignUpRoute,
   StudentVisaRoute: StudentVisaRoute,
   SuccessStoriesRoute: SuccessStoriesRoute,
   UniversitiesRoute: UniversitiesRoute,

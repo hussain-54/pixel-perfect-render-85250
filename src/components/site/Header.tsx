@@ -3,16 +3,10 @@ import { Link } from "@tanstack/react-router";
 import { ChevronDown, Menu, UserRound, X } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { MegaMenuPanel } from "@/components/site/MegaMenuPanel";
 import { MobileNavDrawer } from "@/components/site/MobileNavDrawer";
 import { SiteSearch } from "@/components/site/SiteSearch";
-import { loginLinks, mainNavigation, type MegaMenuId } from "@/data/navigation";
+import { mainNavigation, type MegaMenuId } from "@/data/navigation";
 import { cn } from "@/lib/utils";
 
 /** Desktop omits Home — the logo already links home. Mobile drawer keeps it. */
@@ -152,23 +146,14 @@ export function Header() {
               </Link>
             </Button>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger
-                className="hidden h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border px-3 text-sm font-medium text-navy hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-[1400px]:inline-flex"
-                aria-label="Login options"
-              >
-                <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden />
-                Login
-                <ChevronDown className="h-3.5 w-3.5 shrink-0" aria-hidden />
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end" className="w-48">
-                {loginLinks.map((link) => (
-                  <DropdownMenuItem key={link.label} asChild>
-                    <Link to={link.to}>{link.label}</Link>
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <Link
+              to="/sign-in"
+              onClick={closeMenus}
+              className="hidden h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border px-3 text-sm font-medium text-navy transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-[1400px]:inline-flex"
+            >
+              <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden />
+              Sign In
+            </Link>
 
             <button
               type="button"

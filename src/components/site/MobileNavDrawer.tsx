@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronDown, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { loginLinks, mainNavigation, megaMenus, type MegaMenuId } from "@/data/navigation";
+import { mainNavigation, megaMenus, type MegaMenuId } from "@/data/navigation";
 import { cn } from "@/lib/utils";
 
 const sectionLabels: Record<MegaMenuId, string[]> = {
@@ -258,23 +258,17 @@ export function MobileNavDrawer({
             );
           })}
 
-          <div className="mt-5 space-y-1 border-t border-border pt-4">
-            <p className="px-3 pb-1 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-royal">
-              Login
-            </p>
-            {loginLinks.map((link) => (
-              <Link
-                key={link.label}
-                to={link.to}
-                onClick={onClose}
-                className="flex items-center justify-between rounded-md px-3 py-2.5 text-sm font-medium text-navy/80 transition-colors hover:bg-accent hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-              >
-                <span>{link.label}</span>
-                <span className="text-royal" aria-hidden>
-                  →
-                </span>
-              </Link>
-            ))}
+          <div className="mt-5 border-t border-border pt-4">
+            <Link
+              to="/sign-in"
+              onClick={onClose}
+              className="flex items-center justify-between rounded-md px-3 py-3 text-[0.95rem] font-semibold text-navy transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <span>Sign In</span>
+              <span className="text-royal" aria-hidden>
+                →
+              </span>
+            </Link>
           </div>
         </nav>
 

@@ -23,6 +23,9 @@ export type AppPath =
   | "/student-visa"
   | "/success-stories"
   | "/universities"
+  | "/sign-in"
+  | "/sign-up"
+  | "/forgot-password"
   | "/student/dashboard"
   | "/staff/dashboard"
   | "/admin/dashboard";
@@ -292,11 +295,8 @@ export const megaMenus: Record<MegaMenuId, { columns: MegaColumn[]; cta: MegaCta
   resources: resourceMenu,
 };
 
-export const loginLinks: NavLink[] = [
-  { label: "Student Login", to: "/student/dashboard" },
-  { label: "Consultant Login", to: "/staff/dashboard" },
-  { label: "Admin Login", to: "/admin/dashboard" },
-];
+/** Single entry point — role is resolved after authentication. */
+export const loginLinks: NavLink[] = [{ label: "Sign In", to: "/sign-in" }];
 
 export type SearchHit = {
   label: string;
