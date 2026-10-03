@@ -28,18 +28,6 @@ export function AuthShell({
         <div className="relative">
           <Logo light to="/" className="w-auto" />
         </div>
-        <div className="relative max-w-md">
-          <p className="text-[0.7rem] font-bold uppercase tracking-[0.18em] text-bright">
-            Global Education & Visa Consultants
-          </p>
-          <h1 className="mt-4 font-display text-4xl font-semibold leading-tight tracking-tight xl:text-[2.75rem]">
-            One account. The right portal for your journey.
-          </h1>
-          <p className="mt-4 text-base leading-relaxed text-navy-foreground/75">
-            Sign in to continue as a student, consultant, or administrator. Your workspace opens
-            automatically based on your account.
-          </p>
-        </div>
         <p className="relative text-xs text-navy-foreground/50">
           © {new Date().getFullYear()} Global Roots Consultants
         </p>
