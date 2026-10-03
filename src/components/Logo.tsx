@@ -62,7 +62,7 @@ export function Logo({
             </span>
             <span
               className={cn(
-                "mt-1 block truncate text-[0.58rem] font-medium tracking-wide",
+                "mt-1 hidden truncate text-[0.58rem] font-medium tracking-wide 2xl:block",
                 light ? "text-navy-foreground/70" : "text-muted-foreground",
               )}
               title="Global Education & Visa Consultants"

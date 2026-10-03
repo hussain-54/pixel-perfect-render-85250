@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronDown, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -14,10 +14,25 @@ const sectionLabels: Record<MegaMenuId, string[]> = {
   resources: ["Guides", "Explore", "Get Help"],
 };
 
-export function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+const FOCUSABLE =
+  'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
+
+export function MobileNavDrawer({
+  open,
+  onClose,
+  id,
+}: {
+  open: boolean;
+  onClose: () => void;
+  id?: string;
+}) {
   const [expanded, setExpanded] = useState<MegaMenuId | null>(null);
   const [q, setQ] = useState("");
   const navigate = useNavigate();
+  const panelRef = useRef<HTMLDivElement>(null);
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const restoreFocusRef = useRef<HTMLElement | null>(null);
+  const titleId = useId();
 
   useEffect(() => {
     if (!open) {
@@ -25,12 +40,59 @@ export function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () 
       setQ("");
       return;
     }
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
+
+    restoreFocusRef.current = document.activeElement as HTMLElement | null;
+
+    const { body } = document;
+    const prevOverflow = body.style.overflow;
+    const prevPaddingRight = body.style.paddingRight;
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
+    body.style.overflow = "hidden";
+    if (scrollbarWidth > 0) {
+      body.style.paddingRight = `${scrollbarWidth}px`;
+    }
+
+    // Focus close control after paint for screen readers / keyboard users
+    const focusTimer = window.setTimeout(() => {
+      closeBtnRef.current?.focus();
+    }, 0);
+
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+
+      if (e.key !== "Tab" || !panelRef.current) return;
+      const focusables = Array.from(
+        panelRef.current.querySelectorAll<HTMLElement>(FOCUSABLE),
+      ).filter((el) => !el.hasAttribute("disabled") && el.tabIndex !== -1);
+      const first = focusables[0];
+      const last = focusables[focusables.length - 1];
+      if (!first || !last) return;
+
+      const active = document.activeElement as HTMLElement | null;
+
+      if (e.shiftKey && active === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && active === last) {
+        e.preventDefault();
+        first.focus();
+      }
     };
-  }, [open]);
+
+    window.addEventListener("keydown", onKey);
+
+    return () => {
+      window.clearTimeout(focusTimer);
+      window.removeEventListener("keydown", onKey);
+      body.style.overflow = prevOverflow;
+      body.style.paddingRight = prevPaddingRight;
+      restoreFocusRef.current?.focus?.();
+    };
+  }, [open, onClose]);
 
   if (!open) return null;
 
@@ -39,28 +101,36 @@ export function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () 
       className="fixed inset-0 z-50 xl:hidden"
       role="dialog"
       aria-modal="true"
-      aria-label="Mobile navigation"
+      aria-labelledby={titleId}
+      id={id}
     >
       <button
         type="button"
-        className="absolute inset-0 bg-navy/40"
+        className="absolute inset-0 bg-navy/35 transition-opacity"
         aria-label="Close menu"
         onClick={onClose}
       />
-      <div className="absolute inset-y-0 right-0 flex w-full max-w-sm flex-col bg-white shadow-xl">
-        <div className="flex h-14 items-center justify-between border-b border-border px-4">
-          <p className="text-sm font-semibold text-navy">Menu</p>
+
+      <div
+        ref={panelRef}
+        className="absolute inset-y-0 right-0 flex w-full max-w-[min(100%,24rem)] flex-col border-l border-border bg-white animate-in slide-in-from-right duration-200"
+      >
+        <div className="flex h-16 shrink-0 items-center justify-between border-b border-border px-4">
+          <p id={titleId} className="text-sm font-semibold text-navy">
+            Menu
+          </p>
           <button
+            ref={closeBtnRef}
             type="button"
             aria-label="Close menu"
             onClick={onClose}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md text-navy hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            className="inline-flex h-11 w-11 items-center justify-center rounded-md text-navy transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           >
-            <X className="h-5 w-5" />
+            <X className="h-5 w-5" aria-hidden />
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto px-3 py-3" aria-label="Mobile">
+        <nav className="flex-1 overflow-y-auto overscroll-contain px-3 py-3" aria-label="Mobile">
           <form
             className="mb-3 px-1"
             onSubmit={(e) => {
@@ -77,13 +147,13 @@ export function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () 
               Search
             </label>
             <div className="relative">
-              <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+              <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <input
                 id="mobile-site-search"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 placeholder="Search universities, programs…"
-                className="h-10 w-full rounded-md border border-input bg-background pl-9 pr-3 text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+                className="h-11 w-full rounded-md border border-border bg-white pl-9 pr-3 text-sm text-navy placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
               />
             </div>
           </form>
@@ -95,7 +165,7 @@ export function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () 
                   key={item.id}
                   to={item.to}
                   onClick={onClose}
-                  className="block rounded-md px-3 py-2.5 text-sm font-semibold text-navy hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  className="block rounded-md px-3 py-3 text-[0.95rem] font-semibold text-navy transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   {item.label}
                 </Link>
@@ -105,72 +175,91 @@ export function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () 
             const isOpen = expanded === item.id;
             const menu = megaMenus[item.id];
             const allowed = sectionLabels[item.id];
+            const panelId = `mobile-submenu-${item.id}`;
 
             return (
               <div key={item.id} className="border-b border-border/70 last:border-0">
                 <button
                   type="button"
                   aria-expanded={isOpen}
+                  aria-controls={panelId}
                   onClick={() => setExpanded(isOpen ? null : item.id)}
                   className={cn(
-                    "flex w-full items-center justify-between rounded-md px-3 py-2.5 text-left text-sm font-semibold text-navy hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    isOpen && "bg-accent/80",
+                    "flex w-full items-center justify-between gap-3 rounded-md px-3 py-3 text-left text-[0.95rem] font-semibold text-navy transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    isOpen && "bg-accent/70 text-navy",
                   )}
                 >
-                  {item.label}
+                  <span className="min-w-0 truncate">{item.label}</span>
                   <ChevronDown
-                    className={cn("h-4 w-4 transition-transform", isOpen && "rotate-180")}
+                    className={cn(
+                      "h-4 w-4 shrink-0 text-royal transition-transform duration-200",
+                      isOpen && "rotate-180",
+                    )}
                     aria-hidden
                   />
                 </button>
-                {isOpen && (
-                  <div className="space-y-4 pb-3 pl-2 pr-1 pt-1">
-                    {menu.columns
-                      .filter((c) => allowed.includes(c.heading))
-                      .map((column) => {
-                        const limit =
-                          column.heading.includes("Popular") || column.heading.includes("Featured")
-                            ? 8
-                            : undefined;
-                        const links = limit ? column.links.slice(0, limit) : column.links;
-                        return (
-                          <div key={column.heading}>
-                            <p className="mb-1.5 px-2 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-royal">
-                              {column.heading}
-                            </p>
-                            <ul className="space-y-0.5">
-                              {links.map((link) => (
-                                <li key={`${column.heading}-${link.label}`}>
-                                  <Link
-                                    to={link.to}
-                                    {...(link.search ? { search: link.search } : {})}
-                                    {...(link.hash ? { hash: link.hash } : {})}
-                                    onClick={onClose}
-                                    className="block rounded-md px-2 py-1.5 text-[0.875rem] text-navy/90 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                  >
-                                    {link.label}
-                                  </Link>
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-                        );
-                      })}
-                    <Link
-                      to={menu.cta.primary.to}
-                      onClick={onClose}
-                      className="mx-2 inline-flex text-sm font-semibold text-royal hover:text-navy"
-                    >
-                      {menu.cta.primary.label} →
-                    </Link>
+
+                <div
+                  id={panelId}
+                  className={cn(
+                    "grid transition-[grid-template-rows] duration-200 ease-out",
+                    isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
+                  )}
+                  inert={isOpen ? undefined : true}
+                  aria-hidden={!isOpen}
+                >
+                  <div className="overflow-hidden">
+                    <div className="space-y-4 pb-3 pl-2 pr-1 pt-1">
+                      {menu.columns
+                        .filter((c) => allowed.includes(c.heading))
+                        .map((column) => {
+                          const limit =
+                            column.heading.includes("Popular") ||
+                            column.heading.includes("Featured")
+                              ? 8
+                              : undefined;
+                          const links = limit ? column.links.slice(0, limit) : column.links;
+                          return (
+                            <div key={column.heading}>
+                              <p className="mb-1.5 px-2 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-royal">
+                                {column.heading}
+                              </p>
+                              <ul className="space-y-0.5">
+                                {links.map((link) => (
+                                  <li key={`${column.heading}-${link.label}`}>
+                                    <Link
+                                      to={link.to}
+                                      {...(link.search ? { search: link.search } : {})}
+                                      {...(link.hash ? { hash: link.hash } : {})}
+                                      onClick={onClose}
+                                      tabIndex={isOpen ? undefined : -1}
+                                      className="block rounded-md px-2 py-2 text-sm text-navy/90 transition-colors hover:bg-accent hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                                    >
+                                      {link.label}
+                                    </Link>
+                                  </li>
+                                ))}
+                              </ul>
+                            </div>
+                          );
+                        })}
+                      <Link
+                        to={menu.cta.primary.to}
+                        onClick={onClose}
+                        tabIndex={isOpen ? undefined : -1}
+                        className="mx-2 inline-flex text-sm font-semibold text-royal transition-colors hover:text-navy"
+                      >
+                        {menu.cta.primary.label} →
+                      </Link>
+                    </div>
                   </div>
-                )}
+                </div>
               </div>
             );
           })}
 
-          <div className="mt-4 space-y-1 border-t border-border pt-4">
-            <p className="px-3 pb-1 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-royal">
+          <div className="mt-5 space-y-1 border-t border-border pt-4">
+            <p className="px-3 pb-1 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-royal">
               Login
             </p>
             {loginLinks.map((link) => (
@@ -178,16 +267,19 @@ export function MobileNavDrawer({ open, onClose }: { open: boolean; onClose: () 
                 key={link.label}
                 to={link.to}
                 onClick={onClose}
-                className="block rounded-md px-3 py-2 text-sm text-navy hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                className="flex items-center justify-between rounded-md px-3 py-2.5 text-sm font-medium text-navy/80 transition-colors hover:bg-accent hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
-                {link.label}
+                <span>{link.label}</span>
+                <span className="text-royal" aria-hidden>
+                  →
+                </span>
               </Link>
             ))}
           </div>
         </nav>
 
-        <div className="border-t border-border p-4">
-          <Button asChild className="w-full" size="sm">
+        <div className="shrink-0 border-t border-border bg-white p-4">
+          <Button asChild className="h-12 w-full text-base font-semibold">
             <Link to="/contact" onClick={onClose}>
               Book Consultation
             </Link>
