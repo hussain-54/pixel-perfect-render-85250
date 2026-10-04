@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { MapPin, Phone, Mail, MessageCircle, Clock } from "lucide-react";
 import { SiteLayout, PageHero } from "@/components/site/SiteLayout";
 import { ConsultationForm } from "@/components/site/blocks";
+import { siteContact } from "@/data/contact";
 
 export const Route = createFileRoute("/contact")({
   head: () => ({
@@ -24,11 +25,11 @@ export const Route = createFileRoute("/contact")({
 
 function Page() {
   const items = [
-    { icon: MapPin, label: "Head office", value: "Gulberg III, Lahore, Pakistan" },
-    { icon: Phone, label: "Phone", value: "+92 300 0000000" },
-    { icon: MessageCircle, label: "WhatsApp", value: "+92 300 0000000" },
-    { icon: Mail, label: "Email", value: "info@globalroots.pk" },
-    { icon: Clock, label: "Hours", value: "Mon–Sat, 10:00–19:00" },
+    { icon: MapPin, label: "Head office", value: siteContact.location.fullDisplay },
+    { icon: Phone, label: "Phone", value: siteContact.phone.display },
+    { icon: MessageCircle, label: "WhatsApp", value: siteContact.whatsapp.display },
+    { icon: Mail, label: "Email", value: siteContact.email.display },
+    { icon: Clock, label: "Hours", value: siteContact.hours },
   ];
   return (
     <SiteLayout>

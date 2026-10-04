@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Mail, Phone, MapPin } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { Header } from "@/components/site/Header";
+import { siteContact } from "@/data/contact";
 
 function Footer() {
   return (
@@ -93,15 +94,19 @@ function Footer() {
           <ul className="mt-4 space-y-3 text-sm text-navy-foreground/75">
             <li className="flex gap-2">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-bright" aria-hidden />
-              Gulberg III, Lahore
+              {siteContact.location.display}
             </li>
             <li className="flex gap-2">
               <Phone className="mt-0.5 h-4 w-4 shrink-0 text-bright" aria-hidden />
-              +92 300 0000000
+              <a href={siteContact.phone.href} className="transition-colors hover:text-bright">
+                {siteContact.phone.display}
+              </a>
             </li>
             <li className="flex gap-2">
               <Mail className="mt-0.5 h-4 w-4 shrink-0 text-bright" aria-hidden />
-              info@globalroots.pk
+              <a href={siteContact.email.href} className="transition-colors hover:text-bright">
+                {siteContact.email.display}
+              </a>
             </li>
           </ul>
         </div>

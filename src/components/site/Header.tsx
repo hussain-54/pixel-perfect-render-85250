@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { MegaMenuPanel } from "@/components/site/MegaMenuPanel";
 import { MobileNavDrawer } from "@/components/site/MobileNavDrawer";
 import { SiteSearch } from "@/components/site/SiteSearch";
+import { UtilityBar } from "@/components/site/UtilityBar";
 import { mainNavigation, type MegaMenuId } from "@/data/navigation";
 import { cn } from "@/lib/utils";
 
@@ -75,6 +76,8 @@ export function Header() {
           scrolled && "border-border bg-white shadow-soft",
         )}
       >
+        <UtilityBar />
+
         <div className="mx-auto flex h-[68px] w-full max-w-[1680px] items-center px-5 md:px-6 lg:px-8 xl:px-10">
           {/* Logo */}
           <Logo className="mr-4 shrink-0 xl:mr-6" />

@@ -1,7 +1,9 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ChevronDown, Search, X } from "lucide-react";
+import { ChevronDown, Mail, MapPin, Phone, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ContactSocialLinks } from "@/components/site/UtilityBar";
+import { siteContact } from "@/data/contact";
 import { mainNavigation, megaMenus, type MegaMenuId } from "@/data/navigation";
 import { cn } from "@/lib/utils";
 
@@ -259,6 +261,51 @@ export function MobileNavDrawer({
           })}
 
           <div className="mt-5 border-t border-border pt-4">
+            <p className="mb-2 px-3 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-royal">
+              Contact Us
+            </p>
+            <ul className="space-y-0.5">
+              <li>
+                <a
+                  href={siteContact.phone.href}
+                  className="flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-navy/90 transition-colors hover:bg-accent hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Phone className="h-4 w-4 shrink-0 text-royal" aria-hidden />
+                  <span>{siteContact.phone.display}</span>
+                </a>
+              </li>
+              <li>
+                <a
+                  href={siteContact.email.href}
+                  className="flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-navy/90 transition-colors hover:bg-accent hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                >
+                  <Mail className="h-4 w-4 shrink-0 text-royal" aria-hidden />
+                  <span className="truncate">{siteContact.email.display}</span>
+                </a>
+              </li>
+              <li>
+                {siteContact.location.href ? (
+                  <a
+                    href={siteContact.location.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-navy/90 transition-colors hover:bg-accent hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <MapPin className="h-4 w-4 shrink-0 text-royal" aria-hidden />
+                    <span>{siteContact.location.fullDisplay}</span>
+                  </a>
+                ) : (
+                  <span className="flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-navy/90">
+                    <MapPin className="h-4 w-4 shrink-0 text-royal" aria-hidden />
+                    <span>{siteContact.location.fullDisplay}</span>
+                  </span>
+                )}
+              </li>
+            </ul>
+            <ContactSocialLinks className="mt-2 px-1" />
+          </div>
+
+          <div className="mt-3 border-t border-border pt-3">
             <Link
               to="/sign-in"
               onClick={onClose}
