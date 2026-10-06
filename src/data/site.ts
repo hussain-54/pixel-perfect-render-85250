@@ -472,5 +472,5 @@ export const trustSignals = [
   "Official university representatives",
   "SECP Registered",
   "British Council trained counselors",
-  "Our Office — Gulberg III, Lahore",
+  "Our Office — Saleemi Chowk, Faisalabad",
 ];

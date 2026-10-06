@@ -11,7 +11,7 @@ export const Route = createFileRoute("/contact")({
       {
         name: "description",
         content:
-          "Book a free study-abroad consultation or contact our office in Gulberg III, Lahore.",
+          "Book a free study-abroad consultation or contact our office in Faisalabad.",
       },
       { property: "og:title", content: "Book a Free Consultation — Global Roots Consultants" },
       {

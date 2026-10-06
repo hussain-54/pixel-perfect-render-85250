@@ -35,9 +35,9 @@ export const siteContact = {
   location: {
     /** Single office label — do not present multiple city offices. */
     label: "Our Office",
-    display: "Gulberg III, Lahore",
-    shortDisplay: "Lahore, Pakistan",
-    fullDisplay: "Gulberg III, Lahore, Pakistan",
+    display: "Saleemi Chowk, Faisalabad",
+    shortDisplay: "Faisalabad, Pakistan",
+    fullDisplay: "584-B 2nd floor, Peoples Colony No.1, Chen One Road, Saleemi Chowk, Faisalabad",
     /** No map URL exists in the project yet. */
     href: null as string | null,
   },
