@@ -17,7 +17,7 @@ export const Route = createFileRoute("/student-visa")({
       { property: "og:title", content: "Student Visa Support — Global Roots Consultants" },
       {
         property: "og:description",
-        content: "Embassy-ready student visa files with a 98% success rate.",
+        content: "Embassy-ready student visa files with meticulous documentation support.",
       },
     ],
   }),

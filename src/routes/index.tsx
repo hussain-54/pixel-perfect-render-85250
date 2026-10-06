@@ -4,7 +4,6 @@ import hero from "@/assets/hero.jpg";
 import consult from "@/assets/consult.jpg";
 import { SiteLayout, SectionHead } from "@/components/site/SiteLayout";
 import { DestinationCard, UniversityCard, CtaBand } from "@/components/site/blocks";
-import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
 import {
   Accordion,
@@ -13,7 +12,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import {
-  destinations,
+  topDestinations,
   programCategories,
   services,
   visaSteps,
@@ -23,8 +22,10 @@ import {
   faqs,
   resources,
   stats,
+  trustSignals,
+  featuredScholarships,
 } from "@/data/site";
-import { universities, scholarships } from "@/data/mock";
+import { universities } from "@/data/mock";
 import { fmtDate } from "@/components/common";
 
 export const Route = createFileRoute("/")({
@@ -108,19 +109,19 @@ function Home() {
       {/* Trust */}
       <section className="border-b">
         <div className="container-page flex flex-wrap items-center justify-center gap-x-10 gap-y-3 py-6 text-sm font-semibold text-muted-foreground">
-          <span className="flex items-center gap-2">
-            <ShieldCheck className="h-4 w-4 text-royal" /> Official university representatives
-          </span>
-          <span>British Council trained counselors</span>
-          <span>ICEF accredited agency</span>
-          <span>Offices in Lahore · Karachi · Islamabad</span>
+          {trustSignals.map((signal, i) => (
+            <span key={signal} className="flex items-center gap-2">
+              {i === 0 ? <ShieldCheck className="h-4 w-4 text-royal" aria-hidden /> : null}
+              {signal}
+            </span>
+          ))}
         </div>
       </section>
 
       {/* Destinations */}
       <section className="container-page section-y">
         <SectionHead
-          eyebrow="Study destinations"
+          eyebrow="Top study destinations"
           title="Where will your degree take you?"
           action={
             <Button asChild variant="outline">
@@ -131,7 +132,7 @@ function Home() {
           }
         />
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4 md:gap-4">
-          {destinations.slice(0, 8).map((d) => (
+          {topDestinations.map((d) => (
             <DestinationCard key={d.name} d={d} />
           ))}
         </div>
@@ -225,7 +226,7 @@ function Home() {
       {/* Scholarships — editorial list, not identical card grid */}
       <section className="container-page section-y">
         <SectionHead
-          eyebrow="Scholarships"
+          eyebrow="Featured Scholarships"
           title="Funding that makes it possible"
           action={
             <Button asChild variant="outline">
@@ -236,20 +237,17 @@ function Home() {
           }
         />
         <ul className="divide-y border-y border-border">
-          {scholarships.slice(0, 4).map((s) => (
+          {featuredScholarships.map((s) => (
             <li
-              key={s.id}
+              key={s.name}
               className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:justify-between"
             >
               <div className="min-w-0">
-                <div className="mb-1.5 flex flex-wrap items-center gap-2">
-                  <StatusBadge status={s.funding} />
-                  <span className="text-xs text-muted-foreground">{s.country}</span>
-                </div>
-                <p className="font-semibold text-navy">{s.name}</p>
-                <p className="mt-0.5 text-sm text-muted-foreground">
-                  {s.level} · {s.field} · Deadline {fmtDate(s.deadline)}
+                <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-royal">
+                  {s.country}
                 </p>
+                <p className="font-semibold text-navy">{s.name}</p>
+                <p className="mt-0.5 text-sm text-muted-foreground">{s.summary}</p>
               </div>
               <Button asChild variant="outline" size="sm" className="shrink-0 self-start">
                 <Link to="/contact">Enquire</Link>

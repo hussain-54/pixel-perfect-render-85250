@@ -16,7 +16,7 @@ export const Route = createFileRoute("/about")({
       { property: "og:title", content: "About Us — Global Roots Consultants" },
       {
         property: "og:description",
-        content: "Our story, values and the team behind 10,000+ student journeys.",
+        content: "Our story, values and the team behind Global Roots Consultants.",
       },
     ],
   }),
@@ -40,8 +40,8 @@ function Page() {
             where they stand.
           </p>
           <p className="leading-relaxed">
-            Today we represent more than 1,500 universities across 50+ countries, with offices in
-            Lahore, Karachi and Islamabad.
+            Today we represent more than 2,000 universities across 30+ countries. Global Roots
+            Consultants is SECP Registered, with our office in Gulberg III, Lahore.
           </p>
           <div className="grid grid-cols-2 gap-5 pt-2">
             {stats.map((s) => (

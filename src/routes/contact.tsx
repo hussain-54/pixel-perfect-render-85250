@@ -11,7 +11,7 @@ export const Route = createFileRoute("/contact")({
       {
         name: "description",
         content:
-          "Book a free study-abroad consultation or contact our Lahore, Karachi and Islamabad offices.",
+          "Book a free study-abroad consultation or contact our office in Gulberg III, Lahore.",
       },
       { property: "og:title", content: "Book a Free Consultation — Global Roots Consultants" },
       {
@@ -25,7 +25,7 @@ export const Route = createFileRoute("/contact")({
 
 function Page() {
   const items = [
-    { icon: MapPin, label: "Head office", value: siteContact.location.fullDisplay },
+    { icon: MapPin, label: siteContact.location.label, value: siteContact.location.fullDisplay },
     { icon: Phone, label: "Phone", value: siteContact.phone.display },
     { icon: MessageCircle, label: "WhatsApp", value: siteContact.whatsapp.display },
     { icon: Mail, label: "Email", value: siteContact.email.display },

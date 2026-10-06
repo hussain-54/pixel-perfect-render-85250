@@ -262,7 +262,7 @@ export function MobileNavDrawer({
 
           <div className="mt-5 border-t border-border pt-4">
             <p className="mb-2 px-3 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-royal">
-              Contact Us
+              {siteContact.location.label}
             </p>
             <ul className="space-y-0.5">
               <li>
@@ -303,6 +303,7 @@ export function MobileNavDrawer({
               </li>
             </ul>
             <SocialLinks className="mt-2 px-1" size="default" />
+            <p className="mt-3 px-3 text-xs font-semibold text-royal">{siteContact.registration}</p>
           </div>
 
           <div className="mt-3 border-t border-border pt-3">

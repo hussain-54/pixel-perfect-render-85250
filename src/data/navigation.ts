@@ -8,7 +8,7 @@
  * - Destinations: South Korea, Turkey (not in site data)
  * - Dedicated scholarship-type / study-level detail pages
  */
-import { destinations, programCategories, services } from "@/data/site";
+import { destinations, topDestinations, programCategories, services } from "@/data/site";
 import { universities, scholarships } from "@/data/mock";
 
 export type AppPath =
@@ -151,16 +151,16 @@ export const scholarshipMenu: { columns: MegaColumn[]; cta: MegaCta } = {
     {
       heading: "Scholarship Types",
       links: [
+        { label: "France Eiffel Scholarship", to: "/scholarships" },
+        { label: "Hungarian Stipendium Scholarship", to: "/scholarships" },
+        { label: "Regional & University-Specific", to: "/scholarships" },
+        { label: "Bright Scholarships", to: "/scholarships" },
         { label: "Fully Funded", to: "/scholarships" },
-        { label: "Government Scholarships", to: "/scholarships" },
         { label: "University Scholarships", to: "/scholarships" },
-        { label: "Merit Scholarships", to: "/scholarships" },
-        { label: "Need-Based Scholarships", to: "/scholarships" },
-        { label: "Research Scholarships", to: "/scholarships" },
       ],
     },
     {
-      heading: "Popular Scholarships",
+      heading: "Featured & Popular",
       links: scholarships.slice(0, 8).map((s) => ({
         label: s.name,
         to: "/scholarships" as const,
@@ -187,8 +187,17 @@ export const scholarshipMenu: { columns: MegaColumn[]; cta: MegaCta } = {
 export const destinationMenu: { columns: MegaColumn[]; cta: MegaCta } = {
   columns: [
     {
-      heading: "Study Destinations",
-      links: destinations.map((d) => ({
+      heading: "Top Destinations",
+      links: topDestinations.map((d) => ({
+        label: `Study in ${d.name}`,
+        to: "/destinations" as const,
+        hash: destSlug(d.name),
+        description: d.desc.split(".")[0] + ".",
+      })),
+    },
+    {
+      heading: "More Destinations",
+      links: destinations.slice(10).map((d) => ({
         label: `Study in ${d.name}`,
         to: "/destinations" as const,
         hash: destSlug(d.name),

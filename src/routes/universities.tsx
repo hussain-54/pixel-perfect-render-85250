@@ -18,7 +18,7 @@ export const Route = createFileRoute("/universities")({
         content: "Search partner universities by country, study level and program.",
       },
       { property: "og:title", content: "Universities — Global Roots Consultants" },
-      { property: "og:description", content: "Discover 1,500+ partner universities worldwide." },
+      { property: "og:description", content: "Discover 2,000+ partner universities worldwide." },
     ],
   }),
   component: Page,

@@ -11,12 +11,12 @@ export const Route = createFileRoute("/destinations")({
       {
         name: "description",
         content:
-          "Study in the UK, Canada, Australia, Germany, USA and 7 more countries with expert guidance.",
+          "Explore study destinations across Europe, North America, Asia and beyond with Global Roots Consultants.",
       },
       { property: "og:title", content: "Study Destinations — Global Roots Consultants" },
       {
         property: "og:description",
-        content: "Compare 12 leading study destinations: work rights, intakes and opportunities.",
+        content: "Compare leading study destinations: work rights, intakes and opportunities.",
       },
     ],
   }),
@@ -28,8 +28,8 @@ function Page() {
     <SiteLayout>
       <PageHero
         eyebrow="Study destinations"
-        title="Twelve countries. One trusted guide."
-        body="Compare work rights, intakes and opportunities, then let our country specialists build your plan."
+        title="Study destinations worldwide."
+        body="Compare work rights, intakes and opportunities across our partner countries, then let our specialists build your plan."
       />
       <section className="container-page space-y-10 py-12 md:space-y-14 md:py-16">
         {destinations.map((d, i) => (

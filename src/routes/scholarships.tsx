@@ -42,8 +42,8 @@ function Page() {
     <SiteLayout>
       <PageHero
         eyebrow="Scholarships"
-        title="Funding your future"
-        body="Explore scholarships our students have won — and learn which ones you qualify for."
+        title="Featured scholarships and funding"
+        body="Explore France Eiffel, Hungarian Stipendium, Bright Scholarships and regional university awards — then speak with a consultant about the right fit."
       />
       <section className="container-page section-y">
         <div className="mb-8 flex flex-wrap gap-2.5 border-b border-border pb-5">

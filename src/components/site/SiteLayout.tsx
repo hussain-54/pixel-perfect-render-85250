@@ -5,6 +5,7 @@ import { Logo } from "@/components/Logo";
 import { Header } from "@/components/site/Header";
 import { SocialLinks } from "@/components/site/SocialLinks";
 import { siteContact } from "@/data/contact";
+import { stats, topDestinations } from "@/data/site";
 
 function Footer() {
   return (
@@ -16,6 +17,14 @@ function Footer() {
             Global Education & Visa Consultants. Guiding students from first conversation to first
             day on campus.
           </p>
+          <p className="mt-3 text-sm font-semibold text-bright">{siteContact.registration}</p>
+          <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-navy-foreground/60">
+            {stats.slice(0, 3).map((s) => (
+              <li key={s.label}>
+                <span className="font-semibold text-navy-foreground/85">{s.value}</span> {s.label}
+              </li>
+            ))}
+          </ul>
         </div>
         <div className="lg:col-span-2">
           <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
@@ -27,16 +36,17 @@ function Footer() {
                 Destinations
               </Link>
             </li>
-            <li>
-              <Link to="/universities" className="transition-colors hover:text-bright">
-                Universities
-              </Link>
-            </li>
-            <li>
-              <Link to="/programs" className="transition-colors hover:text-bright">
-                Programs
-              </Link>
-            </li>
+            {topDestinations.slice(0, 5).map((d) => (
+              <li key={d.name}>
+                <Link
+                  to="/destinations"
+                  hash={d.name.toLowerCase().replace(/\s/g, "-")}
+                  className="transition-colors hover:text-bright"
+                >
+                  Study in {d.name}
+                </Link>
+              </li>
+            ))}
             <li>
               <Link to="/scholarships" className="transition-colors hover:text-bright">
                 Scholarships
@@ -90,12 +100,12 @@ function Footer() {
         </div>
         <div className="lg:col-span-2">
           <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
-            Contact
+            {siteContact.location.label}
           </p>
           <ul className="mt-4 space-y-3 text-sm text-navy-foreground/75">
             <li className="flex gap-2">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-bright" aria-hidden />
-              {siteContact.location.display}
+              {siteContact.location.fullDisplay}
             </li>
             <li className="flex gap-2">
               <Phone className="mt-0.5 h-4 w-4 shrink-0 text-bright" aria-hidden />

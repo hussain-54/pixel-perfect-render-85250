@@ -27,7 +27,7 @@ export const Route = createFileRoute("/success-stories")({
 function Page() {
   return (
     <SiteLayout>
-      <PageHero eyebrow="Success stories" title="10,000+ students. Countless journeys." />
+      <PageHero eyebrow="Success stories" title="500+ students guided. Countless journeys." />
       <section className="container-page section-y grid gap-10 md:grid-cols-2 md:gap-x-12 md:gap-y-14">
         {stories.map((s) => (
           <figure key={s.name} className="border-t border-royal/25 pt-6">

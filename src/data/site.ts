@@ -1,103 +1,233 @@
 import uk from "@/assets/dest-uk.jpg";
 import canada from "@/assets/dest-canada.jpg";
-import australia from "@/assets/dest-australia.jpg";
 import germany from "@/assets/dest-germany.jpg";
 import usa from "@/assets/dest-usa.jpg";
 import italy from "@/assets/dest-italy.jpg";
 import france from "@/assets/dest-france.jpg";
-import china from "@/assets/dest-china.jpg";
 import japan from "@/assets/dest-japan.jpg";
 import malaysia from "@/assets/dest-malaysia.jpg";
 import nz from "@/assets/dest-nz.jpg";
 import finland from "@/assets/dest-finland.jpg";
 
-/** Static marketing content for the public website. */
-export const destinations = [
+/**
+ * Destination imagery is reused for countries without a dedicated photo yet.
+ * Dedicated assets exist for: UK, France, Germany, Italy, Finland, Canada, USA,
+ * Malaysia, New Zealand, Japan. Other countries reuse regional fallback photos.
+ */
+const img = {
+  uk,
+  france,
+  germany,
+  italy,
+  finland,
+  canada,
+  usa,
+  malaysia,
+  nz,
+  europe: germany,
+  nordic: finland,
+  mediterranean: italy,
+  asia: malaysia,
+  eastAsia: japan,
+  oceania: nz,
+} as const;
+
+export type Destination = {
+  name: string;
+  img: string;
+  desc: string;
+  work: string;
+  intake: string;
+};
+
+/** Full study destinations — top 10 listed first for homepage “Top Study Destinations”. */
+export const destinations: Destination[] = [
   {
     name: "UK",
-    img: uk,
+    img: img.uk,
     desc: "One-year master's degrees, world-ranked universities and a 2-year Graduate Route visa.",
     work: "2 years post-study",
     intake: "Sep · Jan",
   },
   {
-    name: "Canada",
-    img: canada,
-    desc: "Affordable, welcoming and a clear pathway from study permit to permanent residence.",
-    work: "Up to 3 years PGWP",
-    intake: "Sep · Jan · May",
-  },
-  {
-    name: "Australia",
-    img: australia,
-    desc: "Globally respected degrees, strong work rights and a high quality of life.",
-    work: "2–4 years",
-    intake: "Feb · Jul",
-  },
-  {
-    name: "Germany",
-    img: germany,
-    desc: "Low or no tuition at public universities with excellent engineering programs.",
-    work: "18 months",
-    intake: "Oct · Apr",
-  },
-  {
-    name: "USA",
-    img: usa,
-    desc: "The world's largest higher-education system with unmatched research and STEM OPT.",
-    work: "1–3 years OPT",
-    intake: "Aug · Jan",
-  },
-  {
-    name: "Italy",
-    img: italy,
-    desc: "Historic universities, regional scholarships and affordable English-taught degrees.",
-    work: "12 months",
-    intake: "Sep · Feb",
-  },
-  {
     name: "France",
-    img: france,
+    img: img.france,
     desc: "Grandes écoles, low public tuition and a gateway to the European job market.",
     work: "2 years APS",
     intake: "Sep · Jan",
   },
   {
-    name: "China",
-    img: china,
-    desc: "Generous government scholarships and fast-growing medical and engineering programs.",
+    name: "Ireland",
+    img: img.uk,
+    desc: "English-taught degrees, welcoming campuses and strong post-study work opportunities.",
+    work: "Up to 2 years",
+    intake: "Sep · Jan",
+  },
+  {
+    name: "Austria",
+    img: img.europe,
+    desc: "Affordable public universities in the heart of Europe with growing English programmes.",
+    work: "12 months",
+    intake: "Oct · Mar",
+  },
+  {
+    name: "Germany",
+    img: img.germany,
+    desc: "Low or no tuition at public universities with excellent engineering programs.",
+    work: "18 months",
+    intake: "Oct · Apr",
+  },
+  {
+    name: "Italy",
+    img: img.italy,
+    desc: "Historic universities, regional scholarships and affordable English-taught degrees.",
+    work: "12 months",
+    intake: "Sep · Feb",
+  },
+  {
+    name: "Hungary",
+    img: img.europe,
+    desc: "Stipendium Hungaricum and affordable European degrees across a wide range of fields.",
     work: "Varies",
-    intake: "Sep · Mar",
+    intake: "Sep · Feb",
   },
   {
-    name: "Japan",
-    img: japan,
-    desc: "Cutting-edge technology programs, MEXT scholarships and safe, modern cities.",
-    work: "Job-seeking visa",
-    intake: "Apr · Oct",
+    name: "Lithuania",
+    img: img.nordic,
+    desc: "Modern Baltic universities with competitive tuition and English-taught programmes.",
+    work: "Varies",
+    intake: "Sep · Feb",
   },
   {
-    name: "Malaysia",
-    img: malaysia,
-    desc: "Branch campuses of UK and Australian universities at a fraction of the cost.",
-    work: "Limited",
-    intake: "Jan · May · Sep",
+    name: "Sweden",
+    img: img.nordic,
+    desc: "Innovation-focused universities with strong research culture and quality of life.",
+    work: "Up to 1 year",
+    intake: "Aug · Jan",
+  },
+  {
+    name: "Finland",
+    img: img.finland,
+    desc: "Top-rated education system, innovation focus and a strong welfare state.",
+    work: "2 years",
+    intake: "Aug · Jan",
+  },
+  {
+    name: "Czech Republic",
+    img: img.europe,
+    desc: "Central European universities with affordable tuition and growing English offerings.",
+    work: "Varies",
+    intake: "Sep · Feb",
+  },
+  {
+    name: "Belgium",
+    img: img.france,
+    desc: "Multilingual campuses and strong European networks for business and science.",
+    work: "Varies",
+    intake: "Sep · Feb",
+  },
+  {
+    name: "Netherlands",
+    img: img.europe,
+    desc: "Highly international universities with a wide range of English-taught degrees.",
+    work: "Orientation year",
+    intake: "Sep · Feb",
   },
   {
     name: "New Zealand",
-    img: nz,
+    img: img.oceania,
     desc: "Small classes, practical learning and post-study work rights of up to 3 years.",
     work: "Up to 3 years",
     intake: "Feb · Jul",
   },
   {
-    name: "Finland",
-    img: finland,
-    desc: "Top-rated education system, innovation focus and a strong welfare state.",
-    work: "2 years",
+    name: "Slovenia",
+    img: img.mediterranean,
+    desc: "Compact European study destination with accessible tuition and scenic campuses.",
+    work: "Varies",
+    intake: "Oct · Feb",
+  },
+  {
+    name: "Latvia",
+    img: img.nordic,
+    desc: "Baltic universities offering English programmes at competitive costs.",
+    work: "Varies",
+    intake: "Sep · Feb",
+  },
+  {
+    name: "Malta",
+    img: img.mediterranean,
+    desc: "English-speaking island destination within the EU for business and hospitality studies.",
+    work: "Varies",
+    intake: "Oct · Feb",
+  },
+  {
+    name: "Romania",
+    img: img.europe,
+    desc: "Affordable European degrees with established medicine and engineering pathways.",
+    work: "Varies",
+    intake: "Oct · Feb",
+  },
+  {
+    name: "Bulgaria",
+    img: img.europe,
+    desc: "Cost-effective European study options with English-taught medical programmes.",
+    work: "Varies",
+    intake: "Oct · Feb",
+  },
+  {
+    name: "Canada",
+    img: img.canada,
+    desc: "Affordable, welcoming and a clear pathway from study permit to permanent residence.",
+    work: "Up to 3 years PGWP",
+    intake: "Sep · Jan · May",
+  },
+  {
+    name: "USA",
+    img: img.usa,
+    desc: "The world's largest higher-education system with unmatched research and STEM OPT.",
+    work: "1–3 years OPT",
     intake: "Aug · Jan",
   },
+  {
+    name: "UAE",
+    img: img.asia,
+    desc: "International branch campuses and career-focused programmes in a global hub.",
+    work: "Varies",
+    intake: "Sep · Jan",
+  },
+  {
+    name: "Malaysia",
+    img: img.malaysia,
+    desc: "Branch campuses of UK and Australian universities at a fraction of the cost.",
+    work: "Limited",
+    intake: "Jan · May · Sep",
+  },
+  {
+    name: "Cyprus",
+    img: img.mediterranean,
+    desc: "English-taught programmes in a Mediterranean setting with growing international intake.",
+    work: "Varies",
+    intake: "Sep · Feb",
+  },
+  {
+    name: "Turkey",
+    img: img.mediterranean,
+    desc: "Wide programme choice across public and private universities with competitive fees.",
+    work: "Varies",
+    intake: "Sep · Feb",
+  },
+  {
+    name: "South Korea",
+    img: img.eastAsia,
+    desc: "Technology-forward universities with expanding English-taught graduate options.",
+    work: "Varies",
+    intake: "Mar · Sep",
+  },
 ];
+
+/** Homepage “Top Study Destinations” — first 10 of the official list. */
+export const topDestinations = destinations.slice(0, 10);
 
 export const programCategories = [
   { name: "Business & Management", count: 1240, examples: "MBA, Finance, Marketing, Supply Chain" },
@@ -194,19 +324,44 @@ export const howItWorks = [
 export const whyUs = [
   {
     title: "Direct university partnerships",
-    body: "Official representation with 1,500+ institutions across 50+ countries.",
+    body: "Official representation with 2,000+ institutions across 30+ countries.",
   },
   {
-    title: "Certified counselors",
-    body: "Trained consultants with years of country-specific experience.",
+    title: "SECP Registered",
+    body: "Global Roots Consultants is SECP Registered — a verified, professionally run consultancy.",
   },
   {
     title: "Transparent case tracking",
     body: "Follow every stage of your journey in your personal student portal.",
   },
   {
-    title: "Proven visa outcomes",
-    body: "A 98% visa success rate built on meticulous documentation.",
+    title: "Experienced counselors",
+    body: "Trained consultants with years of country-specific study-abroad experience.",
+  },
+];
+
+/** Homepage featured scholarships — titles only; no invented amounts or deadlines. */
+export const featuredScholarships = [
+  {
+    name: "France Eiffel Scholarship",
+    country: "France",
+    summary: "French government excellence programme for international postgraduate students.",
+  },
+  {
+    name: "Hungarian Stipendium Scholarship",
+    country: "Hungary",
+    summary:
+      "Government scholarship supporting international students across Hungarian universities.",
+  },
+  {
+    name: "Regional & University-Specific Scholarships",
+    country: "Multiple",
+    summary: "Funding opportunities offered by regions and partner universities worldwide.",
+  },
+  {
+    name: "Bright Scholarships",
+    country: "Multiple",
+    summary: "Merit-focused scholarship pathways for eligible international applicants.",
   },
 ];
 
@@ -305,9 +460,17 @@ export const resources = [
   },
 ];
 
+/** Primary Global Roots company statistics. */
 export const stats = [
-  { value: "1,500+", label: "Universities" },
-  { value: "50+", label: "Countries" },
-  { value: "10,000+", label: "Students Guided" },
-  { value: "98%", label: "Success Rate" },
+  { value: "2,000+", label: "Universities" },
+  { value: "30+", label: "Countries" },
+  { value: "500+", label: "Students Guided" },
+  { value: "SECP", label: "Registered" },
+];
+
+export const trustSignals = [
+  "Official university representatives",
+  "SECP Registered",
+  "British Council trained counselors",
+  "Our Office — Gulberg III, Lahore",
 ];

@@ -33,6 +33,8 @@ export const siteContact = {
     href: "mailto:info@globalroots.pk",
   },
   location: {
+    /** Single office label — do not present multiple city offices. */
+    label: "Our Office",
     display: "Gulberg III, Lahore",
     shortDisplay: "Lahore, Pakistan",
     fullDisplay: "Gulberg III, Lahore, Pakistan",
@@ -45,6 +47,7 @@ export const siteContact = {
     href: "https://wa.me/923000000000",
   },
   hours: "Mon–Sat, 10:00–19:00",
+  registration: "SECP Registered",
 } as const;
 
 /**
