@@ -2,13 +2,13 @@
  * Single source of truth for public contact details and social channels.
  * Values below are reused from existing site content (contact page / footer).
  *
- * Social `href` fields are placeholders until real Global Roots profile URLs
- * are provided — empty hrefs are never rendered.
+ * Social `href` fields must be real Global Roots profile URLs.
+ * Empty hrefs are never rendered — do not invent account links.
  */
 import type { AppPath } from "@/data/navigation";
 
 export type SocialChannelId =
-  "facebook" | "instagram" | "linkedin" | "youtube" | "tiktok" | "whatsapp" | "x";
+  "facebook" | "instagram" | "youtube" | "linkedin" | "x" | "snapchat" | "tiktok" | "whatsapp";
 
 export type SocialLink = {
   id: SocialChannelId;
@@ -48,16 +48,20 @@ export const siteContact = {
 } as const;
 
 /**
- * PLACEHOLDER social URLs — set a real https URL to show the icon.
- * Do not invent account links.
+ * Shared social-channel configuration used by the utility bar,
+ * mobile navigation drawer, and footer.
+ *
+ * Only entries with a non-empty `href` are rendered.
+ * Paste real Global Roots profile URLs here when available.
  */
 export const socialLinks: SocialLink[] = [
   { id: "facebook", label: "Facebook", href: "" },
   { id: "instagram", label: "Instagram", href: "" },
-  { id: "linkedin", label: "LinkedIn", href: "" },
   { id: "youtube", label: "YouTube", href: "" },
-  // TikTok omitted until a real URL + matching icon are available
+  { id: "linkedin", label: "LinkedIn", href: "" },
   { id: "x", label: "X", href: "" },
+  { id: "snapchat", label: "Snapchat", href: "" },
+  { id: "tiktok", label: "TikTok", href: "" },
   {
     id: "whatsapp",
     label: "WhatsApp",

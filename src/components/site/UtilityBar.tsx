@@ -1,32 +1,8 @@
 import { Link } from "@tanstack/react-router";
-import {
-  Facebook,
-  Instagram,
-  Linkedin,
-  Mail,
-  MapPin,
-  MessageCircle,
-  Phone,
-  Twitter,
-  Youtube,
-  type LucideIcon,
-} from "lucide-react";
-import {
-  getConfiguredSocialLinks,
-  siteContact,
-  utilityQuickLinks,
-  type SocialChannelId,
-} from "@/data/contact";
+import { Mail, MapPin, Phone } from "lucide-react";
+import { SocialLinks } from "@/components/site/SocialLinks";
+import { getConfiguredSocialLinks, siteContact, utilityQuickLinks } from "@/data/contact";
 import { cn } from "@/lib/utils";
-
-const socialIcons: Partial<Record<SocialChannelId, LucideIcon>> = {
-  facebook: Facebook,
-  instagram: Instagram,
-  linkedin: Linkedin,
-  youtube: Youtube,
-  whatsapp: MessageCircle,
-  x: Twitter,
-};
 
 export function UtilityBar({ className }: { className?: string }) {
   const social = getConfiguredSocialLinks();
@@ -38,7 +14,7 @@ export function UtilityBar({ className }: { className?: string }) {
         className,
       )}
     >
-      <div className="mx-auto flex h-9 w-full max-w-[1680px] items-center justify-between gap-4 px-5 text-[12px] md:px-6 lg:px-8 xl:px-10">
+      <div className="mx-auto flex h-10 w-full max-w-[1680px] items-center justify-between gap-4 px-5 text-[12px] md:px-6 lg:px-8 xl:px-10">
         {/* Left — contact */}
         <div className="flex min-w-0 items-center gap-3 lg:gap-5">
           <a
@@ -77,26 +53,7 @@ export function UtilityBar({ className }: { className?: string }) {
 
         {/* Right — social + quick links */}
         <div className="flex shrink-0 items-center gap-3 lg:gap-4">
-          {social.length > 0 ? (
-            <div className="flex items-center gap-0.5">
-              {social.map((item) => {
-                const Icon = socialIcons[item.id];
-                if (!Icon) return null;
-                return (
-                  <a
-                    key={item.id}
-                    href={item.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={item.label}
-                    className="inline-flex h-7 w-7 items-center justify-center rounded-sm text-navy-foreground/80 transition-colors hover:bg-navy-foreground/10 hover:text-bright focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bright/50"
-                  >
-                    <Icon className="h-3.5 w-3.5" aria-hidden />
-                  </a>
-                );
-              })}
-            </div>
-          ) : null}
+          <SocialLinks size="utility" surface="navy" />
 
           {social.length > 0 ? (
             <span className="hidden h-3 w-px shrink-0 bg-navy-foreground/20 xl:block" aria-hidden />
@@ -119,34 +76,4 @@ export function UtilityBar({ className }: { className?: string }) {
   );
 }
 
-export function ContactSocialLinks({
-  className,
-  iconClassName,
-}: {
-  className?: string;
-  iconClassName?: string;
-}) {
-  const social = getConfiguredSocialLinks();
-  if (social.length === 0) return null;
-
-  return (
-    <div className={cn("flex flex-wrap items-center gap-1", className)}>
-      {social.map((item) => {
-        const Icon = socialIcons[item.id];
-        if (!Icon) return null;
-        return (
-          <a
-            key={item.id}
-            href={item.href}
-            target="_blank"
-            rel="noopener noreferrer"
-            aria-label={item.label}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-md text-navy/70 transition-colors hover:bg-accent hover:text-royal focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-          >
-            <Icon className={cn("h-4 w-4", iconClassName)} aria-hidden />
-          </a>
-        );
-      })}
-    </div>
-  );
-}
+export { ContactSocialLinks } from "@/components/site/SocialLinks";

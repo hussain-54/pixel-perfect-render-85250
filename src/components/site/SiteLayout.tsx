@@ -3,6 +3,7 @@ import { Link } from "@tanstack/react-router";
 import { Mail, Phone, MapPin } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { Header } from "@/components/site/Header";
+import { SocialLinks } from "@/components/site/SocialLinks";
 import { siteContact } from "@/data/contact";
 
 function Footer() {
@@ -112,9 +113,9 @@ function Footer() {
         </div>
       </div>
       <div className="border-t border-navy-foreground/10">
-        <div className="container-page flex flex-col justify-between gap-2 py-5 text-xs text-navy-foreground/50 sm:flex-row sm:items-center">
+        <div className="container-page flex flex-col justify-between gap-3 py-5 text-xs text-navy-foreground/50 sm:flex-row sm:items-center">
           <span>© 2026 Global Roots Consultants. All rights reserved.</span>
-          <span>Global Education & Visa Consultants</span>
+          <SocialLinks size="utility" surface="navy" className="sm:justify-end" />
         </div>
       </div>
     </footer>

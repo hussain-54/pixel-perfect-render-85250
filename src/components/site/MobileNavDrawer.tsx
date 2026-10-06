@@ -2,7 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronDown, Mail, MapPin, Phone, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { ContactSocialLinks } from "@/components/site/UtilityBar";
+import { SocialLinks } from "@/components/site/SocialLinks";
 import { siteContact } from "@/data/contact";
 import { mainNavigation, megaMenus, type MegaMenuId } from "@/data/navigation";
 import { cn } from "@/lib/utils";
@@ -302,7 +302,7 @@ export function MobileNavDrawer({
                 )}
               </li>
             </ul>
-            <ContactSocialLinks className="mt-2 px-1" />
+            <SocialLinks className="mt-2 px-1" size="default" />
           </div>
 
           <div className="mt-3 border-t border-border pt-3">

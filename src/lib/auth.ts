@@ -138,10 +138,10 @@ export async function signInWithPassword(options: {
   const remember = Boolean(options.remember);
 
   if (!email || !password) {
-    return { ok: false, error: "Enter your email and password to continue." };
+    return { ok: false, error: "Please enter your email and password to continue." };
   }
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return { ok: false, error: "Enter a valid email address." };
+    return { ok: false, error: "Please enter a valid email address." };
   }
   if (password.length < 6) {
     return { ok: false, error: "Password must be at least 6 characters." };
@@ -184,7 +184,7 @@ export async function requestPasswordReset(
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const email = normalizeEmail(emailRaw);
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return { ok: false, error: "Enter a valid email address." };
+    return { ok: false, error: "Please enter a valid email address." };
   }
 
   if (!isSupabaseConfigured()) {
@@ -212,14 +212,16 @@ export async function signUpStudent(options: {
   fullName: string;
   email: string;
   password: string;
+  phone?: string;
 }): Promise<SignInResult> {
   const fullName = options.fullName.trim();
   const email = normalizeEmail(options.email);
   const password = options.password;
+  const phone = options.phone?.trim() ?? "";
 
-  if (!fullName) return { ok: false, error: "Enter your full name." };
+  if (!fullName) return { ok: false, error: "Please enter your full name." };
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return { ok: false, error: "Enter a valid email address." };
+    return { ok: false, error: "Please enter a valid email address." };
   }
   if (password.length < 8) {
     return { ok: false, error: "Password must be at least 8 characters." };
@@ -238,7 +240,11 @@ export async function signUpStudent(options: {
       email,
       password,
       options: {
-        data: { full_name: fullName, role: "student" },
+        data: {
+          full_name: fullName,
+          role: "student",
+          ...(phone ? { phone } : {}),
+        },
       },
     });
     if (error) return { ok: false, error: error.message };

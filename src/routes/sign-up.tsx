@@ -1,12 +1,11 @@
 import { useState, type FormEvent } from "react";
 import { Link, createFileRoute, useNavigate } from "@tanstack/react-router";
-import { Eye, EyeOff, Loader2 } from "lucide-react";
+import { CheckCircle2, Loader2 } from "lucide-react";
+import { AuthField } from "@/components/auth/AuthField";
+import { AuthPasswordField } from "@/components/auth/AuthPasswordField";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { signUpStudent } from "@/lib/auth";
-import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/sign-up")({
   head: () => ({
@@ -14,55 +13,75 @@ export const Route = createFileRoute("/sign-up")({
       { title: "Create Account — Global Roots Consultants" },
       {
         name: "description",
-        content: "Create a Global Roots student account to track your study abroad journey.",
+        content: "Create a Global Roots student account to start your study abroad journey.",
       },
     ],
   }),
   component: SignUpPage,
 });
 
+type FieldKey = "fullName" | "email" | "phone" | "password" | "confirmPassword";
+
 function SignUpPage() {
   const navigate = useNavigate();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
+  const [success, setSuccess] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [fieldErrors, setFieldErrors] = useState<{
-    fullName?: string;
-    email?: string;
-    password?: string;
-  }>({});
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<FieldKey, string>>>({});
+
+  function clearFieldError(key: FieldKey) {
+    setFieldErrors((f) => {
+      if (!f[key]) return f;
+      const next = { ...f };
+      delete next[key];
+      return next;
+    });
+  }
 
   function validate() {
-    const next: { fullName?: string; email?: string; password?: string } = {};
-    if (!fullName.trim()) next.fullName = "Full name is required.";
-    if (!email.trim()) next.email = "Email is required.";
+    const next: Partial<Record<FieldKey, string>> = {};
+    if (!fullName.trim()) next.fullName = "Please enter your full name.";
+    if (!email.trim()) next.email = "Please enter your email address.";
     else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim())) {
-      next.email = "Enter a valid email address.";
+      next.email = "Please enter a valid email address.";
     }
-    if (!password) next.password = "Password is required.";
-    else if (password.length < 8) next.password = "Use at least 8 characters.";
+    if (!phone.trim()) next.phone = "Please enter your phone number.";
+    else if (phone.replace(/\D/g, "").length < 8) {
+      next.phone = "Please enter a valid phone number.";
+    }
+    if (!password) next.password = "Please create a password.";
+    else if (password.length < 8) next.password = "Password must be at least 8 characters.";
+    if (!confirmPassword) next.confirmPassword = "Please confirm your password.";
+    else if (password !== confirmPassword) next.confirmPassword = "Those passwords don't match.";
     setFieldErrors(next);
     return Object.keys(next).length === 0;
   }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
+    if (loading || success) return;
     setError(null);
     setInfo(null);
     if (!validate()) return;
 
     setLoading(true);
     try {
-      const result = await signUpStudent({ fullName, email, password });
+      const result = await signUpStudent({ fullName, email, phone, password });
       if (result.ok) {
-        await navigate({ to: result.redirectTo });
+        setSuccess(true);
+        window.setTimeout(() => {
+          void navigate({ to: result.redirectTo });
+        }, 1200);
         return;
       }
-      // Confirmation-required path still surfaces as a soft message
       if (result.error.toLowerCase().includes("check your email")) {
         setInfo(result.error);
         return;
@@ -75,150 +94,143 @@ function SignUpPage() {
 
   return (
     <AuthShell
-      title="Create your account"
-      subtitle="Student accounts start here. Consultant and admin access is issued by Global Roots."
+      title="Create your Global Roots account"
+      subtitle="Start your journey to studying abroad."
       footer={
         <p className="text-center text-sm text-muted-foreground">
           Already have an account?{" "}
-          <Link to="/sign-in" className="font-semibold text-royal hover:text-navy">
+          <Link
+            to="/sign-in"
+            className="font-semibold text-royal transition-colors hover:text-navy"
+          >
             Sign In
           </Link>
         </p>
       }
     >
-      <form onSubmit={onSubmit} className="space-y-5" noValidate>
-        {error ? (
-          <div
-            role="alert"
-            className="rounded-md border border-destructive/30 bg-destructive/5 px-3.5 py-3 text-sm text-destructive"
-          >
-            {error}
-          </div>
-        ) : null}
-        {info ? (
-          <div
-            role="status"
-            className="rounded-md border border-royal/25 bg-accent/60 px-3.5 py-3 text-sm text-navy"
-          >
-            {info}{" "}
-            <Link to="/sign-in" className="font-semibold text-royal hover:text-navy">
-              Go to Sign In
-            </Link>
-          </div>
-        ) : null}
+      {success ? (
+        <div
+          role="status"
+          className="animate-in fade-in duration-300 rounded-md border border-royal/20 bg-accent/70 px-4 py-6 text-center"
+        >
+          <CheckCircle2 className="mx-auto h-8 w-8 text-royal" aria-hidden />
+          <p className="mt-3 font-display text-lg font-semibold text-navy">
+            Account created successfully.
+          </p>
+          <p className="mt-1.5 text-sm text-muted-foreground">Taking you to your student portal…</p>
+        </div>
+      ) : (
+        <form onSubmit={onSubmit} className="space-y-5" noValidate>
+          {error ? (
+            <div
+              role="alert"
+              className="rounded-md border border-destructive/30 bg-destructive/5 px-3.5 py-3 text-sm text-destructive"
+            >
+              {error}
+            </div>
+          ) : null}
+          {info ? (
+            <div
+              role="status"
+              className="rounded-md border border-royal/25 bg-accent/60 px-3.5 py-3 text-sm text-navy"
+            >
+              {info}{" "}
+              <Link to="/sign-in" className="font-semibold text-royal hover:text-navy">
+                Go to Sign In
+              </Link>
+            </div>
+          ) : null}
 
-        <div className="space-y-2">
-          <Label htmlFor="sign-up-name" className="text-navy">
-            Full name
-          </Label>
-          <Input
+          <AuthField
             id="sign-up-name"
+            label="Full Name"
             autoComplete="name"
             value={fullName}
             onChange={(e) => {
               setFullName(e.target.value);
-              if (fieldErrors.fullName) {
-                setFieldErrors((f) => {
-                  const next = { ...f };
-                  delete next.fullName;
-                  return next;
-                });
-              }
+              clearFieldError("fullName");
             }}
             placeholder="Your full name"
-            className={cn(fieldErrors.fullName && "border-destructive")}
+            error={fieldErrors.fullName}
             disabled={loading}
           />
-          {fieldErrors.fullName ? (
-            <p className="text-xs text-destructive">{fieldErrors.fullName}</p>
-          ) : null}
-        </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="sign-up-email" className="text-navy">
-            Email
-          </Label>
-          <Input
+          <AuthField
             id="sign-up-email"
+            label="Email Address"
             type="email"
             autoComplete="email"
+            inputMode="email"
             value={email}
             onChange={(e) => {
               setEmail(e.target.value);
-              if (fieldErrors.email) {
-                setFieldErrors((f) => {
-                  const next = { ...f };
-                  delete next.email;
-                  return next;
-                });
-              }
+              clearFieldError("email");
             }}
             placeholder="you@example.com"
-            className={cn(fieldErrors.email && "border-destructive")}
+            error={fieldErrors.email}
             disabled={loading}
           />
-          {fieldErrors.email ? (
-            <p className="text-xs text-destructive">{fieldErrors.email}</p>
-          ) : null}
-        </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="sign-up-password" className="text-navy">
-            Password
-          </Label>
-          <div className="relative">
-            <Input
-              id="sign-up-password"
-              type={showPassword ? "text" : "password"}
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => {
-                setPassword(e.target.value);
-                if (fieldErrors.password) {
-                  setFieldErrors((f) => {
-                    const next = { ...f };
-                    delete next.password;
-                    return next;
-                  });
-                }
-              }}
-              placeholder="At least 8 characters"
-              className={cn("pr-11", fieldErrors.password && "border-destructive")}
-              disabled={loading}
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword((v) => !v)}
-              className="absolute right-2 top-1/2 inline-flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-navy"
-              aria-label={showPassword ? "Hide password" : "Show password"}
-              tabIndex={-1}
-            >
-              {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-            </button>
-          </div>
-          {fieldErrors.password ? (
-            <p className="text-xs text-destructive">{fieldErrors.password}</p>
-          ) : null}
-        </div>
+          <AuthField
+            id="sign-up-phone"
+            label="Phone Number"
+            type="tel"
+            autoComplete="tel"
+            inputMode="tel"
+            value={phone}
+            onChange={(e) => {
+              setPhone(e.target.value);
+              clearFieldError("phone");
+            }}
+            placeholder="+92 300 1234567"
+            error={fieldErrors.phone}
+            disabled={loading}
+          />
 
-        <Button type="submit" className="h-12 w-full text-base font-semibold" disabled={loading}>
-          {loading ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
-              Creating account…
-            </>
-          ) : (
-            "Create account"
-          )}
-        </Button>
+          <AuthPasswordField
+            id="sign-up-password"
+            label="Password"
+            value={password}
+            onChange={(value) => {
+              setPassword(value);
+              clearFieldError("password");
+            }}
+            error={fieldErrors.password}
+            disabled={loading}
+            autoComplete="new-password"
+            placeholder="At least 8 characters"
+            showPassword={showPassword}
+            onToggleVisibility={() => setShowPassword((v) => !v)}
+          />
 
-        <p className="text-center text-xs leading-relaxed text-muted-foreground">
-          Prefer to speak with a consultant first?{" "}
-          <Link to="/contact" className="font-semibold text-royal hover:text-navy">
-            Book a free consultation
-          </Link>
-        </p>
-      </form>
+          <AuthPasswordField
+            id="sign-up-confirm"
+            label="Confirm Password"
+            value={confirmPassword}
+            onChange={(value) => {
+              setConfirmPassword(value);
+              clearFieldError("confirmPassword");
+            }}
+            error={fieldErrors.confirmPassword}
+            disabled={loading}
+            autoComplete="new-password"
+            placeholder="Re-enter your password"
+            showPassword={showConfirm}
+            onToggleVisibility={() => setShowConfirm((v) => !v)}
+          />
+
+          <Button type="submit" className="h-12 w-full text-base font-semibold" disabled={loading}>
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
+                Creating account...
+              </>
+            ) : (
+              "Create Account"
+            )}
+          </Button>
+        </form>
+      )}
     </AuthShell>
   );
 }
