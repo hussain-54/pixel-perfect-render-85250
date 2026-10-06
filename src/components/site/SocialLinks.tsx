@@ -9,7 +9,7 @@ import {
   Youtube,
   type LucideIcon,
 } from "lucide-react";
-import { getConfiguredSocialLinks, type SocialChannelId } from "@/data/contact";
+import { socialLinks, type SocialChannelId } from "@/data/contact";
 import { cn } from "@/lib/utils";
 
 const socialIcons: Record<SocialChannelId, LucideIcon> = {
@@ -44,34 +44,54 @@ type SocialLinksProps = {
   surface?: "navy" | "light" | undefined;
 };
 
-export function SocialLinks({ className, size = "default", surface = "light" }: SocialLinksProps) {
-  const social = getConfiguredSocialLinks();
-  if (social.length === 0) return null;
+function iconShellClass(
+  id: SocialChannelId,
+  size: "utility" | "default",
+  surface: "navy" | "light",
+  interactive: boolean,
+) {
+  const hit = size === "utility" ? "h-8 w-8" : "h-9 w-9";
+  return cn(
+    "inline-flex shrink-0 items-center justify-center rounded-full shadow-[0_1px_0_rgb(0_0_0_/0.12)] transition-[transform,opacity,background-color] duration-200 ease-out",
+    interactive && "hover:scale-[1.06] hover:opacity-95 active:scale-[0.98]",
+    "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bright/60 focus-visible:ring-offset-1",
+    surface === "navy" ? "focus-visible:ring-offset-navy" : "focus-visible:ring-offset-white",
+    hit,
+    brandClassName[id],
+  );
+}
 
-  const hit = size === "utility" ? "h-8 w-8" /* 32px — within 30–34px */ : "h-9 w-9";
+export function SocialLinks({ className, size = "default", surface = "light" }: SocialLinksProps) {
   const glyph = size === "utility" ? "h-[17px] w-[17px]" : "h-[18px] w-[18px]";
 
   return (
     <nav aria-label="Social media" className={cn("flex items-center gap-1.5", className)}>
-      {social.map((item) => {
+      {socialLinks.map((item) => {
         const Icon = socialIcons[item.id];
+        const href = item.href.trim();
+        const interactive = Boolean(href);
+
+        if (!interactive) {
+          return (
+            <span
+              key={item.id}
+              aria-label={item.label}
+              title={`${item.label} — link coming soon`}
+              className={iconShellClass(item.id, size, surface, false)}
+            >
+              <Icon className={glyph} aria-hidden strokeWidth={2.1} />
+            </span>
+          );
+        }
+
         return (
           <a
             key={item.id}
-            href={item.href}
+            href={href}
             target="_blank"
             rel="noopener noreferrer"
             aria-label={item.label}
-            className={cn(
-              "inline-flex shrink-0 items-center justify-center rounded-full shadow-[0_1px_0_rgb(0_0_0_/0.12)] transition-[transform,opacity,background-color] duration-200 ease-out",
-              "hover:scale-[1.06] hover:opacity-95 active:scale-[0.98]",
-              "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bright/60 focus-visible:ring-offset-1",
-              surface === "navy"
-                ? "focus-visible:ring-offset-navy"
-                : "focus-visible:ring-offset-white",
-              hit,
-              brandClassName[item.id],
-            )}
+            className={iconShellClass(item.id, size, surface, true)}
           >
             <Icon className={glyph} aria-hidden strokeWidth={2.1} />
           </a>

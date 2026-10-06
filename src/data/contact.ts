@@ -2,8 +2,8 @@
  * Single source of truth for public contact details and social channels.
  * Values below are reused from existing site content (contact page / footer).
  *
- * Social `href` fields must be real Global Roots profile URLs.
- * Empty hrefs are never rendered — do not invent account links.
+ * Paste real Global Roots profile URLs into `socialLinks` when ready.
+ * Icons always render; empty hrefs show the icon without a live link.
  */
 import type { AppPath } from "@/data/navigation";
 
@@ -13,7 +13,7 @@ export type SocialChannelId =
 export type SocialLink = {
   id: SocialChannelId;
   label: string;
-  /** Leave empty until a real profile URL is available. */
+  /** Real profile URL, or empty until provided. */
   href: string;
 };
 
@@ -51,8 +51,7 @@ export const siteContact = {
  * Shared social-channel configuration used by the utility bar,
  * mobile navigation drawer, and footer.
  *
- * Only entries with a non-empty `href` are rendered.
- * Paste real Global Roots profile URLs here when available.
+ * Icons always display. Add real URLs when available.
  */
 export const socialLinks: SocialLink[] = [
   { id: "facebook", label: "Facebook", href: "" },
@@ -75,6 +74,7 @@ export const utilityQuickLinks: UtilityQuickLink[] = [
   { label: "Free Consultation", to: "/contact" },
 ];
 
+/** Social channels that currently have a live URL. */
 export function getConfiguredSocialLinks(): SocialLink[] {
   return socialLinks.filter((link) => Boolean(link.href.trim()));
 }

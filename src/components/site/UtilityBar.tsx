@@ -1,11 +1,11 @@
 import { Link } from "@tanstack/react-router";
 import { Mail, MapPin, Phone } from "lucide-react";
 import { SocialLinks } from "@/components/site/SocialLinks";
-import { getConfiguredSocialLinks, siteContact, utilityQuickLinks } from "@/data/contact";
+import { socialLinks, siteContact, utilityQuickLinks } from "@/data/contact";
 import { cn } from "@/lib/utils";
 
 export function UtilityBar({ className }: { className?: string }) {
-  const social = getConfiguredSocialLinks();
+  const hasSocial = socialLinks.length > 0;
 
   return (
     <div
@@ -15,7 +15,7 @@ export function UtilityBar({ className }: { className?: string }) {
       )}
     >
       <div className="mx-auto flex h-10 w-full max-w-[1680px] items-center justify-between gap-4 px-5 text-[12px] md:px-6 lg:px-8 xl:px-10">
-        {/* Left — contact */}
+        {/* Left - contact */}
         <div className="flex min-w-0 items-center gap-3 lg:gap-5">
           <a
             href={siteContact.phone.href}
@@ -51,11 +51,11 @@ export function UtilityBar({ className }: { className?: string }) {
           )}
         </div>
 
-        {/* Right — social + quick links */}
+        {/* Right - social + quick links */}
         <div className="flex shrink-0 items-center gap-3 lg:gap-4">
           <SocialLinks size="utility" surface="navy" />
 
-          {social.length > 0 ? (
+          {hasSocial ? (
             <span className="hidden h-3 w-px shrink-0 bg-navy-foreground/20 xl:block" aria-hidden />
           ) : null}
 
