@@ -142,7 +142,7 @@ export function Header() {
               asChild
               variant="default"
               size="sm"
-              className="hidden h-10 shrink-0 whitespace-nowrap px-4 text-sm min-[1400px]:inline-flex"
+              className="hidden h-10 shrink-0 whitespace-nowrap px-3 text-sm sm:inline-flex min-[1400px]:px-4"
             >
               <Link to="/contact" onClick={closeMenus}>
                 Book Consultation
@@ -151,8 +151,9 @@ export function Header() {
 
             <Link
               to="/sign-in"
+              search={{}}
               onClick={closeMenus}
-              className="hidden h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border px-3 text-sm font-medium text-navy transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-[1400px]:inline-flex"
+              className="hidden h-10 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md border border-border px-3 text-sm font-medium text-navy transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:inline-flex"
             >
               <UserRound className="h-3.5 w-3.5 shrink-0" aria-hidden />
               Sign In

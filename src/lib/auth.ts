@@ -1,41 +1,34 @@
 import type { User } from "@supabase/supabase-js";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
-import type { PortalRole } from "@/components/portal/PortalShell";
+import { findDemoAccount, findDemoAccountByEmail, isDemoAuthEnabled } from "@/lib/demo-auth";
+import {
+  portalHomeByRole,
+  normalizeAppRole,
+  type AppRole,
+  type PortalHome,
+} from "@/lib/roles";
+import {
+  clearSession,
+  establishSession,
+  getPortalSession,
+  type PublicSession,
+} from "@/server/portal-data";
 
-export type AuthRole = PortalRole;
+export type { AppRole, PortalHome };
+export { portalHomeByRole, normalizeAppRole };
 
-export type PortalHome = "/student/dashboard" | "/staff/dashboard" | "/admin/dashboard";
-
-export const portalHomeByRole: Record<AuthRole, PortalHome> = {
-  student: "/student/dashboard",
-  staff: "/staff/dashboard",
-  admin: "/admin/dashboard",
-};
+/** @deprecated Use AppRole — kept for older imports. */
+export type AuthRole = AppRole;
 
 const REMEMBER_EMAIL_KEY = "gr_remember_email";
 const DEMO_SESSION_KEY = "gr_demo_session";
 
-/** Local demo accounts used when Supabase Auth users are not yet provisioned. */
-const DEMO_ACCOUNTS: Array<{ email: string; password: string; role: AuthRole }> = [
-  { email: "student@globalroots.pk", password: "demo1234", role: "student" },
-  { email: "consultant@globalroots.pk", password: "demo1234", role: "staff" },
-  { email: "admin@globalroots.pk", password: "demo1234", role: "admin" },
-];
-
 export type SignInResult =
-  { ok: true; role: AuthRole; redirectTo: PortalHome } | { ok: false; error: string };
+  | { ok: true; role: AppRole; redirectTo: PortalHome }
+  | { ok: false; error: string };
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
-}
-
-function normalizeRole(value: unknown): AuthRole | null {
-  if (typeof value !== "string") return null;
-  const role = value.trim().toLowerCase();
-  if (role === "student") return "student";
-  if (role === "staff" || role === "consultant") return "staff";
-  if (role === "admin") return "admin";
-  return null;
 }
 
 export function getRememberedEmail(): string {
@@ -57,9 +50,9 @@ export function setRememberedEmail(email: string | null) {
   }
 }
 
-function setDemoSession(role: AuthRole, email: string, remember: boolean) {
-  if (typeof window === "undefined") return;
-  const payload = JSON.stringify({ role, email, at: Date.now() });
+function setClientDemoSession(role: AppRole, email: string, remember: boolean, consultantId?: string) {
+  if (typeof window === "undefined" || !isDemoAuthEnabled()) return;
+  const payload = JSON.stringify({ role, email, consultantId, at: Date.now() });
   try {
     sessionStorage.setItem(DEMO_SESSION_KEY, payload);
     if (remember) localStorage.setItem(DEMO_SESSION_KEY, payload);
@@ -69,15 +62,27 @@ function setDemoSession(role: AuthRole, email: string, remember: boolean) {
   }
 }
 
-export function getDemoSession(): { role: AuthRole; email: string } | null {
-  if (typeof window === "undefined") return null;
+export function getDemoSession(): {
+  role: AppRole;
+  email: string;
+  consultantId?: string;
+} | null {
+  if (typeof window === "undefined" || !isDemoAuthEnabled()) return null;
   try {
     const raw = sessionStorage.getItem(DEMO_SESSION_KEY) ?? localStorage.getItem(DEMO_SESSION_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as { role?: unknown; email?: unknown };
-    const role = normalizeRole(parsed.role);
+    const parsed = JSON.parse(raw) as {
+      role?: unknown;
+      email?: unknown;
+      consultantId?: unknown;
+    };
+    const role = normalizeAppRole(parsed.role);
     if (!role || typeof parsed.email !== "string") return null;
-    return { role, email: parsed.email };
+    return {
+      role,
+      email: parsed.email,
+      ...(typeof parsed.consultantId === "string" ? { consultantId: parsed.consultantId } : {}),
+    };
   } catch {
     return null;
   }
@@ -93,40 +98,90 @@ export function clearDemoSession() {
   }
 }
 
-async function resolveSupabaseRole(user: User): Promise<AuthRole> {
-  const fromApp = normalizeRole(user.app_metadata?.["role"]);
+/** Trusted role resolution — app_metadata then profiles. Never user_metadata. */
+async function resolveSupabaseRole(user: User): Promise<AppRole> {
+  const fromApp = normalizeAppRole(user.app_metadata?.["role"]);
   if (fromApp) return fromApp;
-
-  const fromUser = normalizeRole(user.user_metadata?.["role"]);
-  if (fromUser) return fromUser;
 
   try {
     const supabase = getSupabase();
     const { data } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
-    const fromProfile = normalizeRole(data?.role);
+    const fromProfile = normalizeAppRole(data?.role);
     if (fromProfile) return fromProfile;
   } catch {
     /* profiles table may not exist yet */
   }
 
-  // Safe default for new accounts without an assigned role
   return "student";
 }
 
-function signInDemo(email: string, password: string, remember: boolean): SignInResult {
-  const match = DEMO_ACCOUNTS.find(
-    (account) => account.email === email && account.password === password,
-  );
-  if (!match) {
-    return { ok: false, error: "Invalid email or password. Please try again." };
+async function authHeaders(): Promise<HeadersInit | undefined> {
+  if (!isSupabaseConfigured()) return undefined;
+  try {
+    const { data } = await getSupabase().auth.getSession();
+    const token = data.session?.access_token;
+    if (!token) return undefined;
+    return { Authorization: `Bearer ${token}` };
+  } catch {
+    return undefined;
   }
-  setDemoSession(match.role, match.email, remember);
-  return { ok: true, role: match.role, redirectTo: portalHomeByRole[match.role] };
+}
+
+/** Headers for authorized server functions (Supabase Bearer when available). */
+export async function getAuthRequestHeaders(): Promise<HeadersInit | undefined> {
+  return authHeaders();
+}
+
+export async function getAuthSession(): Promise<PublicSession | null> {
+  try {
+    const headers = await authHeaders();
+    const cookieSession = await getPortalSession(headers ? { headers } : undefined);
+    if (cookieSession) return cookieSession;
+  } catch {
+    /* fall through */
+  }
+
+  if (isSupabaseConfigured()) {
+    try {
+      const { data } = await getSupabase().auth.getSession();
+      if (data.session?.user) {
+        const role = await resolveSupabaseRole(data.session.user);
+        return {
+          role,
+          email: (data.session.user.email ?? "").toLowerCase(),
+          source: "supabase" as const,
+        };
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (isDemoAuthEnabled()) {
+    const demo = getDemoSession();
+    if (demo) {
+      // Re-derive role from the allow-list — never trust a client-edited role claim.
+      const account = findDemoAccountByEmail(demo.email);
+      if (account) {
+        const role = normalizeAppRole(account.role);
+        if (role) {
+          return {
+            role,
+            email: account.email,
+            source: "demo" as const,
+            ...(account.consultantId ? { consultantId: account.consultantId } : {}),
+          };
+        }
+      }
+    }
+  }
+
+  return null;
 }
 
 /**
- * Unified sign-in: Supabase Auth first, demo accounts as fallback.
- * Role is resolved from metadata / profiles — never selected in the UI.
+ * Unified sign-in. Demo accounts only when demo auth is enabled.
+ * Role is never selected in the UI.
  */
 export async function signInWithPassword(options: {
   email: string;
@@ -155,28 +210,108 @@ export async function signInWithPassword(options: {
       const supabase = getSupabase();
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
 
-      if (!error && data.user) {
+      if (!error && data.user && data.session?.access_token) {
         clearDemoSession();
-        const role = await resolveSupabaseRole(data.user);
+        const established = await establishSession({
+          data: { accessToken: data.session.access_token },
+        });
+        const role = established.role;
         return { ok: true, role, redirectTo: portalHomeByRole[role] };
       }
 
-      // Unknown Supabase user — allow demo accounts for local/portal preview
-      const demo = signInDemo(email, password, remember);
-      if (demo.ok) return demo;
+      if (isDemoAuthEnabled()) {
+        const demo = findDemoAccount(email, password);
+        if (demo) {
+          const established = await establishSession({
+            data: { demoEmail: email, demoPassword: password },
+          });
+          setClientDemoSession(
+            established.role,
+            established.email,
+            remember,
+            established.consultantId,
+          );
+          return {
+            ok: true,
+            role: established.role,
+            redirectTo: portalHomeByRole[established.role],
+          };
+        }
+      }
 
       return {
         ok: false,
         error: error?.message ?? "Invalid email or password. Please try again.",
       };
     } catch {
-      const demo = signInDemo(email, password, remember);
-      if (demo.ok) return demo;
+      if (isDemoAuthEnabled()) {
+        const demo = findDemoAccount(email, password);
+        if (demo) {
+          try {
+            const established = await establishSession({
+              data: { demoEmail: email, demoPassword: password },
+            });
+            setClientDemoSession(
+              established.role,
+              established.email,
+              remember,
+              established.consultantId,
+            );
+            return {
+              ok: true,
+              role: established.role,
+              redirectTo: portalHomeByRole[established.role],
+            };
+          } catch {
+            /* fall through */
+          }
+        }
+      }
       return { ok: false, error: "Unable to sign in right now. Please try again." };
     }
   }
 
-  return signInDemo(email, password, remember);
+  if (!isDemoAuthEnabled()) {
+    return {
+      ok: false,
+      error: "Authentication is not configured for this environment.",
+    };
+  }
+
+  const demo = findDemoAccount(email, password);
+  if (!demo) {
+    return { ok: false, error: "Invalid email or password. Please try again." };
+  }
+
+  try {
+    const established = await establishSession({
+      data: { demoEmail: email, demoPassword: password },
+    });
+    setClientDemoSession(established.role, established.email, remember, established.consultantId);
+    return {
+      ok: true,
+      role: established.role,
+      redirectTo: portalHomeByRole[established.role],
+    };
+  } catch {
+    return { ok: false, error: "Unable to sign in right now. Please try again." };
+  }
+}
+
+export async function signOut(): Promise<void> {
+  clearDemoSession();
+  if (isSupabaseConfigured()) {
+    try {
+      await getSupabase().auth.signOut();
+    } catch {
+      /* ignore */
+    }
+  }
+  try {
+    await clearSession();
+  } catch {
+    /* ignore */
+  }
 }
 
 export async function requestPasswordReset(
@@ -236,13 +371,13 @@ export async function signUpStudent(options: {
 
   try {
     const supabase = getSupabase();
+    // Do not put role in user_metadata — roles are assigned via profiles / app_metadata only.
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
         data: {
           full_name: fullName,
-          role: "student",
           ...(phone ? { phone } : {}),
         },
       },
@@ -255,10 +390,15 @@ export async function signUpStudent(options: {
       };
     }
 
-    // If email confirmation is disabled, session may already exist
-    if (data.session) {
-      const role = await resolveSupabaseRole(data.user);
-      return { ok: true, role, redirectTo: portalHomeByRole[role] };
+    if (data.session?.access_token) {
+      const established = await establishSession({
+        data: { accessToken: data.session.access_token },
+      });
+      return {
+        ok: true,
+        role: established.role,
+        redirectTo: portalHomeByRole[established.role],
+      };
     }
 
     return {

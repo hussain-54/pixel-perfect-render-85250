@@ -8,8 +8,23 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { getRememberedEmail, signInWithPassword } from "@/lib/auth";
+import { portalHomeByRole, roleCanAccessPortal, type AppRole, type PortalHome } from "@/lib/roles";
+
+const PORTAL_HOMES: PortalHome[] = [
+  "/student/dashboard",
+  "/staff/dashboard",
+  "/admin/dashboard",
+];
+
+function isPortalHome(value: unknown): value is PortalHome {
+  return typeof value === "string" && (PORTAL_HOMES as string[]).includes(value);
+}
 
 export const Route = createFileRoute("/sign-in")({
+  validateSearch: (search: Record<string, unknown>): { redirect?: PortalHome } => {
+    const value = search["redirect"];
+    return isPortalHome(value) ? { redirect: value } : {};
+  },
   head: () => ({
     meta: [
       { title: "Sign In — Global Roots Consultants" },
@@ -24,6 +39,7 @@ export const Route = createFileRoute("/sign-in")({
 
 function SignInPage() {
   const navigate = useNavigate();
+  const { redirect: redirectTo } = Route.useSearch();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [remember, setRemember] = useState(true);
@@ -61,6 +77,21 @@ function SignInPage() {
     return Object.keys(next).length === 0;
   }
 
+  function resolveDestination(role: AppRole): PortalHome {
+    if (redirectTo) {
+      if (redirectTo.startsWith("/student") && roleCanAccessPortal(role, "student")) {
+        return redirectTo;
+      }
+      if (redirectTo.startsWith("/staff") && roleCanAccessPortal(role, "staff")) {
+        return redirectTo;
+      }
+      if (redirectTo.startsWith("/admin") && roleCanAccessPortal(role, "admin")) {
+        return redirectTo;
+      }
+    }
+    return portalHomeByRole[role];
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
     if (loading) return;
@@ -74,7 +105,7 @@ function SignInPage() {
         setError(result.error);
         return;
       }
-      await navigate({ to: result.redirectTo });
+      await navigate({ to: resolveDestination(result.role) });
     } finally {
       setLoading(false);
     }

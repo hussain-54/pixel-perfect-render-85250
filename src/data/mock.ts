@@ -11,6 +11,7 @@ import type {
   Notification,
   ActivityItem,
   AuditLog,
+  OfficerTask,
 } from "@/types";
 
 export const STAGES: Stage[] = [
@@ -247,6 +248,8 @@ export const students: Student[] = [
     "c4",
     "2026-09-20",
   ),
+  s(11, "Sara Iqbal", "UK", "MSc Data Science", "Master's", "offer_received", "c1", "2026-09-18"),
+  s(12, "Usman Ali", "UK", "MSc Finance", "Master's", "visa_preparation", "c1", "2026-09-15"),
 ];
 
 export const appointments: Appointment[] = [
@@ -350,6 +353,10 @@ export const documents: StudentDocument[] = [
     uploaded: "2026-09-14",
     status: "Approved",
     reviewer: "Ayesha Khan",
+    expiresOn: "2026-12-15",
+    version: 1,
+    linkedApplicationId: "APP-3002",
+    uploadedBy: "Ali Raza",
   },
   {
     id: "d2",
@@ -367,6 +374,9 @@ export const documents: StudentDocument[] = [
     category: "Academic Certificates",
     uploaded: "2026-09-15",
     status: "Pending Review",
+    version: 1,
+    linkedApplicationId: "APP-3002",
+    uploadedBy: "Ali Raza",
   },
   {
     id: "d4",
@@ -375,6 +385,9 @@ export const documents: StudentDocument[] = [
     category: "Academic Transcripts",
     uploaded: "2026-09-15",
     status: "Pending Review",
+    version: 2,
+    linkedApplicationId: "APP-3002",
+    uploadedBy: "Ali Raza",
   },
   {
     id: "d5",
@@ -384,6 +397,7 @@ export const documents: StudentDocument[] = [
     uploaded: "2026-09-16",
     status: "Approved",
     reviewer: "Ayesha Khan",
+    expiresOn: "2026-11-30",
   },
   {
     id: "d6",
@@ -394,6 +408,9 @@ export const documents: StudentDocument[] = [
     status: "Needs Correction",
     comment: "Please expand your career goals section and mention why you chose the UK.",
     reviewer: "Ayesha Khan",
+    version: 1,
+    linkedApplicationId: "APP-3002",
+    uploadedBy: "Ali Raza",
   },
   {
     id: "d7",
@@ -404,6 +421,9 @@ export const documents: StudentDocument[] = [
     status: "Rejected",
     comment: "Statement must cover the last 6 months and be bank-stamped.",
     reviewer: "Sana Malik",
+    version: 1,
+    linkedApplicationId: "APP-3002",
+    uploadedBy: "Ali Raza",
   },
   {
     id: "d8",
@@ -430,6 +450,9 @@ export const documents: StudentDocument[] = [
     category: "CV",
     uploaded: "2026-09-27",
     status: "Pending Review",
+    version: 1,
+    linkedApplicationId: "APP-3008",
+    uploadedBy: "Zainab Shah",
   },
   {
     id: "d11",
@@ -438,6 +461,9 @@ export const documents: StudentDocument[] = [
     category: "Recommendation Letter",
     uploaded: "2026-09-27",
     status: "Pending Review",
+    version: 2,
+    linkedApplicationId: "APP-3008",
+    uploadedBy: "Zainab Shah",
   },
   {
     id: "d12",
@@ -477,6 +503,59 @@ export const documents: StudentDocument[] = [
   },
 ];
 
+// Soft-archive one record for directory archived filter demos.
+students[6]!.archived = true;
+
+export const officerTasks: OfficerTask[] = [
+  {
+    id: "t1",
+    studentId: "s1",
+    title: "Call University of Essex",
+    dueAt: "2026-10-08T10:00:00.000Z",
+    priority: "overdue",
+    status: "open",
+    assigneeId: "c1",
+    reminderRef: "task:t1",
+  },
+  {
+    id: "t2",
+    studentId: "s1",
+    title: "Follow up: Ali Raza passport",
+    dueAt: "2026-10-10T16:00:00.000Z",
+    priority: "due_today",
+    status: "open",
+    assigneeId: "c1",
+    reminderRef: "task:t2",
+  },
+  {
+    id: "t3",
+    studentId: "s4",
+    title: "Confirm TU Munich document pack",
+    dueAt: "2026-10-12T09:00:00.000Z",
+    priority: "upcoming",
+    status: "open",
+    assigneeId: "c1",
+  },
+  {
+    id: "t4",
+    studentId: "s8",
+    title: "Review Amna portfolio feedback",
+    dueAt: "2026-10-11T12:00:00.000Z",
+    priority: "upcoming",
+    status: "in_progress",
+    assigneeId: "c1",
+  },
+  {
+    id: "t5",
+    studentId: "s2",
+    title: "Toronto application checklist",
+    dueAt: "2026-10-09T08:00:00.000Z",
+    priority: "overdue",
+    status: "open",
+    assigneeId: "c2",
+  },
+];
+
 export const applications: Application[] = [
   {
     id: "APP-3001",
@@ -486,8 +565,8 @@ export const applications: Application[] = [
     program: "MSc Data Science",
     intake: "Jan 2027",
     appliedOn: "—",
-    deadline: "2026-11-15",
-    status: "Ready",
+    deadline: "2026-10-12",
+    status: "Ready to Submit",
     officerId: "c1",
   },
   {
@@ -498,8 +577,8 @@ export const applications: Application[] = [
     program: "MSc Data Science & Analytics",
     intake: "Jan 2027",
     appliedOn: "—",
-    deadline: "2026-11-30",
-    status: "Draft",
+    deadline: "2026-10-14",
+    status: "Docs Pending",
     officerId: "c1",
   },
   {
@@ -569,9 +648,9 @@ export const applications: Application[] = [
     country: "Germany",
     program: "MSc Mechanical",
     intake: "Apr 2027",
-    appliedOn: "—",
+    appliedOn: "2026-09-01",
     deadline: "2026-12-15",
-    status: "Draft",
+    status: "Offer Received",
     officerId: "c1",
   },
   {
@@ -597,6 +676,42 @@ export const applications: Application[] = [
     deadline: "2026-10-31",
     status: "Rejected",
     officerId: "c4",
+  },
+  {
+    id: "APP-3011",
+    studentId: "s8",
+    university: "University of Bologna",
+    country: "Italy",
+    program: "MA Design",
+    intake: "Sep 2026",
+    appliedOn: "2026-08-20",
+    deadline: "2026-10-20",
+    status: "Offer Received",
+    officerId: "c1",
+  },
+  {
+    id: "APP-3012",
+    studentId: "s11",
+    university: "University of Leeds",
+    country: "UK",
+    program: "MSc Data Science",
+    intake: "Jan 2027",
+    appliedOn: "2026-09-05",
+    deadline: "2026-11-15",
+    status: "Offer Received",
+    officerId: "c1",
+  },
+  {
+    id: "APP-3013",
+    studentId: "s12",
+    university: "University of Essex",
+    country: "UK",
+    program: "MSc Finance",
+    intake: "Jan 2027",
+    appliedOn: "2026-08-15",
+    deadline: "2026-09-30",
+    status: "Offer Received",
+    officerId: "c1",
   },
 ];
 

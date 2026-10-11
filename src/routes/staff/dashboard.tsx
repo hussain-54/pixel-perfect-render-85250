@@ -1,6 +1,7 @@
+import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { Calendar, Users, Inbox } from "lucide-react";
-import { DEMO_CONSULTANT_ID, DEMO_TODAY } from "@/components/portal/demo";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { CalendarClock, FileSearch, FolderKanban, Users } from "lucide-react";
 import {
   PageHeader,
   Panel,
@@ -9,128 +10,236 @@ import {
   fmtDate,
   LoadingRows,
   ErrorState,
+  EmptyState,
+  PermissionDenied,
+  portalErrorMessage,
 } from "@/components/common";
-import { StatusBadge } from "@/components/StatusBadge";
-import { Initials } from "@/components/common";
+import { Button } from "@/components/ui/button";
 import { useData } from "@/lib/useData";
-import {
-  getConsultant,
-  getStudents,
-  getAppointments,
-  getDocuments,
-  lookupStudent,
-  stageLabel,
-} from "@/services";
+import { getOfficerDashboard, reviewStudentDocument } from "@/services";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/staff/dashboard")({
   component: StaffDashboard,
 });
 
 function StaffDashboard() {
-  const consultantQ = useData(["staff", "consultant", DEMO_CONSULTANT_ID], () =>
-    getConsultant(DEMO_CONSULTANT_ID),
-  );
-  const studentsQ = useData(["students"], getStudents);
-  const apptsQ = useData(["appointments"], getAppointments);
-  const docsQ = useData(["documents"], getDocuments);
+  const queryClient = useQueryClient();
+  const dashQ = useData(["officer", "dashboard"], getOfficerDashboard);
+  const [reviewError, setReviewError] = useState<string | null>(null);
 
-  if (consultantQ.isLoading || studentsQ.isLoading) return <LoadingRows rows={6} />;
-  if (!consultantQ.data) return <ErrorState body="Demo consultant not found." />;
+  const reviewM = useMutation({
+    mutationFn: ({ id, action }: { id: string; action: "Approved" | "Rejected" }) =>
+      reviewStudentDocument(id, action),
+    onSuccess: async () => {
+      setReviewError(null);
+      await queryClient.invalidateQueries({ queryKey: ["officer", "dashboard"] });
+      await queryClient.invalidateQueries({ queryKey: ["officer", "documents-queue"] });
+      await queryClient.invalidateQueries({ queryKey: ["documents"] });
+    },
+    onError: (err) => setReviewError(portalErrorMessage(err, "Review failed.")),
+  });
 
-  const consultant = consultantQ.data;
-  const myStudents = (studentsQ.data ?? []).filter((s) => s.consultantId === DEMO_CONSULTANT_ID);
-  const todayAppts = (apptsQ.data ?? []).filter(
-    (a) => a.consultantId === DEMO_CONSULTANT_ID && a.date === DEMO_TODAY,
-  );
-  const pendingAppts = (apptsQ.data ?? []).filter(
-    (a) => a.consultantId === DEMO_CONSULTANT_ID && a.status === "Requested",
-  );
-  const pendingDocs = (docsQ.data ?? []).filter(
-    (d) => d.status === "Pending Review" && myStudents.some((s) => s.id === d.studentId),
-  );
+  if (dashQ.isLoading) return <LoadingRows rows={8} />;
+
+  if (dashQ.isError) {
+    const msg = portalErrorMessage(dashQ.error);
+    if (msg.toLowerCase().includes("permission") || String(dashQ.error).includes("403")) {
+      return <PermissionDenied body={msg} />;
+    }
+    return <ErrorState body={msg} />;
+  }
+
+  const data = dashQ.data;
+  if (!data) return <EmptyState title="No dashboard data" body="No authorized records available." />;
 
   return (
     <div>
       <PageHeader
-        title={`Good day, ${consultant.name.split(" ")[0]}`}
-        subtitle={`Demo consultant · ${consultant.role} · ${consultant.department}`}
+        title={`Good day, ${data.greetingName}`}
+        subtitle={data.deskLabel}
       />
-      <p className="mb-4 rounded-md border border-dashed border-royal/30 bg-accent/50 px-3 py-2 text-xs text-muted-foreground">
-        Logged in as <strong className="text-navy">{consultant.name}</strong> (mock consultant c1).
-        Schedule uses demo date {fmtDate(DEMO_TODAY)}.
-      </p>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Assigned students" value={myStudents.length} icon={<Users />} />
         <StatCard
-          label="Today’s sessions"
-          value={todayAppts.length}
-          hint="On demo calendar date"
-          icon={<Calendar />}
+          label="Assigned students"
+          value={data.metrics.assignedStudents}
+          icon={<Users />}
         />
-        <StatCard label="Pending requests" value={pendingAppts.length} icon={<Inbox />} />
-        <StatCard label="Docs to review" value={pendingDocs.length} icon={<Inbox />} />
+        <StatCard
+          label="Apps in progress"
+          value={data.metrics.appsInProgress}
+          icon={<FolderKanban />}
+        />
+        <StatCard
+          label="Docs to review"
+          value={data.metrics.docsToReview}
+          icon={<FileSearch />}
+        />
+        <StatCard
+          label="Deadlines this week"
+          value={data.metrics.deadlinesThisWeek}
+          icon={<CalendarClock />}
+        />
+      </div>
+
+      <div className="mb-6 grid gap-6 lg:grid-cols-2">
+        <Panel
+          title="Today's Tasks"
+          action={
+            <Link to="/staff/activity" className="text-xs font-semibold text-royal hover:underline">
+              All tasks »
+            </Link>
+          }
+        >
+          {!data.todaysTasks.length ? (
+            <EmptyState title="No open tasks" body="You have no overdue or due tasks right now." />
+          ) : (
+            <ul className="space-y-3">
+              {data.todaysTasks.map((t) => (
+                <li
+                  key={t.id}
+                  className="flex items-start justify-between gap-3 border-t border-border/70 pt-3 first:border-0 first:pt-0"
+                >
+                  <div className="min-w-0">
+                    <p
+                      className={cn(
+                        "text-sm font-semibold text-navy",
+                        t.priority === "overdue" && "font-bold text-danger",
+                      )}
+                    >
+                      {t.title}
+                    </p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {t.studentName ?? "General"}
+                      {" · "}
+                      {t.priority === "overdue"
+                        ? "Overdue"
+                        : t.priority === "due_today"
+                          ? "Due today"
+                          : fmtDate(t.dueAt.slice(0, 10))}
+                    </p>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+
+        <Panel
+          title="Assigned Students"
+          action={
+            <Link to="/staff/students" className="text-xs font-semibold text-royal hover:underline">
+              All students »
+            </Link>
+          }
+        >
+          {!data.assignedOverview.length ? (
+            <EmptyState
+              title="No assigned students"
+              body="Students appear here once they are assigned to you."
+            />
+          ) : (
+            <TableWrap>
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Dest.</th>
+                  <th>Stage</th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.assignedOverview.map((s) => (
+                  <tr key={s.id}>
+                    <td>
+                      <Link
+                        to="/staff/students/$studentId"
+                        params={{ studentId: s.id }}
+                        search={{ tab: "assessment" }}
+                        className="font-medium text-navy hover:text-royal hover:underline"
+                      >
+                        {s.name}
+                      </Link>
+                    </td>
+                    <td>{s.destination}</td>
+                    <td className="text-xs">{s.stageLabel}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </TableWrap>
+          )}
+        </Panel>
       </div>
 
       <div className="grid gap-6 lg:grid-cols-2">
-        <Panel title="Today’s schedule">
-          {!todayAppts.length ? (
-            <p className="text-sm text-muted-foreground">No appointments on the demo date.</p>
+        <Panel title="Documents Waiting for Review">
+          {reviewError ? <div className="mb-3"><ErrorState body={reviewError} /></div> : null}
+          {!data.docsWaiting.length ? (
+            <EmptyState title="Inbox clear" body="No documents awaiting your review." />
           ) : (
-            <ul className="space-y-3">
-              {todayAppts.map((a) => {
-                const st = lookupStudent(a.studentId);
-                return (
-                  <li
-                    key={a.id}
-                    className="flex items-center gap-3 border-t pt-3 first:border-0 first:pt-0"
-                  >
-                    <Initials name={st?.name ?? "?"} />
-                    <div className="min-w-0 flex-1">
-                      <p className="font-semibold text-navy">{st?.name}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {a.time} · {a.type}
-                      </p>
-                    </div>
-                    <StatusBadge status={a.status} />
-                  </li>
-                );
-              })}
+            <ul className="space-y-4">
+              {data.docsWaiting.map((d) => (
+                <li
+                  key={d.id}
+                  className="flex flex-col gap-2 border-t border-border/70 pt-3 first:border-0 first:pt-0 sm:flex-row sm:items-center sm:justify-between"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-navy">
+                      {d.studentName} · {d.category}
+                    </p>
+                    <p className="text-xs text-muted-foreground">Uploaded {fmtDate(d.uploaded)}</p>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      variant="navy"
+                      disabled={reviewM.isPending}
+                      onClick={() => reviewM.mutate({ id: d.id, action: "Approved" })}
+                    >
+                      Approve
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={reviewM.isPending}
+                      onClick={() => reviewM.mutate({ id: d.id, action: "Rejected" })}
+                    >
+                      Reject
+                    </Button>
+                  </div>
+                </li>
+              ))}
             </ul>
           )}
-          <Link
-            to="/staff/appointments"
-            className="mt-4 inline-block text-sm font-semibold text-royal hover:underline"
-          >
-            Full calendar →
-          </Link>
         </Panel>
 
-        <Panel title="Assigned students">
-          <TableWrap>
-            <thead>
-              <tr>
-                <th>Student</th>
-                <th>Destination</th>
-                <th>Stage</th>
-              </tr>
-            </thead>
-            <tbody>
-              {myStudents.slice(0, 5).map((s) => (
-                <tr key={s.id}>
-                  <td className="font-medium text-navy">{s.name}</td>
-                  <td>{s.destination}</td>
-                  <td className="text-xs">{stageLabel(s.stage)}</td>
-                </tr>
+        <Panel title="Upcoming Deadlines">
+          {!data.upcomingDeadlines.length ? (
+            <EmptyState
+              title="No deadlines in the next 14 days"
+              body="Application and offer deadlines for your students will show here."
+            />
+          ) : (
+            <ul className="space-y-3">
+              {data.upcomingDeadlines.map((d) => (
+                <li
+                  key={d.id}
+                  className="flex items-center justify-between gap-3 border-t border-border/70 pt-3 first:border-0 first:pt-0"
+                >
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-navy">{d.label}</p>
+                    <p className="text-xs text-muted-foreground">{d.studentName}</p>
+                  </div>
+                  <div className="shrink-0 text-right text-xs">
+                    <p className="font-semibold text-navy">{fmtDate(d.deadline)}</p>
+                    <p className={cn(d.daysLeft <= 3 ? "font-bold text-danger" : "text-muted-foreground")}>
+                      {d.daysLeft === 0 ? "Today" : `${d.daysLeft} days left`}
+                    </p>
+                  </div>
+                </li>
               ))}
-            </tbody>
-          </TableWrap>
-          <Link
-            to="/staff/students"
-            className="mt-4 inline-block text-sm font-semibold text-royal hover:underline"
-          >
-            All students →
-          </Link>
+            </ul>
+          )}
         </Panel>
       </div>
     </div>

@@ -100,7 +100,7 @@ function SignUpPage() {
         <p className="text-center text-sm text-muted-foreground">
           Already have an account?{" "}
           <Link
-            to="/sign-in"
+            to="/sign-in" search={{}}
             className="font-semibold text-royal transition-colors hover:text-navy"
           >
             Sign In
@@ -135,7 +135,7 @@ function SignUpPage() {
               className="rounded-md border border-royal/25 bg-accent/60 px-3.5 py-3 text-sm text-navy"
             >
               {info}{" "}
-              <Link to="/sign-in" className="font-semibold text-royal hover:text-navy">
+              <Link to="/sign-in" search={{}} className="font-semibold text-royal hover:text-navy">
                 Go to Sign In
               </Link>
             </div>

@@ -1,12 +1,17 @@
 import type { ReactNode } from "react";
-import { useState } from "react";
-import { Link, Outlet, useRouterState } from "@tanstack/react-router";
-import { Menu } from "lucide-react";
+import { useEffect, useState } from "react";
+import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { LogOut, Menu, Search } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { RoleSwitcher } from "@/components/site/RoleSwitcher";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { isDemoAuthEnabled } from "@/lib/demo-auth";
+import { signOut } from "@/lib/auth";
+import { searchAuthorizedStudents } from "@/services";
 import { cn } from "@/lib/utils";
 
 export type PortalRole = "student" | "staff" | "admin";
@@ -21,9 +26,13 @@ export type PortalNavItem = {
     | "/student/notifications"
     | "/staff/dashboard"
     | "/staff/students"
+    | "/staff/students/$studentId"
     | "/staff/appointments"
     | "/staff/applications"
     | "/staff/documents"
+    | "/staff/offers"
+    | "/staff/tasks"
+    | "/staff/reports"
     | "/staff/leads"
     | "/staff/activity"
     | "/admin/dashboard"
@@ -96,10 +105,40 @@ type PortalShellProps = {
   barTitle?: string;
 };
 
-/** Shared portal chrome: sidebar, top bar, demo role switcher. */
+/** Shared portal chrome: sidebar, top bar, logout; demo role switcher only when demo auth is enabled. */
 export function PortalShell({ role, nav, children, barTitle }: PortalShellProps) {
   const meta = roleMeta[role];
+  const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [signingOut, setSigningOut] = useState(false);
+  const [searchQ, setSearchQ] = useState("");
+  const [searchOpen, setSearchOpen] = useState(false);
+  const showDemoSwitcher = isDemoAuthEnabled();
+  const showGlobalSearch = role === "staff";
+
+  const searchQTrim = searchQ.trim();
+  const searchResults = useQuery({
+    queryKey: ["officer", "global-search", searchQTrim],
+    queryFn: () => searchAuthorizedStudents(searchQTrim),
+    enabled: showGlobalSearch && searchQTrim.length >= 2,
+    staleTime: 15_000,
+  });
+
+  useEffect(() => {
+    if (searchQTrim.length < 2) setSearchOpen(false);
+    else setSearchOpen(true);
+  }, [searchQTrim]);
+
+  async function onSignOut() {
+    if (signingOut) return;
+    setSigningOut(true);
+    try {
+      await signOut();
+      await navigate({ to: "/sign-in", search: {} });
+    } finally {
+      setSigningOut(false);
+    }
+  }
 
   return (
     <div className="flex min-h-svh bg-surface">
@@ -107,12 +146,25 @@ export function PortalShell({ role, nav, children, barTitle }: PortalShellProps)
         <div className="border-b border-sidebar-border px-4 py-5">
           <Logo light to={meta.home} />
           <p className="mt-3 text-[0.65rem] font-bold uppercase tracking-[0.2em] text-bright">
-            Demo portal
+            {showDemoSwitcher ? "Demo portal" : "Secure portal"}
           </p>
         </div>
         <SidebarNav items={nav} />
-        <div className="mt-auto border-t border-sidebar-border p-4 text-xs text-sidebar-foreground/60">
-          Mock data only — no live backend.
+        <div className="mt-auto space-y-3 border-t border-sidebar-border p-4">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full justify-start gap-2 border-sidebar-border bg-transparent text-sidebar-foreground hover:bg-sidebar-accent"
+            onClick={onSignOut}
+            disabled={signingOut}
+          >
+            <LogOut className="h-4 w-4" aria-hidden />
+            {signingOut ? "Signing out..." : "Sign out"}
+          </Button>
+          <p className="text-xs text-sidebar-foreground/60">
+            {showDemoSwitcher ? "Mock data — demo auth enabled." : "Authorized access only."}
+          </p>
         </div>
       </aside>
 
@@ -127,6 +179,19 @@ export function PortalShell({ role, nav, children, barTitle }: PortalShellProps)
             </SheetTitle>
           </SheetHeader>
           <SidebarNav items={nav} onNavigate={() => setMobileOpen(false)} />
+          <div className="border-t border-sidebar-border p-4">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full justify-start gap-2"
+              onClick={onSignOut}
+              disabled={signingOut}
+            >
+              <LogOut className="h-4 w-4" aria-hidden />
+              Sign out
+            </Button>
+          </div>
         </SheetContent>
       </Sheet>
 
@@ -146,11 +211,69 @@ export function PortalShell({ role, nav, children, barTitle }: PortalShellProps)
             <span className="truncate font-display text-base font-semibold text-navy md:text-lg">
               {barTitle ?? meta.title}
             </span>
+            {showGlobalSearch ? (
+              <div className="relative ml-auto hidden min-w-0 max-w-md flex-1 md:block">
+                <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={searchQ}
+                  onChange={(e) => setSearchQ(e.target.value)}
+                  onFocus={() => searchQTrim.length >= 2 && setSearchOpen(true)}
+                  onBlur={() => window.setTimeout(() => setSearchOpen(false), 150)}
+                  placeholder="Search student, ID, phone..."
+                  aria-label="Search students"
+                  className="h-9 pl-8"
+                />
+                {searchOpen && searchQTrim.length >= 2 ? (
+                  <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-40 rounded-md border border-border bg-white shadow-md">
+                    {searchResults.isLoading ? (
+                      <p className="px-3 py-2 text-xs text-muted-foreground">Searching…</p>
+                    ) : searchResults.isError ? (
+                      <p className="px-3 py-2 text-xs text-danger">Search unavailable</p>
+                    ) : !(searchResults.data?.length) ? (
+                      <p className="px-3 py-2 text-xs text-muted-foreground">No authorized matches</p>
+                    ) : (
+                      <ul className="max-h-64 overflow-auto py-1">
+                        {searchResults.data.map((hit) => (
+                          <li key={hit.id}>
+                            <Link
+                              to="/staff/students/$studentId"
+                              params={{ studentId: hit.id }}
+                              search={{ tab: "assessment" }}
+                              className="block px-3 py-2 text-sm hover:bg-accent"
+                              onMouseDown={(e) => e.preventDefault()}
+                              onClick={() => {
+                                setSearchQ("");
+                                setSearchOpen(false);
+                              }}
+                            >
+                              <span className="font-semibold text-navy">{hit.name}</span>
+                              <span className="ml-2 text-xs text-muted-foreground">
+                                {hit.caseId} · {hit.phone}
+                              </span>
+                            </Link>
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
           </div>
-          <div className="hidden shrink-0 md:block">
+          <div className="hidden shrink-0 lg:block">
             <Logo to={meta.home} />
           </div>
-          <RoleSwitcher current={meta.switcherLabel} />
+          {showDemoSwitcher ? <RoleSwitcher current={meta.switcherLabel} /> : null}
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="hidden sm:inline-flex"
+            onClick={onSignOut}
+            disabled={signingOut}
+          >
+            Sign out
+          </Button>
         </header>
         <main className="flex-1 p-4 md:p-6 lg:p-7">{children ?? <Outlet />}</main>
       </div>

@@ -18,6 +18,7 @@ import {
   Settings,
 } from "lucide-react";
 import { PortalShell, type PortalNavItem } from "@/components/portal/PortalShell";
+import { requirePortalAccess } from "@/lib/portal-guard";
 
 const adminNav: PortalNavItem[] = [
   { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -39,6 +40,7 @@ const adminNav: PortalNavItem[] = [
 ];
 
 export const Route = createFileRoute("/admin")({
+  beforeLoad: requirePortalAccess("admin"),
   component: AdminPortalLayout,
 });
 

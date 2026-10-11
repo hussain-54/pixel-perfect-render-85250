@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import type { Database } from "@/types/database";
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim() ?? "";
 const supabasePublishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY?.trim() ?? "";
@@ -7,10 +8,10 @@ export function isSupabaseConfigured(): boolean {
   return Boolean(supabaseUrl && supabasePublishableKey);
 }
 
-let client: SupabaseClient | null = null;
+let client: SupabaseClient<Database> | null = null;
 
 /** Shared Supabase client using the publishable (anon) key. */
-export function getSupabase(): SupabaseClient {
+export function getSupabase(): SupabaseClient<Database> {
   if (!isSupabaseConfigured()) {
     throw new Error(
       "Supabase is not configured. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in .env",
@@ -31,10 +32,10 @@ export function getSupabase(): SupabaseClient {
 }
 
 /** Same client as getSupabase() — created on first property access if needed. */
-export const supabase = new Proxy({} as SupabaseClient, {
+export const supabase = new Proxy({} as SupabaseClient<Database>, {
   get(_target, prop) {
     const instance = getSupabase();
-    const value = instance[prop as keyof SupabaseClient];
+    const value = instance[prop as keyof SupabaseClient<Database>];
     return typeof value === "function" ? value.bind(instance) : value;
   },
 });

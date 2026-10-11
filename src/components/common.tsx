@@ -94,6 +94,27 @@ export function ErrorState({
   );
 }
 
+/** Parse `status:message` errors thrown by portal server functions. */
+export function portalErrorMessage(error: unknown, fallback = "Something went wrong.") {
+  if (!(error instanceof Error)) return fallback;
+  const m = error.message.match(/^(\d{3}):([\s\S]+)$/);
+  if (m?.[1] === "403") return m[2]?.trim() || "You do not have permission to view this data.";
+  if (m?.[1] === "401") return m[2]?.trim() || "Please sign in to continue.";
+  return m?.[2]?.trim() || error.message || fallback;
+}
+
+export function PermissionDenied({
+  body = "You do not have permission to view this data.",
+}: {
+  body?: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-lg border border-warning/30 bg-warning-soft p-4 text-sm text-navy">
+      <AlertTriangle className="h-4 w-4 text-warning" /> {body}
+    </div>
+  );
+}
+
 export function LoadingRows({ rows = 4 }: { rows?: number }) {
   return (
     <div className="space-y-3" aria-busy>

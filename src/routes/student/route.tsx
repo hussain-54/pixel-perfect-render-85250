@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { LayoutDashboard, Calendar, FileText, GraduationCap, User, Bell } from "lucide-react";
 import { PortalShell, type PortalNavItem } from "@/components/portal/PortalShell";
+import { requirePortalAccess } from "@/lib/portal-guard";
 
 const studentNav: PortalNavItem[] = [
   { to: "/student/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -12,6 +13,7 @@ const studentNav: PortalNavItem[] = [
 ];
 
 export const Route = createFileRoute("/student")({
+  beforeLoad: requirePortalAccess("student"),
   component: StudentPortalLayout,
 });
 

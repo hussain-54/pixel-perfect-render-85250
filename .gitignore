@@ -20,10 +20,20 @@ dist-ssr
 .nitro
 *.local
 
+# Private document blobs (never commit student files)
+.data/
+
 # Env / secrets
 .env
 .env.*
 !.env.example
+
+# Local temp / verification artifacts
+.tmp-*
+.tmp-wireframes/
+tsc-out.txt
+tsc-final.txt
+test-out.txt
 
 # Wrangler / Cloudflare
 .wrangler/

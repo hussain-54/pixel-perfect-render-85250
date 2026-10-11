@@ -308,7 +308,7 @@ export function MobileNavDrawer({
 
           <div className="mt-3 border-t border-border pt-3">
             <Link
-              to="/sign-in"
+              to="/sign-in" search={{}}
               onClick={onClose}
               className="flex items-center justify-between rounded-md px-3 py-3 text-[0.95rem] font-semibold text-navy transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >

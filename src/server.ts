@@ -1,4 +1,7 @@
 import "./lib/error-capture";
+import { startTaskAutomationScheduler } from "./server/task-automation-scheduler";
+
+startTaskAutomationScheduler();
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";

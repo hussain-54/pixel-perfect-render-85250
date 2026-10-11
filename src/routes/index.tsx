@@ -64,21 +64,21 @@ function Home() {
           className="absolute inset-0 h-full w-full object-cover object-[center_30%]"
         />
         <div className="bg-hero-overlay absolute inset-0" />
-        <div className="container-page relative py-16 md:py-20 lg:py-24">
-          <p className="font-display text-xl font-semibold tracking-tight text-navy-foreground md:text-2xl">
+        <div className="container-page relative py-20 md:py-24 lg:py-28">
+          <p className="font-display text-2xl font-semibold tracking-tight text-navy-foreground md:text-3xl">
             Global Roots Consultants
           </p>
-          <p className="mt-1.5 text-[0.6875rem] font-semibold uppercase tracking-[0.18em] text-bright">
+          <p className="mt-2 text-[0.6875rem] font-semibold uppercase tracking-[0.18em] text-bright">
             Global Education & Visa Consultants
           </p>
-          <h1 className="mt-5 max-w-2xl font-display text-[2.15rem] font-semibold leading-[1.1] text-navy-foreground md:text-5xl lg:text-[3.25rem]">
+          <h1 className="mt-6 max-w-2xl font-display text-[2.35rem] font-semibold leading-[1.08] text-navy-foreground md:text-5xl lg:text-[3.4rem]">
             Your Global Education Journey Starts Here.
           </h1>
-          <p className="mt-4 max-w-md text-[0.95rem] leading-relaxed text-navy-foreground/80 md:text-base">
-            Discover world-class universities, explore international study opportunities, and get
-            expert guidance from application to visa.
+          <p className="mt-5 max-w-lg text-base leading-relaxed text-navy-foreground/80 md:text-[1.05rem]">
+            Discover universities abroad and get clear guidance from application through visa —
+            starting with a free consultation.
           </p>
-          <div className="mt-7 flex flex-wrap gap-3">
+          <div className="mt-8 flex flex-wrap gap-3">
             <Button asChild variant="bright" size="lg">
               <Link to="/contact">Book Free Consultation</Link>
             </Button>
@@ -87,17 +87,17 @@ function Home() {
             </Button>
           </div>
         </div>
-        <div className="relative border-t border-navy-foreground/10 bg-navy/85">
-          <div className="container-page grid grid-cols-2 md:grid-cols-4">
+        <div className="relative border-t border-navy-foreground/10 bg-navy/90 backdrop-blur-[2px]">
+          <div className="container-page grid grid-cols-2 gap-y-1 md:grid-cols-4">
             {stats.map((s) => (
               <div
                 key={s.label}
-                className="border-navy-foreground/10 py-6 md:border-l md:px-6 md:first:border-l-0 md:first:pl-0"
+                className="border-navy-foreground/10 py-5 md:border-l md:px-6 md:py-6 md:first:border-l-0 md:first:pl-0"
               >
-                <p className="font-display text-2xl font-semibold text-navy-foreground md:text-3xl">
+                <p className="font-display text-2xl font-semibold text-navy-foreground md:text-[1.75rem]">
                   {s.value}
                 </p>
-                <p className="mt-1 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-bright">
+                <p className="mt-1 text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-bright/90">
                   {s.label}
                 </p>
               </div>

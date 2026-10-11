@@ -11,14 +11,17 @@ export const Route = createFileRoute("/contact")({
       {
         name: "description",
         content:
-          "Book a free study-abroad consultation or contact our office in Faisalabad.",
+          "Book a free study-abroad consultation or contact Global Roots Consultants in Faisalabad.",
       },
       { property: "og:title", content: "Book a Free Consultation — Global Roots Consultants" },
       {
         property: "og:description",
         content: "Speak with a senior education and visa consultant for free.",
       },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
+    links: [{ rel: "canonical", href: "https://globalroots.pk/contact" }],
   }),
   component: Page,
 });

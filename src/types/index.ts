@@ -55,6 +55,22 @@ export interface Student {
   institution: string;
   grade: string;
   englishTest: string;
+  /** Soft-archive flag — excluded from active directory by default. */
+  archived?: boolean;
+}
+
+export type OfficerTaskPriority = "overdue" | "due_today" | "upcoming" | "normal";
+export type OfficerTaskStatus = "open" | "in_progress" | "completed" | "cancelled";
+
+export interface OfficerTask {
+  id: string;
+  studentId: string | null;
+  title: string;
+  dueAt: string;
+  priority: OfficerTaskPriority;
+  status: OfficerTaskStatus;
+  assigneeId: string;
+  reminderRef?: string;
 }
 
 export type AppointmentStatus =
@@ -89,10 +105,30 @@ export interface StudentDocument {
   status: DocumentStatus;
   comment?: string;
   reviewer?: string;
+  /** Passport or certificate expiry. Absent when the document type has none. */
+  expiresOn?: string;
+  /** File version. Greater than 1 means the student re-uploaded. */
+  version?: number;
+  linkedApplicationId?: string;
+  uploadedBy?: string;
+  /** Officer requested the file; the student has not uploaded it yet. */
+  awaitingUpload?: boolean;
+  /** Private storage metadata — never a public URL. */
+  storageBucket?: string;
+  storagePath?: string | null;
+  mimeType?: string;
+  fileSizeBytes?: number;
+  currentVersionId?: string | null;
 }
 
 export type ApplicationStatus =
-  "Draft" | "Ready" | "Submitted" | "Under Review" | "Offer Received" | "Rejected" | "Withdrawn";
+  | "Docs Pending"
+  | "Under Review"
+  | "Ready to Submit"
+  | "Submitted"
+  | "Offer Received"
+  | "Rejected"
+  | "Withdrawn";
 export interface Application {
   id: string;
   studentId: string;

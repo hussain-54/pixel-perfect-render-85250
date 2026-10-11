@@ -50,7 +50,10 @@ import { Route as StaffAppointmentsRouteImport } from './routes/staff/appointmen
 import { Route as StaffDashboardRouteImport } from './routes/staff/dashboard'
 import { Route as StaffDocumentsRouteImport } from './routes/staff/documents'
 import { Route as StaffLeadsRouteImport } from './routes/staff/leads'
+import { Route as StaffOffersRouteImport } from './routes/staff/offers'
+import { Route as StaffReportsRouteImport } from './routes/staff/reports'
 import { Route as StaffStudentsRouteImport } from './routes/staff/students'
+import { Route as StaffTasksRouteImport } from './routes/staff/tasks'
 import { Route as StudentIndexRouteImport } from './routes/student/index'
 import { Route as StudentApplicationsRouteImport } from './routes/student/applications'
 import { Route as StudentAppointmentsRouteImport } from './routes/student/appointments'
@@ -58,6 +61,7 @@ import { Route as StudentDashboardRouteImport } from './routes/student/dashboard
 import { Route as StudentDocumentsRouteImport } from './routes/student/documents'
 import { Route as StudentNotificationsRouteImport } from './routes/student/notifications'
 import { Route as StudentProfileRouteImport } from './routes/student/profile'
+import { Route as StaffStudentsStudentIdRouteImport } from './routes/staff/students.$studentId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -264,9 +268,24 @@ const StaffLeadsRoute = StaffLeadsRouteImport.update({
   path: '/leads',
   getParentRoute: () => StaffRouteRoute,
 } as any)
+const StaffOffersRoute = StaffOffersRouteImport.update({
+  id: '/offers',
+  path: '/offers',
+  getParentRoute: () => StaffRouteRoute,
+} as any)
+const StaffReportsRoute = StaffReportsRouteImport.update({
+  id: '/reports',
+  path: '/reports',
+  getParentRoute: () => StaffRouteRoute,
+} as any)
 const StaffStudentsRoute = StaffStudentsRouteImport.update({
   id: '/students',
   path: '/students',
+  getParentRoute: () => StaffRouteRoute,
+} as any)
+const StaffTasksRoute = StaffTasksRouteImport.update({
+  id: '/tasks',
+  path: '/tasks',
   getParentRoute: () => StaffRouteRoute,
 } as any)
 const StudentIndexRoute = StudentIndexRouteImport.update({
@@ -303,6 +322,11 @@ const StudentProfileRoute = StudentProfileRouteImport.update({
   id: '/profile',
   path: '/profile',
   getParentRoute: () => StudentRouteRoute,
+} as any)
+const StaffStudentsStudentIdRoute = StaffStudentsStudentIdRouteImport.update({
+  id: '/$studentId',
+  path: '/$studentId',
+  getParentRoute: () => StaffStudentsRoute,
 } as any)
 
 export interface FileRoutesByFullPath {
@@ -345,7 +369,10 @@ export interface FileRoutesByFullPath {
   '/staff/dashboard': typeof StaffDashboardRoute
   '/staff/documents': typeof StaffDocumentsRoute
   '/staff/leads': typeof StaffLeadsRoute
-  '/staff/students': typeof StaffStudentsRoute
+  '/staff/offers': typeof StaffOffersRoute
+  '/staff/reports': typeof StaffReportsRoute
+  '/staff/students': typeof StaffStudentsRouteWithChildren
+  '/staff/tasks': typeof StaffTasksRoute
   '/student/applications': typeof StudentApplicationsRoute
   '/student/appointments': typeof StudentAppointmentsRoute
   '/student/dashboard': typeof StudentDashboardRoute
@@ -355,6 +382,7 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AdminIndexRoute
   '/staff/': typeof StaffIndexRoute
   '/student/': typeof StudentIndexRoute
+  '/staff/students/$studentId': typeof StaffStudentsStudentIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -393,7 +421,10 @@ export interface FileRoutesByTo {
   '/staff/dashboard': typeof StaffDashboardRoute
   '/staff/documents': typeof StaffDocumentsRoute
   '/staff/leads': typeof StaffLeadsRoute
-  '/staff/students': typeof StaffStudentsRoute
+  '/staff/offers': typeof StaffOffersRoute
+  '/staff/reports': typeof StaffReportsRoute
+  '/staff/students': typeof StaffStudentsRouteWithChildren
+  '/staff/tasks': typeof StaffTasksRoute
   '/student/applications': typeof StudentApplicationsRoute
   '/student/appointments': typeof StudentAppointmentsRoute
   '/student/dashboard': typeof StudentDashboardRoute
@@ -403,6 +434,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/staff': typeof StaffIndexRoute
   '/student': typeof StudentIndexRoute
+  '/staff/students/$studentId': typeof StaffStudentsStudentIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -445,7 +477,10 @@ export interface FileRoutesById {
   '/staff/dashboard': typeof StaffDashboardRoute
   '/staff/documents': typeof StaffDocumentsRoute
   '/staff/leads': typeof StaffLeadsRoute
-  '/staff/students': typeof StaffStudentsRoute
+  '/staff/offers': typeof StaffOffersRoute
+  '/staff/reports': typeof StaffReportsRoute
+  '/staff/students': typeof StaffStudentsRouteWithChildren
+  '/staff/tasks': typeof StaffTasksRoute
   '/student/applications': typeof StudentApplicationsRoute
   '/student/appointments': typeof StudentAppointmentsRoute
   '/student/dashboard': typeof StudentDashboardRoute
@@ -455,6 +490,7 @@ export interface FileRoutesById {
   '/admin/': typeof AdminIndexRoute
   '/staff/': typeof StaffIndexRoute
   '/student/': typeof StudentIndexRoute
+  '/staff/students/$studentId': typeof StaffStudentsStudentIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -498,7 +534,10 @@ export interface FileRouteTypes {
     | '/staff/dashboard'
     | '/staff/documents'
     | '/staff/leads'
+    | '/staff/offers'
+    | '/staff/reports'
     | '/staff/students'
+    | '/staff/tasks'
     | '/student/applications'
     | '/student/appointments'
     | '/student/dashboard'
@@ -508,6 +547,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/staff/'
     | '/student/'
+    | '/staff/students/$studentId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -546,7 +586,10 @@ export interface FileRouteTypes {
     | '/staff/dashboard'
     | '/staff/documents'
     | '/staff/leads'
+    | '/staff/offers'
+    | '/staff/reports'
     | '/staff/students'
+    | '/staff/tasks'
     | '/student/applications'
     | '/student/appointments'
     | '/student/dashboard'
@@ -556,6 +599,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/staff'
     | '/student'
+    | '/staff/students/$studentId'
   id:
     | '__root__'
     | '/'
@@ -597,7 +641,10 @@ export interface FileRouteTypes {
     | '/staff/dashboard'
     | '/staff/documents'
     | '/staff/leads'
+    | '/staff/offers'
+    | '/staff/reports'
     | '/staff/students'
+    | '/staff/tasks'
     | '/student/applications'
     | '/student/appointments'
     | '/student/dashboard'
@@ -607,6 +654,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/staff/'
     | '/student/'
+    | '/staff/students/$studentId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -918,11 +966,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StaffLeadsRouteImport
       parentRoute: typeof StaffRouteRoute
     }
+    '/staff/offers': {
+      id: '/staff/offers'
+      path: '/offers'
+      fullPath: '/staff/offers'
+      preLoaderRoute: typeof StaffOffersRouteImport
+      parentRoute: typeof StaffRouteRoute
+    }
+    '/staff/reports': {
+      id: '/staff/reports'
+      path: '/reports'
+      fullPath: '/staff/reports'
+      preLoaderRoute: typeof StaffReportsRouteImport
+      parentRoute: typeof StaffRouteRoute
+    }
     '/staff/students': {
       id: '/staff/students'
       path: '/students'
       fullPath: '/staff/students'
       preLoaderRoute: typeof StaffStudentsRouteImport
+      parentRoute: typeof StaffRouteRoute
+    }
+    '/staff/tasks': {
+      id: '/staff/tasks'
+      path: '/tasks'
+      fullPath: '/staff/tasks'
+      preLoaderRoute: typeof StaffTasksRouteImport
       parentRoute: typeof StaffRouteRoute
     }
     '/student/': {
@@ -974,6 +1043,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StudentProfileRouteImport
       parentRoute: typeof StudentRouteRoute
     }
+    '/staff/students/$studentId': {
+      id: '/staff/students/$studentId'
+      path: '/$studentId'
+      fullPath: '/staff/students/$studentId'
+      preLoaderRoute: typeof StaffStudentsStudentIdRouteImport
+      parentRoute: typeof StaffStudentsRoute
+    }
   }
 }
 
@@ -1021,6 +1097,18 @@ const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
   AdminRouteRouteChildren,
 )
 
+interface StaffStudentsRouteChildren {
+  StaffStudentsStudentIdRoute: typeof StaffStudentsStudentIdRoute
+}
+
+const StaffStudentsRouteChildren: StaffStudentsRouteChildren = {
+  StaffStudentsStudentIdRoute: StaffStudentsStudentIdRoute,
+}
+
+const StaffStudentsRouteWithChildren = StaffStudentsRoute._addFileChildren(
+  StaffStudentsRouteChildren,
+)
+
 interface StaffRouteRouteChildren {
   StaffActivityRoute: typeof StaffActivityRoute
   StaffApplicationsRoute: typeof StaffApplicationsRoute
@@ -1028,7 +1116,10 @@ interface StaffRouteRouteChildren {
   StaffDashboardRoute: typeof StaffDashboardRoute
   StaffDocumentsRoute: typeof StaffDocumentsRoute
   StaffLeadsRoute: typeof StaffLeadsRoute
-  StaffStudentsRoute: typeof StaffStudentsRoute
+  StaffOffersRoute: typeof StaffOffersRoute
+  StaffReportsRoute: typeof StaffReportsRoute
+  StaffStudentsRoute: typeof StaffStudentsRouteWithChildren
+  StaffTasksRoute: typeof StaffTasksRoute
   StaffIndexRoute: typeof StaffIndexRoute
 }
 
@@ -1039,7 +1130,10 @@ const StaffRouteRouteChildren: StaffRouteRouteChildren = {
   StaffDashboardRoute: StaffDashboardRoute,
   StaffDocumentsRoute: StaffDocumentsRoute,
   StaffLeadsRoute: StaffLeadsRoute,
-  StaffStudentsRoute: StaffStudentsRoute,
+  StaffOffersRoute: StaffOffersRoute,
+  StaffReportsRoute: StaffReportsRoute,
+  StaffStudentsRoute: StaffStudentsRouteWithChildren,
+  StaffTasksRoute: StaffTasksRoute,
   StaffIndexRoute: StaffIndexRoute,
 }
 
