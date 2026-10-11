@@ -5,17 +5,16 @@ import { AuthField } from "@/components/auth/AuthField";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { Button } from "@/components/ui/button";
 import { requestPasswordReset } from "@/lib/auth";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/forgot-password")({
-  head: () => ({
-    meta: [
-      { title: "Reset Password — Global Roots Consultants" },
-      {
-        name: "description",
-        content: "Reset your Global Roots account password.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/forgot-password",
+      title: "Reset Password — Global Roots Consultants",
+      description: "Reset your Global Roots account password.",
+      indexable: false,
+    }),
   component: ForgotPasswordPage,
 });
 

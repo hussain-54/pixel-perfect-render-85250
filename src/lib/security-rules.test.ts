@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { normalizeAppRole, roleCanAccessPortal, STAFF_DESK_ROLES, ADMISSION_OFFICER_ROLE } from "./roles";
 import { validateConsultationRequest, newConsultationReference } from "./consultation";
+// Consultation fail-closed UI tests live in consultation.test.ts
 import { findDemoAccountByEmail } from "./demo-auth";
 
 describe("role normalization", () => {

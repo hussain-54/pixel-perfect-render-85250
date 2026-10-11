@@ -305,22 +305,29 @@ export const portalGetMonthlyStats = createServerFn({ method: "GET" }).handler(a
 export const portalSubmitConsultation = createServerFn({ method: "POST" })
   .validator((data: Record<string, string>) => data)
   .handler(async ({ data }) => {
-    const { validateConsultationRequest, newConsultationReference } = await import(
-      "@/lib/consultation"
-    );
+    const {
+      validateConsultationRequest,
+      resolveConsultationReference,
+      CONSULTATION_PERSISTENCE_ERROR,
+    } = await import("@/lib/consultation");
     const parsed = validateConsultationRequest(data);
     if (!parsed.success) {
       const msg = parsed.error.issues[0]?.message ?? "Please check the form and try again.";
       throw new Error(`400:${msg}`);
     }
     const input = parsed.data;
-    const ref = newConsultationReference();
+    // Reuse client-supplied ref on retry so unique(reference_code) makes retries idempotent.
+    const ref = resolveConsultationReference(input.reference_code || data["reference_code"]);
 
     const { createServerSupabase } = await import("@/server/supabase");
     const client = createServerSupabase();
     if (!client) {
-      // Supabase not configured — acknowledge without claiming persistence.
-      return { ok: true as const, ref, persisted: false as const };
+      return {
+        ok: false as const,
+        persisted: false as const,
+        ref,
+        error: CONSULTATION_PERSISTENCE_ERROR,
+      };
     }
 
     const preferredDate = input.date?.trim() ? input.date.trim() : null;
@@ -339,16 +346,20 @@ export const portalSubmitConsultation = createServerFn({ method: "POST" })
     });
 
     if (error) {
-      // Table missing or public INSERT policy not applied yet — acknowledge without fake DB success.
-      const notReady =
-        /consultation_requests|schema cache|does not exist|PGRST|row-level security|42501/i.test(
-          `${error.code ?? ""} ${error.message ?? ""}`,
-        );
-      if (notReady) {
-        return { ok: true as const, ref, persisted: false as const };
+      const code = `${error.code ?? ""}`;
+      const message = `${error.message ?? ""}`;
+      // Same reference already stored (retry after a successful insert) — treat as persisted.
+      if (code === "23505" && /reference_code/i.test(message)) {
+        return { ok: true as const, persisted: true as const, ref };
       }
-      throw new Error(`503:${error.message || "Unable to save your consultation request."}`);
+      // Never claim success when the row was not written (incl. RLS 42501 / missing table).
+      return {
+        ok: false as const,
+        persisted: false as const,
+        ref,
+        error: CONSULTATION_PERSISTENCE_ERROR,
+      };
     }
 
-    return { ok: true as const, ref, persisted: true as const };
+    return { ok: true as const, persisted: true as const, ref };
   });

@@ -9,7 +9,7 @@ import {
   Youtube,
   type LucideIcon,
 } from "lucide-react";
-import { socialLinks, type SocialChannelId } from "@/data/contact";
+import { getConfiguredSocialLinks, type SocialChannelId } from "@/data/contact";
 import { cn } from "@/lib/utils";
 
 const socialIcons: Record<SocialChannelId, LucideIcon> = {
@@ -63,26 +63,14 @@ function iconShellClass(
 
 export function SocialLinks({ className, size = "default", surface = "light" }: SocialLinksProps) {
   const glyph = size === "utility" ? "h-[17px] w-[17px]" : "h-[18px] w-[18px]";
+  const links = getConfiguredSocialLinks();
+  if (links.length === 0) return null;
 
   return (
     <nav aria-label="Social media" className={cn("flex items-center gap-1.5", className)}>
-      {socialLinks.map((item) => {
+      {links.map((item) => {
         const Icon = socialIcons[item.id];
         const href = item.href.trim();
-        const interactive = Boolean(href);
-
-        if (!interactive) {
-          return (
-            <span
-              key={item.id}
-              aria-label={item.label}
-              title={`${item.label} — link coming soon`}
-              className={iconShellClass(item.id, size, surface, false)}
-            >
-              <Icon className={glyph} aria-hidden strokeWidth={2.1} />
-            </span>
-          );
-        }
 
         return (
           <a

@@ -3,24 +3,20 @@ import { useState } from "react";
 import { z } from "zod";
 import { Search } from "lucide-react";
 import { SiteLayout, PageHero } from "@/components/site/SiteLayout";
-import { UniversityCard, CtaBand } from "@/components/site/blocks";
+import { UniversityCard, CtaBand, CatalogueSampleNotice } from "@/components/site/blocks";
 import { FilterSelect, EmptyState, LoadingRows } from "@/components/common";
 import { useData } from "@/lib/useData";
 import { getUniversities } from "@/services";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/universities")({
   validateSearch: z.object({ q: z.string().optional(), country: z.string().optional() }),
-  head: () => ({
-    meta: [
-      { title: "Universities — Global Roots Consultants" },
-      {
-        name: "description",
-        content: "Search partner universities by country, study level and program.",
-      },
-      { property: "og:title", content: "Universities — Global Roots Consultants" },
-      { property: "og:description", content: "Discover 2,000+ partner universities worldwide." },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/universities",
+      title: "Universities — Global Roots Consultants",
+      description: "Browse sample partner university listings by country, study level and program.",
+    }),
   component: Page,
 });
 
@@ -45,9 +41,10 @@ function Page() {
       <PageHero
         eyebrow="Universities"
         title="Find your university"
-        body="Search our partner institutions and filter by what matters to you."
+        body="Search sample partner listings and filter by what matters to you — then confirm options with a consultant."
       />
       <section className="container-page section-y">
+        <CatalogueSampleNotice kind="universities" />
         <div className="mb-8 flex flex-wrap gap-2.5 border-b border-border pb-5">
           <div className="relative min-w-[220px] flex-1">
             <Search className="pointer-events-none absolute left-3 top-3 h-4 w-4 text-muted-foreground" />

@@ -205,6 +205,32 @@ export async function signInWithPassword(options: {
   if (remember) setRememberedEmail(email);
   else setRememberedEmail(null);
 
+  // Prefer known demo accounts when demo auth is enabled so Supabase "Invalid login
+  // credentials" does not surface for consultant@ / ayesha@ / admin@ demo logins.
+  if (isDemoAuthEnabled()) {
+    const demo = findDemoAccount(email, password);
+    if (demo) {
+      try {
+        const established = await establishSession({
+          data: { demoEmail: email, demoPassword: password },
+        });
+        setClientDemoSession(
+          established.role,
+          established.email,
+          remember,
+          established.consultantId,
+        );
+        return {
+          ok: true,
+          role: established.role,
+          redirectTo: portalHomeByRole[established.role],
+        };
+      } catch {
+        return { ok: false, error: "Unable to sign in right now. Please try again." };
+      }
+    }
+  }
+
   if (isSupabaseConfigured()) {
     try {
       const supabase = getSupabase();
@@ -219,54 +245,16 @@ export async function signInWithPassword(options: {
         return { ok: true, role, redirectTo: portalHomeByRole[role] };
       }
 
-      if (isDemoAuthEnabled()) {
-        const demo = findDemoAccount(email, password);
-        if (demo) {
-          const established = await establishSession({
-            data: { demoEmail: email, demoPassword: password },
-          });
-          setClientDemoSession(
-            established.role,
-            established.email,
-            remember,
-            established.consultantId,
-          );
-          return {
-            ok: true,
-            role: established.role,
-            redirectTo: portalHomeByRole[established.role],
-          };
-        }
+      const supabaseMsg = error?.message ?? "Invalid email or password. Please try again.";
+      if (!isDemoAuthEnabled() && /invalid login credentials/i.test(supabaseMsg)) {
+        return {
+          ok: false,
+          error:
+            "Invalid login credentials. Demo portal accounts work with `npm run dev` (or set VITE_ENABLE_DEMO_AUTH=true and rebuild).",
+        };
       }
-
-      return {
-        ok: false,
-        error: error?.message ?? "Invalid email or password. Please try again.",
-      };
+      return { ok: false, error: supabaseMsg };
     } catch {
-      if (isDemoAuthEnabled()) {
-        const demo = findDemoAccount(email, password);
-        if (demo) {
-          try {
-            const established = await establishSession({
-              data: { demoEmail: email, demoPassword: password },
-            });
-            setClientDemoSession(
-              established.role,
-              established.email,
-              remember,
-              established.consultantId,
-            );
-            return {
-              ok: true,
-              role: established.role,
-              redirectTo: portalHomeByRole[established.role],
-            };
-          } catch {
-            /* fall through */
-          }
-        }
-      }
       return { ok: false, error: "Unable to sign in right now. Please try again." };
     }
   }
@@ -278,24 +266,7 @@ export async function signInWithPassword(options: {
     };
   }
 
-  const demo = findDemoAccount(email, password);
-  if (!demo) {
-    return { ok: false, error: "Invalid email or password. Please try again." };
-  }
-
-  try {
-    const established = await establishSession({
-      data: { demoEmail: email, demoPassword: password },
-    });
-    setClientDemoSession(established.role, established.email, remember, established.consultantId);
-    return {
-      ok: true,
-      role: established.role,
-      redirectTo: portalHomeByRole[established.role],
-    };
-  } catch {
-    return { ok: false, error: "Unable to sign in right now. Please try again." };
-  }
+  return { ok: false, error: "Invalid email or password. Please try again." };
 }
 
 export async function signOut(): Promise<void> {

@@ -3,23 +3,16 @@ import { SiteLayout, PageHero } from "@/components/site/SiteLayout";
 import { CtaBand } from "@/components/site/blocks";
 import { Button } from "@/components/ui/button";
 import { destinations } from "@/data/site";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/destinations")({
-  head: () => ({
-    meta: [
-      { title: "Study Destinations — Global Roots Consultants" },
-      {
-        name: "description",
-        content:
-          "Explore study destinations across Europe, North America, Asia and beyond with Global Roots Consultants.",
-      },
-      { property: "og:title", content: "Study Destinations — Global Roots Consultants" },
-      {
-        property: "og:description",
-        content: "Compare leading study destinations: work rights, intakes and opportunities.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/destinations",
+      title: "Study Destinations — Global Roots Consultants",
+      description:
+        "Explore study destinations across Europe, North America, Asia and beyond with Global Roots Consultants.",
+    }),
   component: Page,
 });
 

@@ -265,15 +265,17 @@ export function MobileNavDrawer({
               {siteContact.location.label}
             </p>
             <ul className="space-y-0.5">
-              <li>
-                <a
-                  href={siteContact.phone.href}
-                  className="flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-navy/90 transition-colors hover:bg-accent hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <Phone className="h-4 w-4 shrink-0 text-royal" aria-hidden />
-                  <span>{siteContact.phone.display}</span>
-                </a>
-              </li>
+              {!siteContact.phone.placeholder ? (
+                <li>
+                  <a
+                    href={siteContact.phone.href}
+                    className="flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-navy/90 transition-colors hover:bg-accent hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <Phone className="h-4 w-4 shrink-0 text-royal" aria-hidden />
+                    <span>{siteContact.phone.display}</span>
+                  </a>
+                </li>
+              ) : null}
               <li>
                 <a
                   href={siteContact.email.href}

@@ -4,23 +4,16 @@ import { SiteLayout, PageHero } from "@/components/site/SiteLayout";
 import { CtaBand } from "@/components/site/blocks";
 import { Initials } from "@/components/common";
 import { stories } from "@/data/site";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/success-stories")({
-  head: () => ({
-    meta: [
-      { title: "Success Stories — Global Roots Consultants" },
-      {
-        name: "description",
-        content:
-          "Real students who reached top universities in the UK, Canada, Germany and Australia.",
-      },
-      { property: "og:title", content: "Success Stories — Global Roots Consultants" },
-      {
-        property: "og:description",
-        content: "Hear from students we guided to their dream universities.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/success-stories",
+      title: "Success Stories — Global Roots Consultants",
+      description:
+        "Real students who reached top universities in the UK, Canada, Germany and Australia.",
+    }),
   component: Page,
 });
 

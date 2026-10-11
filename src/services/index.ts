@@ -168,13 +168,11 @@ export const lookupConsultant = (id: string | null) => db.consultants.find((c) =
 export const stageIndex = (key: string) => db.STAGES.findIndex((s) => s.key === key);
 export const stageLabel = (key: string) => db.STAGES.find((s) => s.key === key)?.label ?? key;
 
-/** Public marketing mutation. */
+/** Public marketing mutation. Success only when persisted === true. */
 export const submitConsultationRequest = (data: Record<string, string>) =>
-  portalSubmitConsultation({ data }) as Promise<{
-    ok: true;
-    ref: string;
-    persisted: boolean;
-  }>;
+  portalSubmitConsultation({ data }) as Promise<
+    import("@/lib/consultation").ConsultationSubmitResult
+  >;
 
 /** Officer dashboard — metrics and lists scoped to the trusted session. */
 export const getOfficerDashboard = () => withAuth((opts) => portalGetOfficerDashboard(opts));

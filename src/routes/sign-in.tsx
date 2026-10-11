@@ -9,6 +9,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { getRememberedEmail, signInWithPassword } from "@/lib/auth";
 import { portalHomeByRole, roleCanAccessPortal, type AppRole, type PortalHome } from "@/lib/roles";
+import { pageHead } from "@/lib/seo";
 
 const PORTAL_HOMES: PortalHome[] = [
   "/student/dashboard",
@@ -25,15 +26,13 @@ export const Route = createFileRoute("/sign-in")({
     const value = search["redirect"];
     return isPortalHome(value) ? { redirect: value } : {};
   },
-  head: () => ({
-    meta: [
-      { title: "Sign In — Global Roots Consultants" },
-      {
-        name: "description",
-        content: "Sign in to Global Roots to continue your application journey.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/sign-in",
+      title: "Sign In — Global Roots Consultants",
+      description: "Sign in to Global Roots to continue your application journey.",
+      indexable: false,
+    }),
   component: SignInPage,
 });
 

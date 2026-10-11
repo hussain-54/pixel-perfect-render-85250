@@ -2,8 +2,10 @@
  * Single source of truth for public contact details and social channels.
  * Values below are reused from existing site content (contact page / footer).
  *
- * Paste real Global Roots profile URLs into `socialLinks` when ready.
- * Icons always render; empty hrefs show the icon without a live link.
+ * OWNER ACTION REQUIRED:
+ * - Replace placeholder phone / WhatsApp with the live business numbers.
+ * - Paste real Global Roots profile URLs into `socialLinks` when ready.
+ * Empty social hrefs are hidden in the UI (not shown as dead icons).
  */
 import type { AppPath } from "@/data/navigation";
 
@@ -25,12 +27,15 @@ export type UtilityQuickLink = {
 /** Existing contact details from contact page + site footer. */
 export const siteContact = {
   phone: {
+    /** Placeholder — GR-015. Do not invent a real number. */
     display: "+92 300 0000000",
     href: "tel:+923000000000",
+    placeholder: true,
   },
   email: {
     display: "info@globalroots.pk",
     href: "mailto:info@globalroots.pk",
+    placeholder: false,
   },
   location: {
     /** Single office label — do not present multiple city offices. */
@@ -42,9 +47,10 @@ export const siteContact = {
     href: null as string | null,
   },
   whatsapp: {
+    /** Placeholder — tied to phone until a verified WhatsApp number is supplied. */
     display: "+92 300 0000000",
-    /** Derived from the existing WhatsApp/phone number on the contact page. */
     href: "https://wa.me/923000000000",
+    placeholder: true,
   },
   hours: "Mon–Sat, 10:00–19:00",
   registration: "SECP Registered",
@@ -54,7 +60,8 @@ export const siteContact = {
  * Shared social-channel configuration used by the utility bar,
  * mobile navigation drawer, and footer.
  *
- * Icons always display. Add real URLs when available.
+ * Icons only render when href is non-empty (except WhatsApp, which also
+ * requires a non-placeholder phone).
  */
 export const socialLinks: SocialLink[] = [
   { id: "facebook", label: "Facebook", href: "" },
@@ -67,7 +74,7 @@ export const socialLinks: SocialLink[] = [
   {
     id: "whatsapp",
     label: "WhatsApp",
-    href: siteContact.whatsapp.href,
+    href: siteContact.whatsapp.placeholder ? "" : siteContact.whatsapp.href,
   },
 ];
 

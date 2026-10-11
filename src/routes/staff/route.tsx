@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { PortalShell, type PortalNavItem } from "@/components/portal/PortalShell";
 import { requirePortalAccess } from "@/lib/portal-guard";
+import { pageHead } from "@/lib/seo";
 
 const staffNav: PortalNavItem[] = [
   { to: "/staff/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -29,6 +30,13 @@ const staffNav: PortalNavItem[] = [
 
 export const Route = createFileRoute("/staff")({
   beforeLoad: requirePortalAccess("staff"),
+  head: () =>
+    pageHead({
+      path: "/staff",
+      title: "Staff Portal — Global Roots Consultants",
+      description: "Authenticated staff workspace.",
+      indexable: false,
+    }),
   component: StaffPortalLayout,
 });
 

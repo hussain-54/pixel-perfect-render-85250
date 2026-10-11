@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { PortalShell, type PortalNavItem } from "@/components/portal/PortalShell";
 import { requirePortalAccess } from "@/lib/portal-guard";
+import { pageHead } from "@/lib/seo";
 
 const adminNav: PortalNavItem[] = [
   { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -41,6 +42,13 @@ const adminNav: PortalNavItem[] = [
 
 export const Route = createFileRoute("/admin")({
   beforeLoad: requirePortalAccess("admin"),
+  head: () =>
+    pageHead({
+      path: "/admin",
+      title: "Admin Portal — Global Roots Consultants",
+      description: "Authenticated admin workspace.",
+      indexable: false,
+    }),
   component: AdminPortalLayout,
 });
 

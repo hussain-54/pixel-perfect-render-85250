@@ -2,23 +2,16 @@ import { createFileRoute } from "@tanstack/react-router";
 import { SiteLayout, PageHero, SectionHead } from "@/components/site/SiteLayout";
 import { CtaBand } from "@/components/site/blocks";
 import { services, howItWorks } from "@/data/site";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/services")({
-  head: () => ({
-    meta: [
-      { title: "Services — Global Roots Consultants" },
-      {
-        name: "description",
-        content:
-          "Counseling, university selection, applications, scholarships, visa and pre-departure support.",
-      },
-      { property: "og:title", content: "Services — Global Roots Consultants" },
-      {
-        property: "og:description",
-        content: "Eight services covering every step of studying abroad.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/services",
+      title: "Services — Global Roots Consultants",
+      description:
+        "Counseling, university selection, applications, scholarships, visa and pre-departure support.",
+    }),
   component: Page,
 });
 

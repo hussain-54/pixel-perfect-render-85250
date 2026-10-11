@@ -15,6 +15,7 @@ import { Route as AdminRouteRouteImport } from './routes/admin/route'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as DestinationsRouteImport } from './routes/destinations'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
+import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ProgramsRouteImport } from './routes/programs'
 import { Route as ResourcesRouteImport } from './routes/resources'
 import { Route as ScholarshipsRouteImport } from './routes/scholarships'
@@ -25,6 +26,7 @@ import { Route as StaffRouteRouteImport } from './routes/staff/route'
 import { Route as StudentRouteRouteImport } from './routes/student/route'
 import { Route as StudentVisaRouteImport } from './routes/student-visa'
 import { Route as SuccessStoriesRouteImport } from './routes/success-stories'
+import { Route as TermsRouteImport } from './routes/terms'
 import { Route as UniversitiesRouteImport } from './routes/universities'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
 import { Route as AdminApplicationsRouteImport } from './routes/admin/applications'
@@ -93,6 +95,11 @@ const ForgotPasswordRoute = ForgotPasswordRouteImport.update({
   path: '/forgot-password',
   getParentRoute: () => rootRouteImport,
 } as any)
+const PrivacyRoute = PrivacyRouteImport.update({
+  id: '/privacy',
+  path: '/privacy',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProgramsRoute = ProgramsRouteImport.update({
   id: '/programs',
   path: '/programs',
@@ -141,6 +148,11 @@ const StudentVisaRoute = StudentVisaRouteImport.update({
 const SuccessStoriesRoute = SuccessStoriesRouteImport.update({
   id: '/success-stories',
   path: '/success-stories',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TermsRoute = TermsRouteImport.update({
+  id: '/terms',
+  path: '/terms',
   getParentRoute: () => rootRouteImport,
 } as any)
 const UniversitiesRoute = UniversitiesRouteImport.update({
@@ -338,6 +350,7 @@ export interface FileRoutesByFullPath {
   '/contact': typeof ContactRoute
   '/destinations': typeof DestinationsRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/privacy': typeof PrivacyRoute
   '/programs': typeof ProgramsRoute
   '/resources': typeof ResourcesRoute
   '/scholarships': typeof ScholarshipsRoute
@@ -346,6 +359,7 @@ export interface FileRoutesByFullPath {
   '/sign-up': typeof SignUpRoute
   '/student-visa': typeof StudentVisaRoute
   '/success-stories': typeof SuccessStoriesRoute
+  '/terms': typeof TermsRoute
   '/universities': typeof UniversitiesRoute
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
@@ -390,6 +404,7 @@ export interface FileRoutesByTo {
   '/contact': typeof ContactRoute
   '/destinations': typeof DestinationsRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/privacy': typeof PrivacyRoute
   '/programs': typeof ProgramsRoute
   '/resources': typeof ResourcesRoute
   '/scholarships': typeof ScholarshipsRoute
@@ -398,6 +413,7 @@ export interface FileRoutesByTo {
   '/sign-up': typeof SignUpRoute
   '/student-visa': typeof StudentVisaRoute
   '/success-stories': typeof SuccessStoriesRoute
+  '/terms': typeof TermsRoute
   '/universities': typeof UniversitiesRoute
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
@@ -446,6 +462,7 @@ export interface FileRoutesById {
   '/contact': typeof ContactRoute
   '/destinations': typeof DestinationsRoute
   '/forgot-password': typeof ForgotPasswordRoute
+  '/privacy': typeof PrivacyRoute
   '/programs': typeof ProgramsRoute
   '/resources': typeof ResourcesRoute
   '/scholarships': typeof ScholarshipsRoute
@@ -454,6 +471,7 @@ export interface FileRoutesById {
   '/sign-up': typeof SignUpRoute
   '/student-visa': typeof StudentVisaRoute
   '/success-stories': typeof SuccessStoriesRoute
+  '/terms': typeof TermsRoute
   '/universities': typeof UniversitiesRoute
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
@@ -503,6 +521,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/destinations'
     | '/forgot-password'
+    | '/privacy'
     | '/programs'
     | '/resources'
     | '/scholarships'
@@ -511,6 +530,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/student-visa'
     | '/success-stories'
+    | '/terms'
     | '/universities'
     | '/admin/applications'
     | '/admin/appointments'
@@ -555,6 +575,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/destinations'
     | '/forgot-password'
+    | '/privacy'
     | '/programs'
     | '/resources'
     | '/scholarships'
@@ -563,6 +584,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/student-visa'
     | '/success-stories'
+    | '/terms'
     | '/universities'
     | '/admin/applications'
     | '/admin/appointments'
@@ -610,6 +632,7 @@ export interface FileRouteTypes {
     | '/contact'
     | '/destinations'
     | '/forgot-password'
+    | '/privacy'
     | '/programs'
     | '/resources'
     | '/scholarships'
@@ -618,6 +641,7 @@ export interface FileRouteTypes {
     | '/sign-up'
     | '/student-visa'
     | '/success-stories'
+    | '/terms'
     | '/universities'
     | '/admin/applications'
     | '/admin/appointments'
@@ -666,6 +690,7 @@ export interface RootRouteChildren {
   ContactRoute: typeof ContactRoute
   DestinationsRoute: typeof DestinationsRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
+  PrivacyRoute: typeof PrivacyRoute
   ProgramsRoute: typeof ProgramsRoute
   ResourcesRoute: typeof ResourcesRoute
   ScholarshipsRoute: typeof ScholarshipsRoute
@@ -674,6 +699,7 @@ export interface RootRouteChildren {
   SignUpRoute: typeof SignUpRoute
   StudentVisaRoute: typeof StudentVisaRoute
   SuccessStoriesRoute: typeof SuccessStoriesRoute
+  TermsRoute: typeof TermsRoute
   UniversitiesRoute: typeof UniversitiesRoute
 }
 
@@ -719,6 +745,13 @@ declare module '@tanstack/react-router' {
       path: '/forgot-password'
       fullPath: '/forgot-password'
       preLoaderRoute: typeof ForgotPasswordRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/privacy': {
+      id: '/privacy'
+      path: '/privacy'
+      fullPath: '/privacy'
+      preLoaderRoute: typeof PrivacyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/programs': {
@@ -789,6 +822,13 @@ declare module '@tanstack/react-router' {
       path: '/success-stories'
       fullPath: '/success-stories'
       preLoaderRoute: typeof SuccessStoriesRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terms': {
+      id: '/terms'
+      path: '/terms'
+      fullPath: '/terms'
+      preLoaderRoute: typeof TermsRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/universities': {
@@ -1174,6 +1214,7 @@ const rootRouteChildren: RootRouteChildren = {
   ContactRoute: ContactRoute,
   DestinationsRoute: DestinationsRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
+  PrivacyRoute: PrivacyRoute,
   ProgramsRoute: ProgramsRoute,
   ResourcesRoute: ResourcesRoute,
   ScholarshipsRoute: ScholarshipsRoute,
@@ -1182,6 +1223,7 @@ const rootRouteChildren: RootRouteChildren = {
   SignUpRoute: SignUpRoute,
   StudentVisaRoute: StudentVisaRoute,
   SuccessStoriesRoute: SuccessStoriesRoute,
+  TermsRoute: TermsRoute,
   UniversitiesRoute: UniversitiesRoute,
 }
 export const routeTree = rootRouteImport

@@ -3,23 +3,16 @@ import { ArrowRight } from "lucide-react";
 import { SiteLayout, PageHero } from "@/components/site/SiteLayout";
 import { CtaBand } from "@/components/site/blocks";
 import { programCategories } from "@/data/site";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/programs")({
-  head: () => ({
-    meta: [
-      { title: "Programs — Global Roots Consultants" },
-      {
-        name: "description",
-        content:
-          "Business, Computer Science, Engineering, Medicine, Data Science and more — find your program abroad.",
-      },
-      { property: "og:title", content: "Programs — Global Roots Consultants" },
-      {
-        property: "og:description",
-        content: "Explore thousands of international degree programs across 8 fields.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/programs",
+      title: "Programs — Global Roots Consultants",
+      description:
+        "Business, Computer Science, Engineering, Medicine, Data Science and more — find your program abroad.",
+    }),
   component: Page,
 });
 

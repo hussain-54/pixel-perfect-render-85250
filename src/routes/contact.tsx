@@ -3,36 +3,50 @@ import { MapPin, Phone, Mail, MessageCircle, Clock } from "lucide-react";
 import { SiteLayout, PageHero } from "@/components/site/SiteLayout";
 import { ConsultationForm } from "@/components/site/blocks";
 import { siteContact } from "@/data/contact";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/contact")({
-  head: () => ({
-    meta: [
-      { title: "Book a Free Consultation — Global Roots Consultants" },
-      {
-        name: "description",
-        content:
-          "Book a free study-abroad consultation or contact Global Roots Consultants in Faisalabad.",
-      },
-      { property: "og:title", content: "Book a Free Consultation — Global Roots Consultants" },
-      {
-        property: "og:description",
-        content: "Speak with a senior education and visa consultant for free.",
-      },
-      { property: "og:type", content: "website" },
-      { name: "twitter:card", content: "summary" },
-    ],
-    links: [{ rel: "canonical", href: "https://globalroots.pk/contact" }],
-  }),
+  head: () =>
+    pageHead({
+      path: "/contact",
+      title: "Book a Free Consultation — Global Roots Consultants",
+      description:
+        "Book a free study-abroad consultation or contact Global Roots Consultants in Faisalabad.",
+    }),
   component: Page,
 });
 
 function Page() {
   const items = [
-    { icon: MapPin, label: siteContact.location.label, value: siteContact.location.fullDisplay },
-    { icon: Phone, label: "Phone", value: siteContact.phone.display },
-    { icon: MessageCircle, label: "WhatsApp", value: siteContact.whatsapp.display },
-    { icon: Mail, label: "Email", value: siteContact.email.display },
-    { icon: Clock, label: "Hours", value: siteContact.hours },
+    {
+      icon: MapPin,
+      label: siteContact.location.label,
+      value: siteContact.location.fullDisplay,
+      href: siteContact.location.href,
+    },
+    {
+      icon: Phone,
+      label: "Phone",
+      value: siteContact.phone.placeholder
+        ? "Available on request — use the form or email"
+        : siteContact.phone.display,
+      href: siteContact.phone.placeholder ? null : siteContact.phone.href,
+    },
+    {
+      icon: MessageCircle,
+      label: "WhatsApp",
+      value: siteContact.whatsapp.placeholder
+        ? "Message us via the consultation form or email"
+        : siteContact.whatsapp.display,
+      href: siteContact.whatsapp.placeholder ? null : siteContact.whatsapp.href,
+    },
+    {
+      icon: Mail,
+      label: "Email",
+      value: siteContact.email.display,
+      href: siteContact.email.href,
+    },
+    { icon: Clock, label: "Hours", value: siteContact.hours, href: null },
   ];
   return (
     <SiteLayout>
@@ -52,7 +66,13 @@ function Page() {
                 <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
                   {i.label}
                 </p>
-                <p className="mt-0.5 font-semibold text-navy">{i.value}</p>
+                {i.href ? (
+                  <a href={i.href} className="mt-0.5 block font-semibold text-navy hover:text-royal">
+                    {i.value}
+                  </a>
+                ) : (
+                  <p className="mt-0.5 font-semibold text-navy">{i.value}</p>
+                )}
               </div>
             </li>
           ))}

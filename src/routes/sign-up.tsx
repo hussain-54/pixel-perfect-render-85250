@@ -6,17 +6,16 @@ import { AuthPasswordField } from "@/components/auth/AuthPasswordField";
 import { AuthShell } from "@/components/auth/AuthShell";
 import { Button } from "@/components/ui/button";
 import { signUpStudent } from "@/lib/auth";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/sign-up")({
-  head: () => ({
-    meta: [
-      { title: "Create Account — Global Roots Consultants" },
-      {
-        name: "description",
-        content: "Create a Global Roots student account to start your study abroad journey.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/sign-up",
+      title: "Create Account — Global Roots Consultants",
+      description: "Create a Global Roots student account to start your study abroad journey.",
+      indexable: false,
+    }),
   component: SignUpPage,
 });
 

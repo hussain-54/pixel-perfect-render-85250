@@ -4,23 +4,16 @@ import { SiteLayout, PageHero } from "@/components/site/SiteLayout";
 import { CtaBand } from "@/components/site/blocks";
 import { Button } from "@/components/ui/button";
 import { visaSteps } from "@/data/site";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/student-visa")({
-  head: () => ({
-    meta: [
-      { title: "Student Visa Support — Global Roots Consultants" },
-      {
-        name: "description",
-        content:
-          "Document preparation, financial evidence, interview prep and full visa application support.",
-      },
-      { property: "og:title", content: "Student Visa Support — Global Roots Consultants" },
-      {
-        property: "og:description",
-        content: "Embassy-ready student visa files with meticulous documentation support.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/student-visa",
+      title: "Student Visa Support — Global Roots Consultants",
+      description:
+        "Document preparation, financial evidence, interview prep and full visa application support.",
+    }),
   component: Page,
 });
 

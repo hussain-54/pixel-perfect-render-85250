@@ -12,10 +12,12 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportRuntimeError } from "../lib/runtime-error-reporting";
-
-const SITE_TITLE = "Global Roots Consultants | Global Education & Visa Consultants";
-const SITE_DESCRIPTION =
-  "Global Roots Consultants — premium education and visa consultancy guiding students from first conversation to first day on campus.";
+import {
+  SITE_DEFAULT_DESCRIPTION,
+  SITE_DEFAULT_TITLE,
+  SITE_NAME,
+  SITE_OG_IMAGE,
+} from "@/lib/seo";
 
 function NotFoundComponent() {
   return (
@@ -82,22 +84,25 @@ export const Route = createRootRouteWithContext<{ queryClient: QueryClient }>()(
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: SITE_TITLE },
-      { name: "description", content: SITE_DESCRIPTION },
-      { name: "author", content: "Global Roots Consultants" },
+      { title: SITE_DEFAULT_TITLE },
+      { name: "description", content: SITE_DEFAULT_DESCRIPTION },
+      { name: "author", content: SITE_NAME },
       { name: "theme-color", content: "#001A3F" },
-      { property: "og:title", content: SITE_TITLE },
-      { property: "og:description", content: SITE_DESCRIPTION },
+      { property: "og:title", content: SITE_DEFAULT_TITLE },
+      { property: "og:description", content: SITE_DEFAULT_DESCRIPTION },
       { property: "og:type", content: "website" },
-      { property: "og:site_name", content: "Global Roots Consultants" },
+      { property: "og:site_name", content: SITE_NAME },
+      { property: "og:image", content: SITE_OG_IMAGE },
       { name: "twitter:card", content: "summary_large_image" },
-      { name: "twitter:title", content: SITE_TITLE },
-      { name: "twitter:description", content: SITE_DESCRIPTION },
+      { name: "twitter:title", content: SITE_DEFAULT_TITLE },
+      { name: "twitter:description", content: SITE_DEFAULT_DESCRIPTION },
+      { name: "twitter:image", content: SITE_OG_IMAGE },
+      // Default robots; route-level heads override (auth/portals use noindex).
       { name: "robots", content: "index,follow" },
     ],
     links: [
       { rel: "stylesheet", href: appCss },
-      { rel: "canonical", href: "https://globalroots.pk/" },
+      // Canonical is set per route via pageHead() — never pin homepage here.
       {
         rel: "stylesheet",
         href: "https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Manrope:wght@400;500;600;700;800&display=swap",

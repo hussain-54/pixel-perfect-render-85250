@@ -1,11 +1,12 @@
 import { Link } from "@tanstack/react-router";
 import { Mail, MapPin, Phone } from "lucide-react";
 import { SocialLinks } from "@/components/site/SocialLinks";
-import { socialLinks, siteContact, utilityQuickLinks } from "@/data/contact";
+import { getConfiguredSocialLinks, siteContact, utilityQuickLinks } from "@/data/contact";
 import { cn } from "@/lib/utils";
 
 export function UtilityBar({ className }: { className?: string }) {
-  const hasSocial = socialLinks.length > 0;
+  const hasSocial = getConfiguredSocialLinks().length > 0;
+  const showPhone = !siteContact.phone.placeholder;
 
   return (
     <div
@@ -17,17 +18,21 @@ export function UtilityBar({ className }: { className?: string }) {
       <div className="mx-auto flex h-10 w-full max-w-[1680px] items-center justify-between gap-4 px-5 text-[12px] md:px-6 lg:px-8 xl:px-10">
         {/* Left - contact */}
         <div className="flex min-w-0 items-center gap-3 lg:gap-5">
-          <a
-            href={siteContact.phone.href}
-            className="inline-flex shrink-0 items-center gap-1.5 text-navy-foreground/85 transition-colors hover:text-bright"
-          >
-            <Phone className="h-3.5 w-3.5 shrink-0 text-bright" aria-hidden />
-            <span>{siteContact.phone.display}</span>
-          </a>
-          <span className="hidden h-3 w-px shrink-0 bg-navy-foreground/20 sm:block" aria-hidden />
+          {showPhone ? (
+            <>
+              <a
+                href={siteContact.phone.href}
+                className="inline-flex shrink-0 items-center gap-1.5 text-navy-foreground/85 transition-colors hover:text-bright"
+              >
+                <Phone className="h-3.5 w-3.5 shrink-0 text-bright" aria-hidden />
+                <span>{siteContact.phone.display}</span>
+              </a>
+              <span className="hidden h-3 w-px shrink-0 bg-navy-foreground/20 sm:block" aria-hidden />
+            </>
+          ) : null}
           <a
             href={siteContact.email.href}
-            className="hidden min-w-0 items-center gap-1.5 truncate text-navy-foreground/85 transition-colors hover:text-bright sm:inline-flex"
+            className="inline-flex min-w-0 items-center gap-1.5 truncate text-navy-foreground/85 transition-colors hover:text-bright"
           >
             <Mail className="h-3.5 w-3.5 shrink-0 text-bright" aria-hidden />
             <span className="truncate">{siteContact.email.display}</span>

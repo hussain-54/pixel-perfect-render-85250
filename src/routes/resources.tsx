@@ -4,23 +4,16 @@ import { SiteLayout, PageHero } from "@/components/site/SiteLayout";
 import { CtaBand } from "@/components/site/blocks";
 import { fmtDate } from "@/components/common";
 import { resources } from "@/data/site";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/resources")({
-  head: () => ({
-    meta: [
-      { title: "Resources & Guides — Global Roots Consultants" },
-      {
-        name: "description",
-        content:
-          "Guides on visas, scholarships, applications and English tests for studying abroad.",
-      },
-      { property: "og:title", content: "Resources & Guides — Global Roots Consultants" },
-      {
-        property: "og:description",
-        content: "Practical study-abroad guides from our consultants.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/resources",
+      title: "Resources & Guides — Global Roots Consultants",
+      description:
+        "Guides on visas, scholarships, applications and English tests for studying abroad.",
+    }),
   component: Page,
 });
 

@@ -107,12 +107,14 @@ function Footer() {
               <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-bright" aria-hidden />
               {siteContact.location.fullDisplay}
             </li>
-            <li className="flex gap-2">
-              <Phone className="mt-0.5 h-4 w-4 shrink-0 text-bright" aria-hidden />
-              <a href={siteContact.phone.href} className="transition-colors hover:text-bright">
-                {siteContact.phone.display}
-              </a>
-            </li>
+            {!siteContact.phone.placeholder ? (
+              <li className="flex gap-2">
+                <Phone className="mt-0.5 h-4 w-4 shrink-0 text-bright" aria-hidden />
+                <a href={siteContact.phone.href} className="transition-colors hover:text-bright">
+                  {siteContact.phone.display}
+                </a>
+              </li>
+            ) : null}
             <li className="flex gap-2">
               <Mail className="mt-0.5 h-4 w-4 shrink-0 text-bright" aria-hidden />
               <a href={siteContact.email.href} className="transition-colors hover:text-bright">
@@ -124,7 +126,18 @@ function Footer() {
       </div>
       <div className="border-t border-navy-foreground/10">
         <div className="container-page flex flex-col justify-between gap-3 py-5 text-xs text-navy-foreground/50 sm:flex-row sm:items-center">
-          <span>© 2026 Global Roots Consultants. All rights reserved.</span>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+            <span>© 2026 Global Roots Consultants. All rights reserved.</span>
+            <span className="hidden h-3 w-px bg-navy-foreground/20 sm:block" aria-hidden />
+            <nav aria-label="Legal" className="flex flex-wrap gap-3">
+              <Link to="/privacy" className="transition-colors hover:text-bright">
+                Privacy
+              </Link>
+              <Link to="/terms" className="transition-colors hover:text-bright">
+                Terms
+              </Link>
+            </nav>
+          </div>
           <SocialLinks size="utility" surface="navy" className="sm:justify-end" />
         </div>
       </div>

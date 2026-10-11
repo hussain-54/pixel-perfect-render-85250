@@ -11,6 +11,21 @@ import { submitConsultationRequest } from "@/services";
 import { destinations } from "@/data/site";
 import type { University, Scholarship } from "@/types";
 
+/** Honest disclosure for mock/sample catalogue listings (not a live CMS inventory). */
+export function CatalogueSampleNotice({ kind }: { kind: "universities" | "scholarships" }) {
+  const label = kind === "universities" ? "university" : "scholarship";
+  return (
+    <p
+      role="note"
+      className="mb-6 border border-border bg-surface px-4 py-3 text-sm leading-relaxed text-muted-foreground"
+    >
+      These {label} entries are <strong className="font-semibold text-navy">sample listings</strong>{" "}
+      for browsing this site. They are not a verified live inventory. Confirm availability,
+      eligibility and deadlines with a Global Roots consultant before applying.
+    </p>
+  );
+}
+
 export function DestinationCard({ d }: { d: (typeof destinations)[number] }) {
   return (
     <Link
@@ -101,11 +116,13 @@ export function ScholarshipCard({ s }: { s: Scholarship }) {
 
 const field = "h-11";
 export function ConsultationForm() {
-  const [done, setDone] = useState<{ ref: string; persisted: boolean } | null>(null);
+  const [doneRef, setDoneRef] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  /** Stable reference for this submission attempt — reused on Retry (idempotent unique key). */
+  const [attemptRef, setAttemptRef] = useState<string | null>(null);
 
-  if (done)
+  if (doneRef)
     return (
       <div
         className="panel flex flex-col items-center p-8 text-center md:p-10"
@@ -116,14 +133,17 @@ export function ConsultationForm() {
         <h3 className="mt-4 font-display text-2xl font-semibold text-navy">Request received</h3>
         <p className="mt-2 max-w-sm text-sm text-muted-foreground">
           Thank you. A Global Roots consultant will contact you within one working day. Reference:{" "}
-          <strong className="text-navy">{done.ref}</strong>
+          <strong className="text-navy">{doneRef}</strong>
         </p>
-        {!done.persisted && (
-          <p className="mt-3 max-w-sm text-xs text-muted-foreground">
-            Your details were validated. Database persistence is not active in this environment yet.
-          </p>
-        )}
-        <Button variant="outline" className="mt-6" onClick={() => setDone(null)}>
+        <Button
+          variant="outline"
+          className="mt-6"
+          onClick={() => {
+            setDoneRef(null);
+            setAttemptRef(null);
+            setError(null);
+          }}
+        >
           Submit another request
         </Button>
       </div>
@@ -139,17 +159,31 @@ export function ConsultationForm() {
         setBusy(true);
         try {
           const data = Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>;
-          const { validateConsultationRequest } = await import("@/lib/consultation");
+          const {
+            validateConsultationRequest,
+            resolveConsultationReference,
+            resolveConsultationSubmitUi,
+          } = await import("@/lib/consultation");
           const local = validateConsultationRequest(data);
           if (!local.success) {
             setError(local.error.issues[0]?.message ?? "Please check the form and try again.");
             return;
           }
-          const r = await submitConsultationRequest(data);
-          setDone({ ref: r.ref, persisted: Boolean(r.persisted) });
+          const ref = resolveConsultationReference(attemptRef);
+          setAttemptRef(ref);
+          const r = await submitConsultationRequest({ ...data, reference_code: ref });
+          const ui = resolveConsultationSubmitUi(r);
+          if (ui.kind === "success") {
+            setDoneRef(ui.ref);
+            setAttemptRef(null);
+            return;
+          }
+          setAttemptRef(ui.ref);
+          setError(ui.error ?? "Unable to save your request. Please try again.");
         } catch (err) {
-          const raw = err instanceof Error ? err.message : "Unable to send your request.";
-          setError(raw.replace(/^\d{3}:/, ""));
+          const { publicConsultationErrorMessage } = await import("@/lib/consultation");
+          const raw = err instanceof Error ? err.message : "";
+          setError(publicConsultationErrorMessage(raw));
         } finally {
           setBusy(false);
         }
@@ -212,16 +246,16 @@ export function ConsultationForm() {
         <Textarea id="msg" name="message" rows={3} />
       </div>
       {error && (
-        <p className="text-sm text-destructive sm:col-span-2" role="alert">
-          {error}
-        </p>
+        <div className="space-y-2 sm:col-span-2" role="alert" aria-live="assertive">
+          <p className="text-sm text-destructive">{error}</p>
+        </div>
       )}
       <Button type="submit" size="lg" className="sm:col-span-2" disabled={busy} aria-busy={busy}>
-        {busy ? "Sending…" : "Request Consultation"}
+        {busy ? "Sending…" : error ? "Try again" : "Request Consultation"}
       </Button>
       <p className="text-xs text-muted-foreground sm:col-span-2">
-        We validate your details before sending. Persistent storage activates after the consultation
-        database migration is applied to your Supabase project.
+        We validate your details before sending. Your request is only confirmed after it is saved
+        securely.
       </p>
     </form>
   );

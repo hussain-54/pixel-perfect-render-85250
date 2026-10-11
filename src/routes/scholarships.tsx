@@ -1,27 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
 import { SiteLayout, PageHero } from "@/components/site/SiteLayout";
-import { ScholarshipCard, CtaBand } from "@/components/site/blocks";
+import { ScholarshipCard, CtaBand, CatalogueSampleNotice } from "@/components/site/blocks";
 import { FilterSelect, EmptyState, LoadingRows } from "@/components/common";
 import { useData } from "@/lib/useData";
 import { getScholarships } from "@/services";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/scholarships")({
-  head: () => ({
-    meta: [
-      { title: "Scholarships — Global Roots Consultants" },
-      {
-        name: "description",
-        content:
-          "Fully funded, partial and tuition-waiver scholarships for international students.",
-      },
-      { property: "og:title", content: "Scholarships — Global Roots Consultants" },
-      {
-        property: "og:description",
-        content: "Find scholarships by country, degree level, funding type and field.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/scholarships",
+      title: "Scholarships — Global Roots Consultants",
+      description:
+        "Browse sample scholarship listings by country, degree level, funding type and field.",
+    }),
   component: Page,
 });
 
@@ -43,9 +36,10 @@ function Page() {
       <PageHero
         eyebrow="Scholarships"
         title="Featured scholarships and funding"
-        body="Explore France Eiffel, Hungarian Stipendium, Bright Scholarships and regional university awards — then speak with a consultant about the right fit."
+        body="Explore sample listings such as France Eiffel, Hungarian Stipendium, Bright Scholarships and regional awards — then speak with a consultant about the right fit."
       />
       <section className="container-page section-y">
+        <CatalogueSampleNotice kind="scholarships" />
         <div className="mb-8 flex flex-wrap gap-2.5 border-b border-border pb-5">
           <FilterSelect
             label="Country"

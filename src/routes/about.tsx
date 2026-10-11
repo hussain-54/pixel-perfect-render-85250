@@ -3,23 +3,16 @@ import consult from "@/assets/consult.jpg";
 import { SiteLayout, PageHero } from "@/components/site/SiteLayout";
 import { CtaBand } from "@/components/site/blocks";
 import { stats, whyUs } from "@/data/site";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/about")({
-  head: () => ({
-    meta: [
-      { title: "About Us — Global Roots Consultants" },
-      {
-        name: "description",
-        content:
-          "Global Roots Consultants is a premium education and visa consultancy guiding students worldwide.",
-      },
-      { property: "og:title", content: "About Us — Global Roots Consultants" },
-      {
-        property: "og:description",
-        content: "Our story, values and the team behind Global Roots Consultants.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/about",
+      title: "About Us — Global Roots Consultants",
+      description:
+        "Global Roots Consultants is a premium education and visa consultancy guiding students worldwide.",
+    }),
   component: Page,
 });
 

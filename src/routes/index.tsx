@@ -27,27 +27,16 @@ import {
 } from "@/data/site";
 import { universities } from "@/data/mock";
 import { fmtDate } from "@/components/common";
+import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/")({
-  head: () => ({
-    meta: [
-      { title: "Global Roots Consultants | Global Education & Visa Consultants" },
-      {
-        name: "description",
-        content:
-          "Discover world-class universities, scholarships and expert guidance from application to visa with Global Roots Consultants.",
-      },
-      {
-        property: "og:title",
-        content: "Global Roots Consultants | Global Education & Visa Consultants",
-      },
-      {
-        property: "og:description",
-        content:
-          "Your global education journey starts here. Expert guidance from application to visa.",
-      },
-    ],
-  }),
+  head: () =>
+    pageHead({
+      path: "/",
+      title: "Global Roots Consultants | Global Education & Visa Consultants",
+      description:
+        "Discover world-class universities, scholarships and expert guidance from application to visa with Global Roots Consultants.",
+    }),
   component: Home,
 });
 
@@ -173,7 +162,8 @@ function Home() {
       <section className="container-page section-y">
         <SectionHead
           eyebrow="Featured universities"
-          title="Partner institutions students love"
+          title="Sample partner institutions"
+          body="Illustrative listings for exploration — confirm options with a consultant. This is not a live verified inventory."
           action={
             <Button asChild variant="outline">
               <Link to="/universities">
@@ -228,6 +218,7 @@ function Home() {
         <SectionHead
           eyebrow="Featured Scholarships"
           title="Funding that makes it possible"
+          body="Sample funding highlights for exploration — confirm eligibility and deadlines with a consultant."
           action={
             <Button asChild variant="outline">
               <Link to="/scholarships">
