@@ -9,7 +9,7 @@ import {
   type PortalSessionPayload,
 } from "@/lib/portal-session";
 import { normalizeAppRole, resolveAppRoleFromTrustedSources, type AppRole } from "@/lib/roles";
-import { readMustChangePasswordFlag } from "@/lib/password-policy";
+import { sessionValidationFailureMessage } from "@/lib/session-auth";
 
 export class AuthError extends Error {
   status: number;
@@ -26,8 +26,6 @@ export type TrustedSession = {
   source: "supabase" | "demo";
   userId?: string;
   consultantId?: string;
-  /** Trusted Auth app_metadata flag — never client-controlled user_metadata. */
-  mustChangePassword?: boolean;
 };
 
 const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 7;
@@ -93,12 +91,16 @@ export function writePortalSessionCookie(payload: Omit<PortalSessionPayload, "ex
     ...payload,
     exp: Date.now() + SESSION_MAX_AGE_SEC * 1000,
   };
+  const secure =
+    process.env["NODE_ENV"] === "production" ||
+    process.env["VERCEL_ENV"] === "production" ||
+    process.env["VERCEL"] === "1";
   setCookie(PORTAL_SESSION_COOKIE, encodePortalSession(full), {
     httpOnly: true,
     path: "/",
     sameSite: "lax",
     maxAge: SESSION_MAX_AGE_SEC,
-    secure: process.env["NODE_ENV"] === "production",
+    secure,
   });
   return full;
 }
@@ -111,19 +113,27 @@ async function sessionFromAccessToken(accessToken: string): Promise<TrustedSessi
   const { url, key } = supabaseEnv();
   if (!url || !key) throw new AuthError("Authentication is not configured.", 503);
 
-  const supabase = createClient(url, key);
-  const { data, error } = await supabase.auth.getUser(accessToken);
-  if (error || !data.user) throw new AuthError("Invalid or expired session.");
+  const token = accessToken.trim();
+  if (!token) throw new AuthError("Sign in required. Missing access token.", 401);
 
-  const role = await resolveTrustedRole(data.user, accessToken);
+  // Stateless server client — never touch browser storage or auto-refresh here.
+  const supabase = createClient(url, key, {
+    auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+  });
+  const { data, error } = await supabase.auth.getUser(token);
+  if (error || !data.user) {
+    // AuthSessionMissingError happens when admin password rotation revoked the
+    // session_id inside an otherwise unexpired JWT — do not treat as authenticated.
+    throw new AuthError(sessionValidationFailureMessage(error?.message), 401);
+  }
+
+  const role = await resolveTrustedRole(data.user, token);
   const email = (data.user.email ?? "").toLowerCase();
-  const mustChangePassword = readMustChangePasswordFlag(data.user.app_metadata);
   const session: TrustedSession = {
     role,
     email,
     source: "supabase",
     userId: data.user.id,
-    ...(mustChangePassword ? { mustChangePassword: true } : {}),
   };
 
   // Consultant / Admission Officer desk id is the consultants row (= auth.uid()).
@@ -131,7 +141,7 @@ async function sessionFromAccessToken(accessToken: string): Promise<TrustedSessi
   if (role === "consultant") {
     try {
       const userClient = createClient(url, key, {
-        global: { headers: { Authorization: `Bearer ${accessToken}` } },
+        global: { headers: { Authorization: `Bearer ${token}` } },
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
       });
       const { data: desk } = await userClient

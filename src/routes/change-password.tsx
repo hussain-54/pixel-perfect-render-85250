@@ -22,7 +22,6 @@ export const Route = createFileRoute("/change-password")({
 
 function ChangePasswordPage() {
   const navigate = useNavigate();
-  const [mustChange, setMustChange] = useState(false);
   const [ready, setReady] = useState(false);
   const [signedIn, setSignedIn] = useState(false);
   const [currentPassword, setCurrentPassword] = useState("");
@@ -45,13 +44,7 @@ function ChangePasswordPage() {
     void (async () => {
       const session = await getAuthSession();
       if (cancelled) return;
-      if (!session) {
-        setSignedIn(false);
-        setReady(true);
-        return;
-      }
-      setSignedIn(true);
-      setMustChange(Boolean(session.mustChangePassword));
+      setSignedIn(Boolean(session));
       setReady(true);
     })();
     return () => {
@@ -66,7 +59,7 @@ function ChangePasswordPage() {
     setSuccess(null);
     setFieldErrors({});
 
-    if (!mustChange && !currentPassword) {
+    if (!currentPassword) {
       setFieldErrors({ current: "Enter your current password." });
       return;
     }
@@ -81,9 +74,9 @@ function ChangePasswordPage() {
     setLoading(true);
     try {
       const result = await changeOwnPassword({
+        currentPassword,
         newPassword: password,
         confirmPassword: confirm,
-        ...(mustChange ? {} : { currentPassword }),
       });
       if (!result.ok) {
         setError(result.error);
@@ -138,23 +131,17 @@ function ChangePasswordPage() {
 
   return (
     <AuthShell
-      title={mustChange ? "Set a new password" : "Change your password"}
-      subtitle={
-        mustChange
-          ? `Your temporary password must be changed before you continue. Use at least ${PASSWORD_MIN_LENGTH} characters with a letter and a number.`
-          : `Enter your current password, then choose a new one (min ${PASSWORD_MIN_LENGTH} characters, letter + number).`
-      }
+      title="Change your password"
+      subtitle={`Enter your current password, then choose a new one (min ${PASSWORD_MIN_LENGTH} characters, letter + number).`}
       footer={
-        mustChange ? null : (
-          <p className="text-center text-sm text-muted-foreground">
-            <Link
-              to="/forgot-password"
-              className="font-semibold text-royal transition-colors hover:text-navy"
-            >
-              Forgot your current password?
-            </Link>
-          </p>
-        )
+        <p className="text-center text-sm text-muted-foreground">
+          <Link
+            to="/forgot-password"
+            className="font-semibold text-royal transition-colors hover:text-navy"
+          >
+            Forgot your current password?
+          </Link>
+        </p>
       }
     >
       <form onSubmit={onSubmit} className="space-y-5" noValidate>
@@ -175,20 +162,18 @@ function ChangePasswordPage() {
           </div>
         ) : null}
 
-        {!mustChange ? (
-          <AuthPasswordField
-            id="change-current-password"
-            label="Current password"
-            value={currentPassword}
-            onChange={setCurrentPassword}
-            error={fieldErrors.current}
-            disabled={loading}
-            autoComplete="current-password"
-            placeholder="Current password"
-            showPassword={showCurrent}
-            onToggleVisibility={() => setShowCurrent((v) => !v)}
-          />
-        ) : null}
+        <AuthPasswordField
+          id="change-current-password"
+          label="Current password"
+          value={currentPassword}
+          onChange={setCurrentPassword}
+          error={fieldErrors.current}
+          disabled={loading}
+          autoComplete="current-password"
+          placeholder="Current password"
+          showPassword={showCurrent}
+          onToggleVisibility={() => setShowCurrent((v) => !v)}
+        />
 
         <AuthPasswordField
           id="change-new-password"
@@ -221,8 +206,6 @@ function ChangePasswordPage() {
               <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
               Saving…
             </>
-          ) : mustChange ? (
-            "Save and continue"
           ) : (
             "Update password"
           )}

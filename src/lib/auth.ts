@@ -8,8 +8,9 @@ import {
   type AppRole,
   type PortalHome,
 } from "@/lib/roles";
-import { CHANGE_PASSWORD_PATH, passwordRecoveryRedirectUrl } from "@/lib/auth-redirects";
-import { readMustChangePasswordFlag, validatePasswordConfirmation } from "@/lib/password-policy";
+import { passwordRecoveryRedirectUrl } from "@/lib/auth-redirects";
+import { validatePasswordConfirmation } from "@/lib/password-policy";
+import { accessTokenNeedsRefresh } from "@/lib/session-auth";
 import {
   clearSession,
   establishSession,
@@ -26,16 +27,8 @@ export type AuthRole = AppRole;
 const REMEMBER_EMAIL_KEY = "gr_remember_email";
 const DEMO_SESSION_KEY = "gr_demo_session";
 
-export type PasswordChangeRedirect = typeof CHANGE_PASSWORD_PATH;
-
 export type SignInResult =
-  | {
-      ok: true;
-      role: AppRole;
-      redirectTo: PortalHome | PasswordChangeRedirect;
-      mustChangePassword?: boolean;
-    }
-  | { ok: false; error: string };
+  { ok: true; role: AppRole; redirectTo: PortalHome } | { ok: false; error: string };
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -137,8 +130,16 @@ async function resolveSupabaseRole(user: User): Promise<AppRole> {
 async function authHeaders(): Promise<HeadersInit | undefined> {
   if (!isSupabaseConfigured()) return undefined;
   try {
-    const { data } = await getSupabase().auth.getSession();
-    const token = data.session?.access_token;
+    const supabase = getSupabase();
+    const { data } = await supabase.auth.getSession();
+    let session = data.session;
+    if (session && accessTokenNeedsRefresh(session.expires_at ?? null)) {
+      const refreshed = await supabase.auth.refreshSession();
+      if (!refreshed.error && refreshed.data.session) {
+        session = refreshed.data.session;
+      }
+    }
+    const token = session?.access_token;
     if (!token) return undefined;
     return { Authorization: `Bearer ${token}` };
   } catch {
@@ -160,16 +161,8 @@ export async function getAuthSession(): Promise<PublicSession | null> {
         try {
           return await establishSession({ data: { accessToken: data.session.access_token } });
         } catch {
-          if (data.session.user) {
-            const role = await resolveSupabaseRole(data.session.user);
-            const mustChangePassword = readMustChangePasswordFlag(data.session.user.app_metadata);
-            return {
-              role,
-              email: (data.session.user.email ?? "").toLowerCase(),
-              source: "supabase" as const,
-              ...(mustChangePassword ? { mustChangePassword: true } : {}),
-            };
-          }
+          // Do not invent an authenticated session from a JWT the server rejected.
+          return null;
         }
       }
     } catch {
@@ -266,21 +259,12 @@ export async function signInWithPassword(options: {
 
       if (!error && data.user && data.session?.access_token) {
         clearDemoSession();
+        // Persist httpOnly portal cookie via server validation of the live JWT.
         const established = await establishSession({
           data: { accessToken: data.session.access_token },
         });
         const role = established.role;
-        const mustChangePassword =
-          Boolean(established.mustChangePassword) ||
-          readMustChangePasswordFlag(data.user.app_metadata);
-        if (mustChangePassword) {
-          return {
-            ok: true,
-            role,
-            redirectTo: CHANGE_PASSWORD_PATH,
-            mustChangePassword: true,
-          };
-        }
+        // Optional password change remains available in-portal; never block entry.
         return { ok: true, role, redirectTo: portalHomeByRole[role] };
       }
 
@@ -384,19 +368,12 @@ export async function updatePasswordFromRecovery(
       return { ok: false, error: msg };
     }
 
-    try {
-      const { portalClearMustChangePassword } = await import("@/server/portal-password");
-      const headers = await authHeaders();
-      await portalClearMustChangePassword(headers ? { headers } : undefined);
-    } catch {
-      /* flag clear best-effort; password already updated */
-    }
-
-    if (sessionData.session.access_token) {
+    const { data: after } = await supabase.auth.getSession();
+    if (after.session?.access_token) {
       try {
-        await establishSession({ data: { accessToken: sessionData.session.access_token } });
+        await establishSession({ data: { accessToken: after.session.access_token } });
       } catch {
-        /* cookie refresh optional */
+        /* cookie refresh optional after recovery */
       }
     }
 
@@ -406,42 +383,52 @@ export async function updatePasswordFromRecovery(
   }
 }
 
-/** Authenticated change-password (voluntary or forced first login). */
+/**
+ * Authenticated change-password.
+ * Verifies the current password on the server, then updates via the user's
+ * Supabase session (not Auth Admin) so the live session is not revoked.
+ */
 export async function changeOwnPassword(options: {
-  currentPassword?: string;
+  currentPassword: string;
   newPassword: string;
   confirmPassword: string;
 }): Promise<PasswordUpdateResult> {
   const check = validatePasswordConfirmation(options.newPassword, options.confirmPassword);
   if (!check.ok) return { ok: false, error: check.error };
+  if (!options.currentPassword) {
+    return { ok: false, error: "Enter your current password to continue." };
+  }
+  if (options.currentPassword === options.newPassword) {
+    return { ok: false, error: "New password must be different from the current password." };
+  }
+
+  if (!isSupabaseConfigured()) {
+    return { ok: false, error: "Authentication is not configured." };
+  }
 
   try {
-    const { portalChangeOwnPassword } = await import("@/server/portal-password");
+    const { portalVerifyCurrentPassword } = await import("@/server/portal-password");
     const headers = await authHeaders();
-    const result = await portalChangeOwnPassword({
-      ...(headers ? { headers } : {}),
-      data: {
-        newPassword: options.newPassword,
-        confirmPassword: options.confirmPassword,
-        ...(options.currentPassword ? { currentPassword: options.currentPassword } : {}),
-      },
+    if (!headers) {
+      return { ok: false, error: "Sign in required. Your session may have expired." };
+    }
+    await portalVerifyCurrentPassword({
+      headers,
+      data: { currentPassword: options.currentPassword },
     });
 
-    // Refresh local session so mustChangePassword clears in JWT/cookie.
-    if (isSupabaseConfigured()) {
-      try {
-        const supabase = getSupabase();
-        await supabase.auth.refreshSession();
-        const { data } = await supabase.auth.getSession();
-        if (data.session?.access_token) {
-          await establishSession({ data: { accessToken: data.session.access_token } });
-        }
-      } catch {
-        /* refresh best-effort */
-      }
+    const supabase = getSupabase();
+    const { error } = await supabase.auth.updateUser({ password: options.newPassword });
+    if (error) {
+      return { ok: false, error: error.message || "Could not update password." };
     }
 
-    return { ok: true, message: result.message };
+    const { data } = await supabase.auth.getSession();
+    if (data.session?.access_token) {
+      await establishSession({ data: { accessToken: data.session.access_token } });
+    }
+
+    return { ok: true, message: "Password updated successfully." };
   } catch (error) {
     const raw = error instanceof Error ? error.message : String(error);
     const cleaned = raw.replace(/^\d+:/, "").trim() || "Could not change password.";

@@ -240,7 +240,6 @@ export const portalCreateAccount = createServerFn({ method: "POST" })
         },
         app_metadata: {
           role: appRole,
-          must_change_password: true,
         },
       });
 
@@ -333,7 +332,6 @@ export const portalCreateAccount = createServerFn({ method: "POST" })
             appRole,
             businessRole,
             createdBy: session.userId,
-            mustChangePassword: true,
           },
         });
       } catch {
@@ -351,7 +349,7 @@ export const portalCreateAccount = createServerFn({ method: "POST" })
           invited: false,
         },
         message:
-          "Account created. Share the temporary password through your secure channel. The employee must change it on first sign-in.",
+          "Account created. Share the temporary password through your secure channel. The employee can sign in immediately and may change their password from the portal when they choose.",
       };
     } catch (error) {
       toError(error);
@@ -381,9 +379,10 @@ export const portalSetTemporaryPassword = createServerFn({ method: "POST" })
       if (profileErr) throw new Error(profileErr.message);
       if (!profile?.email) throw new AuthError("Account not found.", 404);
 
+      // Auth Admin password rotation revokes existing sessions by design.
+      // Employee must sign in again with the new temporary password.
       const { error: updateErr } = await admin.auth.admin.updateUserById(profile.id, {
         password: data.temporaryPassword,
-        app_metadata: { must_change_password: true },
       });
       if (updateErr) {
         throw new AuthError(updateErr.message || "Could not set temporary password.", 400);
@@ -412,7 +411,7 @@ export const portalSetTemporaryPassword = createServerFn({ method: "POST" })
       return {
         ok: true as const,
         message:
-          "Temporary password set. Share it securely with the employee; they must change it on next sign-in. The password is not stored or shown here.",
+          "Temporary password set. Share it securely with the employee; existing sessions were revoked so they must sign in again. The password is not stored or shown here.",
       };
     } catch (error) {
       toError(error);

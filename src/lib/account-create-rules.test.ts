@@ -58,7 +58,7 @@ function validateDirectCreateInput(input: {
     businessRole: option.businessRole,
     invited: false,
     sendsInvitationEmail: false,
-    mustChangePassword: true,
+    forcesFirstLoginPasswordChange: false,
   };
 }
 
@@ -77,7 +77,7 @@ describe("direct account creation rules", () => {
     expect(result.appRole).toBe("consultant");
     expect(result.invited).toBe(false);
     expect(result.sendsInvitationEmail).toBe(false);
-    expect(result.mustChangePassword).toBe(true);
+    expect(result.forcesFirstLoginPasswordChange).toBe(false);
   });
 
   it("rejects weak / mismatched temporary passwords", () => {

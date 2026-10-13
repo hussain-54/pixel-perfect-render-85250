@@ -1,6 +1,5 @@
 import { redirect } from "@tanstack/react-router";
 import { getPortalSession, type PublicSession } from "@/server/portal-data";
-import { CHANGE_PASSWORD_PATH } from "@/lib/auth-redirects";
 import {
   portalHomeByRole,
   roleCanAccessPortal,
@@ -39,13 +38,42 @@ export function requirePortalAccess(portal: PortalKind) {
     let session: PublicSession | null = null;
 
     // Live JWT path first — refreshes httpOnly cookie from profiles/app_metadata.
+    // Proactively refresh near-expiry tokens so the next server fn still validates.
     if (typeof window !== "undefined" && isSupabaseConfigured()) {
       try {
-        const { data } = await getSupabase().auth.getSession();
+        const supabase = getSupabase();
+        let { data } = await supabase.auth.getSession();
+        const expiresAt = data.session?.expires_at;
+        if (
+          data.session &&
+          typeof expiresAt === "number" &&
+          expiresAt * 1000 <= Date.now() + 60_000
+        ) {
+          const refreshed = await supabase.auth.refreshSession();
+          if (!refreshed.error && refreshed.data.session) {
+            data = { session: refreshed.data.session };
+          }
+        }
         const token = data.session?.access_token;
         if (token) {
           const { establishSession } = await import("@/server/portal-data");
-          session = await establishSession({ data: { accessToken: token } });
+          try {
+            session = await establishSession({ data: { accessToken: token } });
+          } catch {
+            // Stale/revoked JWT (e.g. admin password rotation) — clear and force sign-in.
+            try {
+              await supabase.auth.signOut();
+            } catch {
+              /* ignore */
+            }
+            const { clearSession } = await import("@/server/portal-data");
+            try {
+              await clearSession();
+            } catch {
+              /* ignore */
+            }
+            session = null;
+          }
         }
       } catch {
         session = null;
@@ -67,10 +95,6 @@ export function requirePortalAccess(portal: PortalKind) {
         to: "/sign-in",
         search: { redirect: portalHomePath(portal) },
       });
-    }
-
-    if (session.mustChangePassword) {
-      throw redirect({ to: CHANGE_PASSWORD_PATH });
     }
 
     if (!roleCanAccessPortal(session.role, portal)) {

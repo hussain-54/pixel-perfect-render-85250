@@ -136,9 +136,8 @@ import {
   type SetTemporaryPasswordInput,
 } from "@/server/portal-accounts";
 import {
-  portalChangeOwnPassword,
-  portalClearMustChangePassword,
-  type ChangeOwnPasswordInput,
+  portalVerifyCurrentPassword,
+  type VerifyCurrentPasswordInput,
 } from "@/server/portal-password";
 import type { HrAttendanceStatus, HrEmploymentStatus } from "@/lib/hr-rules";
 import type { MarketingCampaignStatus } from "@/lib/marketing-rules";
@@ -512,11 +511,8 @@ export const setPortalConsultantDeskStatus = (data: {
 export const revokePortalAccountSessions = (data: { userId: string }) =>
   withAuth((opts) => portalRevokeAccountSessions({ ...opts, data }));
 
-export const changePortalOwnPassword = (data: ChangeOwnPasswordInput) =>
-  withAuth((opts) => portalChangeOwnPassword({ ...opts, data }));
-
-export const clearPortalMustChangePassword = () =>
-  withAuth((opts) => portalClearMustChangePassword(opts));
+export const verifyPortalCurrentPassword = (data: VerifyCurrentPasswordInput) =>
+  withAuth((opts) => portalVerifyCurrentPassword({ ...opts, data }));
 
 export const listHrEmployees = () => withAuth((opts) => portalListHrEmployees(opts));
 

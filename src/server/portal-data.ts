@@ -30,8 +30,6 @@ export type PublicSession = {
   email: string;
   source: "supabase" | "demo";
   consultantId?: string;
-  /** From Auth app_metadata — forces /change-password until cleared server-side. */
-  mustChangePassword?: boolean;
 };
 
 function toPublic(session: TrustedSession): PublicSession {
@@ -40,7 +38,6 @@ function toPublic(session: TrustedSession): PublicSession {
     email: session.email,
     source: session.source,
     ...(session.consultantId ? { consultantId: session.consultantId } : {}),
-    ...(session.mustChangePassword ? { mustChangePassword: true } : {}),
   };
 }
 

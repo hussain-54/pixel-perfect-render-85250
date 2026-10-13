@@ -413,8 +413,9 @@ export function AdminAccountManagement() {
               </Button>
               <p className="text-xs text-muted-foreground">
                 Creates the Auth user directly (no invitation email). Share the temporary password
-                through your secure channel. The employee must change it on first sign-in. Duplicate
-                emails are rejected. Passwords are never stored in application tables.
+                through your secure channel. The employee can sign in immediately; password change
+                is optional from the portal. Duplicate emails are rejected. Passwords are never
+                stored in application tables.
               </p>
             </form>
           </Panel>
@@ -637,7 +638,8 @@ function AccountRow({
                 {tempPwPending ? "Saving…" : "Save temporary password"}
               </Button>
               <p className="text-[0.7rem] text-muted-foreground">
-                Share out-of-band. Employee must change it on next sign-in. Never shown after save.
+                Share out-of-band. Existing sessions are revoked; employee signs in with the new
+                password. Never shown after save.
               </p>
             </div>
           ) : null}
