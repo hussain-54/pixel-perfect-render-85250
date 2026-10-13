@@ -1,11 +1,13 @@
 /** Lightweight CSV / Excel-compatible CSV / text PDF exports (no extra deps). */
 
+import { sanitizeSpreadsheetCell } from "@/lib/report-rules";
+
 function utf8ToBase64(text: string): string {
   return Buffer.from(text, "utf8").toString("base64");
 }
 
 export function escapeCsvCell(value: string | number | null | undefined): string {
-  const s = value == null ? "" : String(value);
+  const s = sanitizeSpreadsheetCell(value);
   return `"${s.replace(/"/g, '""')}"`;
 }
 
@@ -66,7 +68,9 @@ export function toSimplePdf(title: string, lines: string[]): string {
     bodies.push(
       `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${contentObj} 0 R /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> >>`,
     );
-    bodies.push(`<< /Length ${Buffer.byteLength(textOps, "utf8")} >>\nstream\n${textOps}\nendstream`);
+    bodies.push(
+      `<< /Length ${Buffer.byteLength(textOps, "utf8")} >>\nstream\n${textOps}\nendstream`,
+    );
   });
 
   const rebuilt: string[] = ["%PDF-1.4"];
@@ -81,7 +85,9 @@ export function toSimplePdf(title: string, lines: string[]): string {
     xref += `${String(off[i]).padStart(10, "0")} 00000 n \n`;
   }
   rebuilt.push(xref);
-  rebuilt.push(`trailer\n<< /Size ${bodies.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`);
+  rebuilt.push(
+    `trailer\n<< /Size ${bodies.length + 1} /Root 1 0 R >>\nstartxref\n${xrefStart}\n%%EOF`,
+  );
   return rebuilt.join("\n");
 }
 

@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { isDemoAuthEnabled } from "@/lib/demo-auth";
-import { signOut } from "@/lib/auth";
+import { getAuthSession, signOut } from "@/lib/auth";
+import { shouldShowDemoSessionIndicator } from "@/lib/portal-data-plane";
 import { searchAuthorizedStudents } from "@/services";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +40,10 @@ export type PortalNavItem = {
     | "/admin/leads"
     | "/admin/students"
     | "/admin/appointments"
+    | "/admin/finance"
+    | "/admin/hr"
+    | "/admin/marketing"
+    | "/admin/operations"
     | "/admin/applications"
     | "/admin/documents"
     | "/admin/universities"
@@ -115,6 +120,13 @@ export function PortalShell({ role, nav, children, barTitle }: PortalShellProps)
   const [searchOpen, setSearchOpen] = useState(false);
   const showDemoSwitcher = isDemoAuthEnabled();
   const showGlobalSearch = role === "staff";
+
+  const sessionQ = useQuery({
+    queryKey: ["portal", "auth-session"],
+    queryFn: () => getAuthSession(),
+    staleTime: 30_000,
+  });
+  const showDemoSessionBadge = shouldShowDemoSessionIndicator(sessionQ.data?.source);
 
   const searchQTrim = searchQ.trim();
   const searchResults = useQuery({
@@ -211,6 +223,15 @@ export function PortalShell({ role, nav, children, barTitle }: PortalShellProps)
             <span className="truncate font-display text-base font-semibold text-navy md:text-lg">
               {barTitle ?? meta.title}
             </span>
+            {showDemoSessionBadge ? (
+              <span
+                role="status"
+                aria-label="Demo session"
+                className="shrink-0 rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-amber-900"
+              >
+                Demo session
+              </span>
+            ) : null}
             {showGlobalSearch ? (
               <div className="relative ml-auto hidden min-w-0 max-w-md flex-1 md:block">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -229,8 +250,10 @@ export function PortalShell({ role, nav, children, barTitle }: PortalShellProps)
                       <p className="px-3 py-2 text-xs text-muted-foreground">Searching…</p>
                     ) : searchResults.isError ? (
                       <p className="px-3 py-2 text-xs text-danger">Search unavailable</p>
-                    ) : !(searchResults.data?.length) ? (
-                      <p className="px-3 py-2 text-xs text-muted-foreground">No authorized matches</p>
+                    ) : !searchResults.data?.length ? (
+                      <p className="px-3 py-2 text-xs text-muted-foreground">
+                        No authorized matches
+                      </p>
                     ) : (
                       <ul className="max-h-64 overflow-auto py-1">
                         {searchResults.data.map((hit) => (

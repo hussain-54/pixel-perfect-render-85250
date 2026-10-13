@@ -34,8 +34,10 @@ function AdminAppointments() {
                 <td>
                   {fmtDate(a.date)} · {a.time}
                 </td>
-                <td className="font-medium text-navy">{lookupStudent(a.studentId)?.name ?? "—"}</td>
-                <td>{lookupConsultant(a.consultantId)?.name ?? "—"}</td>
+                <td className="font-medium text-navy">
+                  {a.studentName ?? lookupStudent(a.studentId)?.name ?? "—"}
+                </td>
+                <td>{a.consultantName ?? lookupConsultant(a.consultantId)?.name ?? "—"}</td>
                 <td>{a.type}</td>
                 <td>
                   <StatusBadge status={a.status} />

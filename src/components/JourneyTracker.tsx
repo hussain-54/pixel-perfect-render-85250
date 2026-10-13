@@ -1,14 +1,47 @@
 import { Check, ArrowRight } from "lucide-react";
 import { getStages, stageIndex } from "@/services";
 import { cn } from "@/lib/utils";
+import { fmtDate } from "@/components/common";
 import type { StageKey } from "@/types";
+import type { JourneyTimelineItem } from "@/types/journey-timeline";
 
-/** The student's 12-stage journey: completed / current / upcoming. */
-export function JourneyTracker({ stage, compact = false }: { stage: StageKey; compact?: boolean }) {
+function statusTone(status: JourneyTimelineItem["status"]) {
+  switch (status) {
+    case "completed":
+      return "text-success";
+    case "rejected":
+    case "returned":
+      return "text-destructive";
+    case "overdue":
+      return "text-warning";
+    case "claimed":
+      return "text-royal";
+    case "current":
+      return "text-royal";
+    default:
+      return "text-muted-foreground";
+  }
+}
+
+/** The student's 12-stage journey: completed / current / upcoming + optional live timeline. */
+export function JourneyTracker({
+  stage,
+  compact = false,
+  timelineItems,
+  pendingActions,
+}: {
+  stage: StageKey;
+  compact?: boolean;
+  /** Chronological events from persisted records (live). Omitted/empty = stage checklist only. */
+  timelineItems?: JourneyTimelineItem[];
+  pendingActions?: JourneyTimelineItem[];
+}) {
   const stages = getStages();
   const current = stageIndex(stage);
   const cur = stages[Math.max(current, 0)]!;
   const pct = Math.round((current / (stages.length - 1)) * 100);
+  const nextFromRecords = pendingActions?.[0]?.pendingAction ?? pendingActions?.[0]?.title;
+  const nextAction = nextFromRecords || cur.nextAction;
 
   return (
     <section className="panel overflow-hidden">
@@ -29,9 +62,7 @@ export function JourneyTracker({ stage, compact = false }: { stage: StageKey; co
             <p className="text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-bright">
               Next action
             </p>
-            <p className="mt-1.5 text-sm leading-relaxed text-navy-foreground/90">
-              {cur.nextAction}
-            </p>
+            <p className="mt-1.5 text-sm leading-relaxed text-navy-foreground/90">{nextAction}</p>
           </div>
           <div className="mt-5">
             <div className="flex justify-between text-xs text-navy-foreground/65">
@@ -99,6 +130,50 @@ export function JourneyTracker({ stage, compact = false }: { stage: StageKey; co
           })}
         </ol>
       </div>
+
+      {timelineItems && timelineItems.length > 0 ? (
+        <div className="border-t border-border px-4 py-4 md:px-6">
+          <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
+            Timeline (from your case records)
+          </p>
+          <ol className="mt-3 space-y-3">
+            {timelineItems.map((item) => (
+              <li
+                key={item.id}
+                className="flex flex-wrap items-start justify-between gap-2 border-t border-border/70 pt-3 first:border-0 first:pt-0"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold text-navy">{item.title}</p>
+                  {item.detail ? (
+                    <p className="mt-0.5 text-xs text-muted-foreground">{item.detail}</p>
+                  ) : null}
+                  {item.responsibleTeam ? (
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Team: {item.responsibleTeam}
+                    </p>
+                  ) : null}
+                  {item.pendingAction ? (
+                    <p className="mt-1 text-xs font-medium text-royal">{item.pendingAction}</p>
+                  ) : null}
+                </div>
+                <div className="shrink-0 text-right">
+                  <p
+                    className={cn(
+                      "text-xs font-semibold uppercase tracking-wide",
+                      statusTone(item.status),
+                    )}
+                  >
+                    {item.status}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted-foreground">
+                    {item.at ? fmtDate(item.at) : "—"}
+                  </p>
+                </div>
+              </li>
+            ))}
+          </ol>
+        </div>
+      ) : null}
     </section>
   );
 }

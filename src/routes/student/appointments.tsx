@@ -55,7 +55,7 @@ function StudentAppointments() {
                   {fmtDate(a.date)} · {a.time}
                 </td>
                 <td className="font-medium text-navy">{a.type}</td>
-                <td>{lookupConsultant(a.consultantId)?.name ?? "—"}</td>
+                <td>{a.consultantName ?? lookupConsultant(a.consultantId)?.name ?? "—"}</td>
                 <td>{a.destination}</td>
                 <td>
                   <StatusBadge status={a.status} />

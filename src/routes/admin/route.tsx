@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+﻿import { createFileRoute } from "@tanstack/react-router";
 import {
   LayoutDashboard,
   UserPlus,
@@ -16,6 +16,10 @@ import {
   Bell,
   ScrollText,
   Settings,
+  Wallet,
+  IdCard,
+  Megaphone,
+  Package,
 } from "lucide-react";
 import { PortalShell, type PortalNavItem } from "@/components/portal/PortalShell";
 import { requirePortalAccess } from "@/lib/portal-guard";
@@ -26,6 +30,10 @@ const adminNav: PortalNavItem[] = [
   { to: "/admin/leads", label: "Leads", icon: UserPlus },
   { to: "/admin/students", label: "Students", icon: Users },
   { to: "/admin/appointments", label: "Appointments", icon: Calendar },
+  { to: "/admin/finance", label: "Finance", icon: Wallet },
+  { to: "/admin/hr", label: "HR & Attendance", icon: IdCard },
+  { to: "/admin/marketing", label: "Marketing", icon: Megaphone },
+  { to: "/admin/operations", label: "Office Ops", icon: Package },
   { to: "/admin/applications", label: "Applications", icon: GraduationCap },
   { to: "/admin/documents", label: "Documents", icon: FileText },
   { to: "/admin/universities", label: "Universities", icon: Building2 },

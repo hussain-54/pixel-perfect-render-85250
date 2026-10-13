@@ -66,14 +66,68 @@ import {
   portalUpdateTaskStatus,
   portalUpsertTask,
 } from "@/server/portal-tasks";
+import { portalExportReports, portalGetReports } from "@/server/portal-reports";
+import { portalExportActivityLog, portalGetActivityLog } from "@/server/portal-activity";
 import {
-  portalExportReports,
-  portalGetReports,
-} from "@/server/portal-reports";
+  portalAssignCounsellor,
+  portalClaimOwnStudentRecord,
+  portalGetSignupFeeStatus,
+  portalHandoverToAdmission,
+  portalIntakeRegisterStudent,
+  portalListAdmissionHandovers,
+  portalRecordCounsellingAgreement,
+  portalRecordSignupFee,
+  portalUpdateAdmissionHandover,
+  portalVerifySignupFee,
+} from "@/server/portal-intake";
+import type {
+  AdmissionHandoverInput,
+  AssignCounsellorInput,
+  CounsellingAgreementInput,
+  IntakeRegisterInput,
+  SignupFeeRecordInput,
+  VerifySignupFeeInput,
+} from "@/types/intake";
 import {
-  portalExportActivityLog,
-  portalGetActivityLog,
-} from "@/server/portal-activity";
+  portalClaimUniversityFeePayment,
+  portalCreateUniversityFeeObligation,
+  portalListUniversityFeeQueue,
+  portalVerifyUniversityFeePayment,
+} from "@/server/portal-finance";
+import { portalGetStudentJourneyTimeline } from "@/server/portal-timeline";
+import { portalGetAdminOpsOverview } from "@/server/portal-admin-ops";
+import {
+  portalCorrectHrAttendance,
+  portalDecideHrLeave,
+  portalGetHrDashboard,
+  portalListHrAttendance,
+  portalListHrEmployees,
+  portalListHrLeave,
+  portalRecordHrAttendance,
+  portalSubmitHrLeave,
+  portalUpsertHrEmployee,
+} from "@/server/portal-hr";
+import {
+  portalArchiveMarketingCampaign,
+  portalAttributeInquiryToCampaign,
+  portalGetMarketingOverview,
+  portalListAttributionHistory,
+  portalUpsertMarketingCampaign,
+} from "@/server/portal-marketing";
+import {
+  portalCreateOpsSalesOrder,
+  portalCreatePurchaseOrder,
+  portalGetOpsDashboard,
+  portalReceivePurchaseLine,
+  portalUpdatePurchaseStatus,
+  portalUpsertOpsExpense,
+  portalUpsertOpsInventoryItem,
+  portalUpsertOpsSupplier,
+} from "@/server/portal-operations";
+import type { HrAttendanceStatus, HrEmploymentStatus } from "@/lib/hr-rules";
+import type { MarketingCampaignStatus } from "@/lib/marketing-rules";
+import type { OpsExpenseStatus, OpsPurchaseStatus } from "@/lib/ops-rules";
+import type { UniversityFeeKindDb, UniversityFeeStatusDb } from "@/types/database";
 import type { StudentDirectoryFilters } from "@/types/portal-officer";
 import type { AssessmentSaveInput, NewApplicationInput } from "@/types/student-profile";
 import type {
@@ -93,13 +147,11 @@ import type {
   NewOfferInput,
   OffersVisaFilters,
 } from "@/types/offers-visa";
-import type {
-  TaskOpsFilters,
-  UpdateTaskStatusInput,
-  UpsertTaskInput,
-} from "@/types/tasks-ops";
+import type { TaskOpsFilters, UpdateTaskStatusInput, UpsertTaskInput } from "@/types/tasks-ops";
 import type { ReportExportFormat, ReportsFilters } from "@/types/reports-ops";
+import type { ModuleReportsFilters } from "@/types/module-reports";
 import type { ActivityFilters } from "@/types/activity-ops";
+import { portalExportModuleReports, portalGetModuleReports } from "@/server/portal-module-reports";
 
 async function withAuth<T>(fn: (opts: { headers?: HeadersInit }) => Promise<T>): Promise<T> {
   const headers = await getAuthRequestHeaders();
@@ -183,6 +235,7 @@ export const getStudentsDirectory = (filters: StudentDirectoryFilters = {}) =>
 export const searchAuthorizedStudents = (q: string) =>
   withAuth((opts) => portalSearchStudents({ ...opts, data: { q } }));
 
+/** Dashboard review — routes through the shared queue review operation (demo + Supabase). */
 export const reviewStudentDocument = (documentId: string, action: "Approved" | "Rejected") =>
   withAuth((opts) => portalReviewDocument({ ...opts, data: { documentId, action } }));
 
@@ -269,7 +322,6 @@ export const saveShortlistItem = (data: {
   suitabilityNote: string;
 }) => withAuth((opts) => portalSaveShortlistItem({ ...opts, data }));
 
-
 export const getOffersVisa = (filters: OffersVisaFilters = {}) =>
   withAuth((opts) => portalGetOffersVisa({ ...opts, data: filters }));
 
@@ -297,10 +349,7 @@ export const recordDepositPaid = (depositId: string, reference: string, paidAt?:
   withAuth((opts) =>
     portalRecordDepositPaid({
       ...opts,
-      data:
-        paidAt === undefined
-          ? { depositId, reference }
-          : { depositId, reference, paidAt },
+      data: paidAt === undefined ? { depositId, reference } : { depositId, reference, paidAt },
     }),
   );
 
@@ -323,8 +372,7 @@ export const advanceVisaStage = (
     }),
   );
 
-export const exportOffersSummary = () =>
-  withAuth((opts) => portalExportOffersSummary(opts));
+export const exportOffersSummary = () => withAuth((opts) => portalExportOffersSummary(opts));
 
 export const getTaskOps = (filters: TaskOpsFilters = {}) =>
   withAuth((opts) => portalGetTaskOps({ ...opts, data: filters }));
@@ -350,15 +398,224 @@ export const registerStudent = (data: {
   program: string;
 }) => withAuth((opts) => portalRegisterStudent({ ...opts, data }));
 
+/** Milestone 1 intake registration (fee claim optional; never auto-verifies). */
+export const intakeRegisterStudent = (data: IntakeRegisterInput) =>
+  withAuth((opts) => portalIntakeRegisterStudent({ ...opts, data }));
+
+export const recordSignupFee = (data: SignupFeeRecordInput) =>
+  withAuth((opts) => portalRecordSignupFee({ ...opts, data }));
+
+export const verifySignupFee = (data: VerifySignupFeeInput) =>
+  withAuth((opts) => portalVerifySignupFee({ ...opts, data }));
+
+export const assignCounsellor = (data: AssignCounsellorInput) =>
+  withAuth((opts) => portalAssignCounsellor({ ...opts, data }));
+
+export const recordCounsellingAgreement = (data: CounsellingAgreementInput) =>
+  withAuth((opts) => portalRecordCounsellingAgreement({ ...opts, data }));
+
+export const handoverToAdmission = (data: AdmissionHandoverInput) =>
+  withAuth((opts) => portalHandoverToAdmission({ ...opts, data }));
+
+export const listAdmissionHandovers = (filters?: {
+  status?: "submitted" | "accepted" | "returned";
+}) => withAuth((opts) => portalListAdmissionHandovers({ ...opts, data: filters ?? {} }));
+
+export const updateAdmissionHandover = (data: {
+  handoverId: string;
+  action: "accept" | "return";
+  note?: string;
+}) => withAuth((opts) => portalUpdateAdmissionHandover({ ...opts, data }));
+
+export const getSignupFeeStatus = (studentId: string) =>
+  withAuth((opts) => portalGetSignupFeeStatus({ ...opts, data: { studentId } }));
+
+/** Link CRM student row to the signed-in Auth profile (email match only). */
+export const claimOwnStudentRecord = () => withAuth((opts) => portalClaimOwnStudentRecord(opts));
+
+export const listUniversityFeeQueue = (filters?: {
+  status?: UniversityFeeStatusDb;
+  studentId?: string;
+}) => withAuth((opts) => portalListUniversityFeeQueue({ ...opts, data: filters ?? {} }));
+
+export const createUniversityFeeObligation = (data: {
+  studentId: string;
+  amount: number;
+  kind?: UniversityFeeKindDb;
+  label?: string;
+  currency?: string;
+  dueDate?: string;
+  applicationId?: string;
+  offerId?: string;
+}) => withAuth((opts) => portalCreateUniversityFeeObligation({ ...opts, data }));
+
+export const claimUniversityFeePayment = (data: {
+  obligationId: string;
+  paymentMethod?: string;
+  referenceReceipt?: string;
+  evidenceNotes?: string;
+}) => withAuth((opts) => portalClaimUniversityFeePayment({ ...opts, data }));
+
+export const verifyUniversityFeePayment = (data: {
+  obligationId: string;
+  action: "verify" | "waive" | "reject";
+  notes?: string;
+}) => withAuth((opts) => portalVerifyUniversityFeePayment({ ...opts, data }));
+
+/** Live chronological journey from persisted workflow records (own student or visible staff). */
+export const getStudentJourneyTimeline = (studentId?: string) =>
+  withAuth((opts) =>
+    portalGetStudentJourneyTimeline({
+      ...opts,
+      data: studentId ? { studentId } : {},
+    }),
+  );
+
+/** Admin / manager operations overview aggregates (authorized + RLS). */
+export const getAdminOpsOverview = () => withAuth((opts) => portalGetAdminOpsOverview(opts));
+
+export const listHrEmployees = () => withAuth((opts) => portalListHrEmployees(opts));
+
+export const listHrAttendance = (filters?: { from?: string; to?: string; employeeId?: string }) =>
+  withAuth((opts) => portalListHrAttendance({ ...opts, data: filters ?? {} }));
+
+export const getHrDashboard = () => withAuth((opts) => portalGetHrDashboard(opts));
+
+export const upsertHrEmployee = (data: {
+  id?: string;
+  employeeCode: string;
+  fullName: string;
+  department?: string;
+  jobTitle?: string;
+  status?: HrEmploymentStatus;
+  hiredOn?: string;
+  profileId?: string | null;
+  reportingManagerId?: string | null;
+}) => withAuth((opts) => portalUpsertHrEmployee({ ...opts, data }));
+
+export const recordHrAttendance = (data: {
+  employeeId: string;
+  workDate: string;
+  status: HrAttendanceStatus;
+  notes?: string;
+}) => withAuth((opts) => portalRecordHrAttendance({ ...opts, data }));
+
+export const correctHrAttendance = (data: {
+  attendanceId: string;
+  status: HrAttendanceStatus;
+  reason: string;
+}) => withAuth((opts) => portalCorrectHrAttendance({ ...opts, data }));
+
+export const submitHrLeave = (data: {
+  employeeId: string;
+  leaveType?: "annual" | "sick" | "unpaid" | "other";
+  startDate: string;
+  endDate: string;
+  reason: string;
+}) => withAuth((opts) => portalSubmitHrLeave({ ...opts, data }));
+
+export const decideHrLeave = (data: {
+  leaveId: string;
+  action: "approve" | "reject" | "cancel";
+  note?: string;
+}) => withAuth((opts) => portalDecideHrLeave({ ...opts, data }));
+
+export const listHrLeave = (filters?: { status?: string; employeeId?: string }) =>
+  withAuth((opts) => portalListHrLeave({ ...opts, data: filters ?? {} }));
+
+export const getMarketingOverview = (filters?: { includeArchived?: boolean }) =>
+  withAuth((opts) => portalGetMarketingOverview({ ...opts, data: filters ?? {} }));
+
+export const upsertMarketingCampaign = (data: {
+  id?: string;
+  name: string;
+  channel?: string;
+  status?: MarketingCampaignStatus;
+  startsOn?: string;
+  endsOn?: string;
+  budgetNote?: string;
+}) => withAuth((opts) => portalUpsertMarketingCampaign({ ...opts, data }));
+
+export const archiveMarketingCampaign = (data: { campaignId: string; archive: boolean }) =>
+  withAuth((opts) => portalArchiveMarketingCampaign({ ...opts, data }));
+
+export const attributeInquiryToCampaign = (data: {
+  consultationRequestId: string;
+  campaignId: string | null;
+  attributionSource?: string;
+}) => withAuth((opts) => portalAttributeInquiryToCampaign({ ...opts, data }));
+
+export const listAttributionHistory = (consultationRequestId: string) =>
+  withAuth((opts) => portalListAttributionHistory({ ...opts, data: { consultationRequestId } }));
+
+export const getOpsDashboard = () => withAuth((opts) => portalGetOpsDashboard(opts));
+
+export const upsertOpsSupplier = (data: {
+  id?: string;
+  name: string;
+  contactName?: string;
+  email?: string;
+  phone?: string;
+  status?: "active" | "inactive";
+  notes?: string;
+}) => withAuth((opts) => portalUpsertOpsSupplier({ ...opts, data }));
+
+export const upsertOpsInventoryItem = (data: {
+  id?: string;
+  sku: string;
+  name: string;
+  unit?: string;
+}) => withAuth((opts) => portalUpsertOpsInventoryItem({ ...opts, data }));
+
+export const createPurchaseOrder = (data: {
+  supplierId: string;
+  currency?: string;
+  notes?: string;
+  lines: Array<{ inventoryItemId: string; quantityOrdered: number; unitCost: number }>;
+}) => withAuth((opts) => portalCreatePurchaseOrder({ ...opts, data }));
+
+export const updatePurchaseStatus = (data: {
+  purchaseOrderId: string;
+  status: OpsPurchaseStatus;
+}) => withAuth((opts) => portalUpdatePurchaseStatus({ ...opts, data }));
+
+export const receivePurchaseLine = (data: {
+  purchaseLineId: string;
+  quantity: number;
+  notes?: string;
+}) => withAuth((opts) => portalReceivePurchaseLine({ ...opts, data }));
+
+export const createOpsSalesOrder = (data: {
+  customerName: string;
+  totalAmount: number;
+  currency?: string;
+  notes?: string;
+}) => withAuth((opts) => portalCreateOpsSalesOrder({ ...opts, data }));
+
+export const upsertOpsExpense = (data: {
+  id?: string;
+  category: string;
+  description: string;
+  amount: number;
+  currency?: string;
+  status?: OpsExpenseStatus;
+  incurredOn?: string;
+}) => withAuth((opts) => portalUpsertOpsExpense({ ...opts, data }));
+
 /** Typed Supabase entity helpers (RLS-backed; use from authorized server code). */
 export * as dbApi from "@/services/db";
 
 export const getOfficerReports = (filters: ReportsFilters = {}) =>
   withAuth((opts) => portalGetReports({ ...opts, data: filters }));
 
-export const exportOfficerReports = (
-  data: ReportsFilters & { format: ReportExportFormat },
-) => withAuth((opts) => portalExportReports({ ...opts, data }));
+export const exportOfficerReports = (data: ReportsFilters & { format: ReportExportFormat }) =>
+  withAuth((opts) => portalExportReports({ ...opts, data }));
+
+export const getModuleReports = (filters: ModuleReportsFilters = {}) =>
+  withAuth((opts) => portalGetModuleReports({ ...opts, data: filters }));
+
+export const exportModuleReports = (data: ModuleReportsFilters & { format: "csv" | "excel" }) =>
+  withAuth((opts) => portalExportModuleReports({ ...opts, data }));
 
 export const getActivityLog = (filters: ActivityFilters = {}) =>
   withAuth((opts) => portalGetActivityLog({ ...opts, data: filters }));

@@ -20,6 +20,7 @@ import {
   studentDocumentStoragePath,
   validateDocumentUpload,
 } from "@/lib/document-storage";
+import { resolveExistingStudentUploadTarget } from "@/lib/student-document-upload";
 import { rolesAtLeastAdmin } from "@/lib/roles";
 import {
   AuthError,
@@ -27,7 +28,11 @@ import {
   requireTrustedSession,
   type TrustedSession,
 } from "@/server/portal-auth";
-import { newPreviewToken, readPrivateDocumentBlob, writePrivateDocumentBlob } from "@/server/document-blob-store";
+import {
+  newPreviewToken,
+  readPrivateDocumentBlob,
+  writePrivateDocumentBlob,
+} from "@/server/document-blob-store";
 import {
   automateDocumentExpiryTask,
   automateDocumentRejectionFollowUp,
@@ -123,7 +128,8 @@ function isExpiring(doc: StudentDocument): boolean {
 }
 
 function inTab(doc: StudentDocument, tab: DocumentQueueTab): boolean {
-  if (tab === "pending") return doc.status === "Pending Review" || doc.status === "Needs Correction";
+  if (tab === "pending")
+    return doc.status === "Pending Review" || doc.status === "Needs Correction";
   if (tab === "approved") return doc.status === "Approved";
   if (tab === "rejected") return doc.status === "Rejected";
   return isExpiring(doc);
@@ -144,9 +150,10 @@ function actorMeta(session: TrustedSession) {
   const cid = consultantScopeId(session);
   const consultant = cid ? db.consultants.find((c) => c.id === cid) : undefined;
   const admin = rolesAtLeastAdmin(session.role);
-  const student = session.role === "student"
-    ? db.students.find((s) => s.email.toLowerCase() === session.email.toLowerCase())
-    : undefined;
+  const student =
+    session.role === "student"
+      ? db.students.find((s) => s.email.toLowerCase() === session.email.toLowerCase())
+      : undefined;
   return {
     id: consultant?.id ?? session.userId ?? student?.id ?? null,
     name: consultant?.name ?? student?.name ?? (admin ? "Admin" : session.email),
@@ -177,7 +184,11 @@ function toRow(doc: StudentDocument, students: Student[]): DocumentQueueRow {
     expiresOn: doc.expiresOn ?? null,
     expiringSoon: isExpiring(doc),
     version,
-    versionLabel: doc.awaitingUpload ? "Not uploaded" : version === 1 ? "v1 (Initial)" : `v${version}`,
+    versionLabel: doc.awaitingUpload
+      ? "Not uploaded"
+      : version === 1
+        ? "v1 (Initial)"
+        : `v${version}`,
     awaitingUpload: Boolean(doc.awaitingUpload),
     linkedApplicationId: app?.id ?? doc.linkedApplicationId ?? null,
     linkedApplicationLabel: app ? `${app.id} · ${app.university}` : null,
@@ -301,9 +312,8 @@ export const portalGetDocumentInspection = createServerFn({ method: "GET" })
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
-        const { requireAoSupabaseClient, getScopedDocumentRow, enrichDocumentsWithVersions } = await import(
-          "@/server/ao-data"
-        );
+        const { requireAoSupabaseClient, getScopedDocumentRow, enrichDocumentsWithVersions } =
+          await import("@/server/ao-data");
         const { listDocumentVersions, listDocumentReviews } = await import("@/services/db");
         const { mapDocumentRow } = await import("@/lib/ao-mappers");
         const client = requireAoSupabaseClient();
@@ -311,13 +321,19 @@ export const portalGetDocumentInspection = createServerFn({ method: "GET" })
         const [docEnriched] = await enrichDocumentsWithVersions(client, [mapDocumentRow(row)]);
         const versions = await listDocumentVersions(client, row.id);
         const reviewRows = await listDocumentReviews(client, row.id);
-        const reviewerIds = reviewRows.map((r) => r.reviewer_id).filter((x): x is string => Boolean(x));
-        const uploaderIds = versions.map((v) => v.uploaded_by).filter((x): x is string => Boolean(x));
+        const reviewerIds = reviewRows
+          .map((r) => r.reviewer_id)
+          .filter((x): x is string => Boolean(x));
+        const uploaderIds = versions
+          .map((v) => v.uploaded_by)
+          .filter((x): x is string => Boolean(x));
         const { namesForIds } = await import("@/server/ao-data");
         const names = await namesForIds(client, [...reviewerIds, ...uploaderIds]);
 
         let prevStatus: DocumentQueueRow["status"] = "Pending Review";
-        const sortedReviews = [...reviewRows].sort((a, b) => a.reviewed_at.localeCompare(b.reviewed_at));
+        const sortedReviews = [...reviewRows].sort((a, b) =>
+          a.reviewed_at.localeCompare(b.reviewed_at),
+        );
         const history = sortedReviews
           .map((r) => {
             const toStatus: DocumentQueueRow["status"] =
@@ -326,7 +342,12 @@ export const portalGetDocumentInspection = createServerFn({ method: "GET" })
                 : r.action === "rejected"
                   ? "Rejected"
                   : "Needs Correction";
-            const uiAction = r.action === "approved" ? "approve" : r.action === "rejected" ? "reject" : "request_reupload";
+            const uiAction =
+              r.action === "approved"
+                ? "approve"
+                : r.action === "rejected"
+                  ? "reject"
+                  : "request_reupload";
             const entry = {
               id: r.id,
               documentId: r.document_id,
@@ -345,7 +366,9 @@ export const portalGetDocumentInspection = createServerFn({ method: "GET" })
           .reverse();
 
         return {
-          document: docEnriched ? toRow(docEnriched, [student]) : toRow(mapDocumentRow(row), [student]),
+          document: docEnriched
+            ? toRow(docEnriched, [student])
+            : toRow(mapDocumentRow(row), [student]),
           history,
           versions: versions.map((v) => ({
             id: v.id,
@@ -429,7 +452,8 @@ export const portalRequestDocument = createServerFn({ method: "POST" })
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
-        const { requireAoSupabaseClient, assertStudentVisibleDb } = await import("@/server/ao-data");
+        const { requireAoSupabaseClient, assertStudentVisibleDb } =
+          await import("@/server/ao-data");
         const { ensureStudentDocument } = await import("@/services/db");
         const { mapDocumentRow } = await import("@/lib/ao-mappers");
         const client = requireAoSupabaseClient();
@@ -460,12 +484,12 @@ export const portalRequestDocument = createServerFn({ method: "POST" })
           };
         }
 
+        // Verified remote student_documents columns only (no awaiting_upload / linked_application_id).
         const created = await ensureStudentDocument(client, {
           student_id: student.id,
           doc_type: canonical,
           label: `${canonical} (requested)`,
           status: "needs_correction",
-          awaiting_upload: true,
         });
         return {
           ok: true as const,
@@ -564,11 +588,14 @@ export const portalReviewQueueDocument = createServerFn({ method: "POST" })
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
-        const { requireAoSupabaseClient, getScopedDocumentRow, enrichDocumentsWithVersions, namesForIds } =
-          await import("@/server/ao-data");
-        const { createDocumentReview, getStudentDocumentById, listDocumentReviews } = await import(
-          "@/services/db"
-        );
+        const {
+          requireAoSupabaseClient,
+          getScopedDocumentRow,
+          enrichDocumentsWithVersions,
+          namesForIds,
+        } = await import("@/server/ao-data");
+        const { createDocumentReview, getStudentDocumentById, listDocumentReviews } =
+          await import("@/services/db");
         const { mapDocumentRow } = await import("@/lib/ao-mappers");
         const client = requireAoSupabaseClient();
         const { row, student } = await getScopedDocumentRow(client, session, data.documentId);
@@ -577,7 +604,10 @@ export const portalReviewQueueDocument = createServerFn({ method: "POST" })
           if (row.awaiting_upload || row.current_version <= 0) {
             throw new AuthError("No private file has been uploaded yet.", 400);
           }
-        } else if ((data.action === "reject" || data.action === "request_reupload") && note.length < 3) {
+        } else if (
+          (data.action === "reject" || data.action === "request_reupload") &&
+          note.length < 3
+        ) {
           throw new AuthError(
             data.action === "reject"
               ? "A rejection reason is required."
@@ -587,7 +617,11 @@ export const portalReviewQueueDocument = createServerFn({ method: "POST" })
         }
 
         const dbAction =
-          data.action === "approve" ? "approved" : data.action === "reject" ? "rejected" : "reupload_requested";
+          data.action === "approve"
+            ? "approved"
+            : data.action === "reject"
+              ? "rejected"
+              : "reupload_requested";
         await createDocumentReview(client, {
           documentId: row.id,
           reviewerId: session.userId ?? null,
@@ -598,7 +632,25 @@ export const portalReviewQueueDocument = createServerFn({ method: "POST" })
         // apply_document_review trigger updates student_documents.status; reload it.
         const refreshedRow = await getStudentDocumentById(client, row.id);
         const refreshedDoc = refreshedRow ?? row;
-        const [enriched] = await enrichDocumentsWithVersions(client, [mapDocumentRow(refreshedDoc)]);
+        const [enriched] = await enrichDocumentsWithVersions(client, [
+          mapDocumentRow(refreshedDoc),
+        ]);
+
+        if (data.action === "approve") {
+          const { nextJourneyStageIfAdvanced } = await import("@/lib/journey-stage");
+          const { data: journeyRow } = await client
+            .from("students")
+            .select("journey_stage")
+            .eq("id", student.id)
+            .maybeSingle();
+          const nextStage = nextJourneyStageIfAdvanced(
+            journeyRow?.journey_stage,
+            "documents_under_review",
+          );
+          if (nextStage) {
+            await client.from("students").update({ journey_stage: nextStage }).eq("id", student.id);
+          }
+        }
 
         const reviewRows = await listDocumentReviews(client, row.id);
         const names = await namesForIds(
@@ -610,9 +662,17 @@ export const portalReviewQueueDocument = createServerFn({ method: "POST" })
           .sort((a, b) => a.reviewed_at.localeCompare(b.reviewed_at))
           .map((r) => {
             const toStatus: DocumentQueueRow["status"] =
-              r.action === "approved" ? "Approved" : r.action === "rejected" ? "Rejected" : "Needs Correction";
+              r.action === "approved"
+                ? "Approved"
+                : r.action === "rejected"
+                  ? "Rejected"
+                  : "Needs Correction";
             const uiAction: DocumentReviewAction =
-              r.action === "approved" ? "approve" : r.action === "rejected" ? "reject" : "request_reupload";
+              r.action === "approved"
+                ? "approve"
+                : r.action === "rejected"
+                  ? "reject"
+                  : "request_reupload";
             const entry = {
               id: r.id,
               documentId: r.document_id,
@@ -754,53 +814,117 @@ export const portalUploadStudentDocument = createServerFn({ method: "POST" })
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
-        const { requireAoSupabaseClient, assertStudentVisibleDb } = await import("@/server/ao-data");
-        const { ensureStudentDocument, registerDocumentVersion, getStudentDocumentById } = await import(
-          "@/services/db"
-        );
+        const { requireAoSupabaseClient, assertStudentVisibleDb, resolveOwnStudentDb } =
+          await import("@/server/ao-data");
+        const { ensureStudentDocument, registerDocumentVersion, getStudentDocumentById } =
+          await import("@/services/db");
         const { mapDocumentRow } = await import("@/lib/ao-mappers");
         const client = requireAoSupabaseClient();
-        const student = await assertStudentVisibleDb(client, session, data.studentId);
-        if (session.role === "student" && session.email.toLowerCase() !== student.email.toLowerCase()) {
-          throw new AuthError("Students may only upload their own documents.", 403);
-        }
-
-        let existingRow = data.documentId ? await getStudentDocumentById(client, data.documentId) : null;
-        if (!data.documentId) {
-          const { data: byCategory, error: byCategoryErr } = await client
-            .from("student_documents")
-            .select("*")
-            .eq("student_id", data.studentId)
-            .eq("doc_type", category)
-            .maybeSingle();
-          if (byCategoryErr) throw new Error(byCategoryErr.message);
-          existingRow = byCategory;
-        }
-        if (data.documentId && !existingRow) throw new AuthError("Document not found.", 404);
-        if (existingRow && existingRow.student_id !== data.studentId) {
-          throw new AuthError("Document does not belong to this student.", 403);
-        }
-
-        const nextVersion = (existingRow?.current_version ?? 0) + 1;
 
         const accessToken = bearerToken();
         if (!accessToken) throw new AuthError("Sign in required. Missing access token.", 401);
         const storageClient = createServerSupabase(accessToken);
         if (!storageClient) throw new AuthError("Storage is not configured.", 503);
 
-        const ensuredDoc = await ensureStudentDocument(client, {
-          student_id: data.studentId,
-          doc_type: category,
-          label: validated.fileName,
-          status: "pending_review",
-          awaiting_upload: false,
-          ...(data.expiresOn ? { expires_on: data.expiresOn } : {}),
-          ...(data.linkedApplicationId ? { linked_application_id: data.linkedApplicationId } : {}),
-        });
+        // --- Student: existing requirement only; never upsert/create; ignore client studentId ---
+        if (session.role === "student") {
+          const owner = await resolveOwnStudentDb(client, session);
+          const documentId = data.documentId?.trim() ?? "";
+          const existingRow = documentId ? await getStudentDocumentById(client, documentId) : null;
+          const resolved = resolveExistingStudentUploadTarget({
+            documentId,
+            category,
+            ownerStudentId: owner.id,
+            existing: existingRow
+              ? {
+                  id: existingRow.id,
+                  student_id: existingRow.student_id,
+                  doc_type: existingRow.doc_type,
+                  current_version: existingRow.current_version ?? 0,
+                }
+              : null,
+          });
+          if (!resolved.ok) throw new AuthError(resolved.message, resolved.status);
+
+          const target = resolved.target;
+          const nextVersion = target.current_version + 1;
+          const storagePath = studentDocumentStoragePath(
+            owner.id,
+            target.id,
+            nextVersion,
+            validated.fileName,
+          );
+          const { error: uploadError } = await storageClient.storage
+            .from(STUDENT_DOCUMENTS_BUCKET)
+            .upload(storagePath, bytes, { contentType: data.mimeType, upsert: false });
+          if (uploadError)
+            throw new AuthError("Upload failed. Please retry with an allowed file.", 400);
+
+          // registerDocumentVersion also bumps current_version + pending_review (verified columns).
+          // Client expiresOn / linkedApplicationId / status / metadata are intentionally ignored.
+          const versionRow = await registerDocumentVersion(client, {
+            studentId: owner.id,
+            documentId: target.id,
+            versionNumber: nextVersion,
+            fileName: validated.fileName,
+            mimeType: data.mimeType,
+            fileSizeBytes: bytes.byteLength,
+            uploadedBy: session.userId ?? null,
+          });
+
+          const finalRow = await getStudentDocumentById(client, target.id);
+          const { nextJourneyStageIfAdvanced } = await import("@/lib/journey-stage");
+          const { data: journeyRow } = await client
+            .from("students")
+            .select("journey_stage")
+            .eq("id", owner.id)
+            .maybeSingle();
+          const nextStage = nextJourneyStageIfAdvanced(
+            journeyRow?.journey_stage,
+            "documents_submitted",
+          );
+          if (nextStage) {
+            await client.from("students").update({ journey_stage: nextStage }).eq("id", owner.id);
+          }
+          return {
+            ok: true as const,
+            duplicate: false as const,
+            document: toRow(mapDocumentRow(finalRow ?? existingRow!), [owner]),
+            version: {
+              id: versionRow.id,
+              versionNumber: versionRow.version_number,
+              // Do not expose private storage object keys to students.
+              storagePath: "",
+            },
+          };
+        }
+
+        // --- Staff: may create/ensure requirements; verified columns only ---
+        const student = await assertStudentVisibleDb(client, session, data.studentId);
+        let targetId = data.documentId?.trim() || "";
+        let existingRow = targetId ? await getStudentDocumentById(client, targetId) : null;
+        if (targetId && !existingRow) throw new AuthError("Document not found.", 404);
+        if (existingRow && existingRow.student_id !== student.id) {
+          throw new AuthError("Document does not belong to this student.", 403);
+        }
+        if (existingRow && existingRow.doc_type.trim().toLowerCase() !== category.toLowerCase()) {
+          throw new AuthError("Document type does not match this requirement.", 400);
+        }
+
+        if (!existingRow) {
+          existingRow = await ensureStudentDocument(client, {
+            student_id: student.id,
+            doc_type: category,
+            label: validated.fileName,
+            status: "pending_review",
+          });
+        }
+        targetId = existingRow.id;
+        const nextVersion = (existingRow.current_version ?? 0) + 1;
 
         const storagePath = studentDocumentStoragePath(
-          data.studentId,
-          ensuredDoc.id,
+          student.id,
+          targetId,
           nextVersion,
           validated.fileName,
         );
@@ -810,8 +934,8 @@ export const portalUploadStudentDocument = createServerFn({ method: "POST" })
         if (uploadError) throw new AuthError(`Upload failed: ${uploadError.message}`, 400);
 
         const versionRow = await registerDocumentVersion(client, {
-          studentId: data.studentId,
-          documentId: ensuredDoc.id,
+          studentId: student.id,
+          documentId: targetId,
           versionNumber: nextVersion,
           fileName: validated.fileName,
           mimeType: data.mimeType,
@@ -819,11 +943,24 @@ export const portalUploadStudentDocument = createServerFn({ method: "POST" })
           uploadedBy: session.userId ?? null,
         });
 
-        const finalRow = await getStudentDocumentById(client, ensuredDoc.id);
+        const finalRow = await getStudentDocumentById(client, targetId);
+        const { nextJourneyStageIfAdvanced } = await import("@/lib/journey-stage");
+        const { data: journeyRow } = await client
+          .from("students")
+          .select("journey_stage")
+          .eq("id", student.id)
+          .maybeSingle();
+        const nextStage = nextJourneyStageIfAdvanced(
+          journeyRow?.journey_stage,
+          "documents_submitted",
+        );
+        if (nextStage) {
+          await client.from("students").update({ journey_stage: nextStage }).eq("id", student.id);
+        }
         return {
           ok: true as const,
           duplicate: false as const,
-          document: toRow(mapDocumentRow(finalRow ?? ensuredDoc), [student]),
+          document: toRow(mapDocumentRow(finalRow ?? existingRow), [student]),
           version: {
             id: versionRow.id,
             versionNumber: versionRow.version_number,
@@ -832,13 +969,34 @@ export const portalUploadStudentDocument = createServerFn({ method: "POST" })
         };
       }
 
-      assertStudentVisible(session, data.studentId);
-
-      if (session.role === "student") {
+      // Demo / mock plane
+      const isStudentUploader = session.role === "student";
+      if (isStudentUploader) {
         const own = visibleStudents(session)[0];
-        if (!own || own.id !== data.studentId) {
-          throw new AuthError("Students may only upload their own documents.", 403);
-        }
+        if (!own) throw new AuthError("Student record not found for this account.", 403);
+        const documentId = data.documentId?.trim() ?? "";
+        const existingDoc = documentId
+          ? (db.documents.find((d) => d.id === documentId) ?? null)
+          : null;
+        const resolved = resolveExistingStudentUploadTarget({
+          documentId,
+          category,
+          ownerStudentId: own.id,
+          existing: existingDoc
+            ? {
+                id: existingDoc.id,
+                student_id: existingDoc.studentId,
+                doc_type: existingDoc.category,
+                current_version: existingDoc.version ?? 0,
+              }
+            : null,
+        });
+        if (!resolved.ok) throw new AuthError(resolved.message, resolved.status);
+        // Force studentId to trusted owner; drop unauthorized client metadata fields.
+        const { expiresOn: _e, linkedApplicationId: _l, ...studentSafe } = data;
+        data = { ...studentSafe, studentId: own.id, documentId: resolved.target.id };
+      } else {
+        assertStudentVisible(session, data.studentId);
       }
 
       if (data.idempotencyKey) {
@@ -862,6 +1020,10 @@ export const portalUploadStudentDocument = createServerFn({ method: "POST" })
       if (data.documentId && !doc) throw new AuthError("Document not found.", 404);
       if (doc && doc.studentId !== data.studentId) {
         throw new AuthError("Document does not belong to this student.", 403);
+      }
+      // Students never create requirements in demo either (fail closed).
+      if (!doc && isStudentUploader) {
+        throw new AuthError("A document id is required to upload.", 400);
       }
 
       const actor = actorMeta(session);
@@ -907,8 +1069,10 @@ export const portalUploadStudentDocument = createServerFn({ method: "POST" })
           storagePath,
           mimeType: data.mimeType,
           fileSizeBytes: bytes.byteLength,
-          ...(data.expiresOn ? { expiresOn: data.expiresOn } : {}),
-          ...(data.linkedApplicationId ? { linkedApplicationId: data.linkedApplicationId } : {}),
+          ...(!isStudentUploader && data.expiresOn ? { expiresOn: data.expiresOn } : {}),
+          ...(!isStudentUploader && data.linkedApplicationId
+            ? { linkedApplicationId: data.linkedApplicationId }
+            : {}),
         };
         db.documents.push(doc);
       } else {
@@ -923,8 +1087,10 @@ export const portalUploadStudentDocument = createServerFn({ method: "POST" })
         doc.mimeType = data.mimeType;
         doc.fileSizeBytes = bytes.byteLength;
         delete doc.comment;
-        if (data.expiresOn) doc.expiresOn = data.expiresOn;
-        if (data.linkedApplicationId) doc.linkedApplicationId = data.linkedApplicationId;
+        if (!isStudentUploader && data.expiresOn) doc.expiresOn = data.expiresOn;
+        if (!isStudentUploader && data.linkedApplicationId) {
+          doc.linkedApplicationId = data.linkedApplicationId;
+        }
       }
 
       const versionRow = appendDocumentVersion({
@@ -953,7 +1119,7 @@ export const portalUploadStudentDocument = createServerFn({ method: "POST" })
         version: {
           id: versionRow.id,
           versionNumber: versionRow.versionNumber,
-          storagePath: versionRow.storagePath,
+          storagePath: isStudentUploader ? "" : versionRow.storagePath,
         },
       };
     } catch (error) {

@@ -10,6 +10,12 @@ import {
   type TrustedSession,
 } from "@/server/portal-auth";
 import { normalizeAppRole, rolesAtLeastAdmin, type AppRole } from "@/lib/roles";
+import {
+  activityForStudent,
+  crmListOrEmpty,
+  crmRecordOrNull,
+  isMockCrmAllowed,
+} from "@/lib/portal-data-plane";
 import * as db from "@/data/mock";
 
 function toError(error: unknown): never {
@@ -125,7 +131,8 @@ export const portalGetStudents = createServerFn({ method: "GET" }).handler(async
   try {
     const session = await requireTrustedSession();
     requireRoles(session, ["consultant", "admin", "super_admin"]);
-    return filterStudentsForSession(session);
+    // Supabase sessions must never receive mock CRM rows as a silent fallback.
+    return crmListOrEmpty(session.source, filterStudentsForSession(session));
   } catch (error) {
     toError(error);
   }
@@ -137,8 +144,11 @@ export const portalGetStudent = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["student", "consultant", "admin", "super_admin"]);
+      if (!isMockCrmAllowed(session.source)) {
+        return crmRecordOrNull(session.source, null);
+      }
       assertStudentVisible(session, data.id);
-      return db.students.find((s) => s.id === data.id) ?? null;
+      return crmRecordOrNull(session.source, db.students.find((s) => s.id === data.id) ?? null);
     } catch (error) {
       toError(error);
     }
@@ -148,8 +158,42 @@ export const portalGetCurrentStudent = createServerFn({ method: "GET" }).handler
   try {
     const session = await requireTrustedSession();
     requireRoles(session, ["student"]);
+
+    const { usesSupabaseDataPlane } = await import("@/server/ao-data");
+    if (usesSupabaseDataPlane(session)) {
+      const { requireAoSupabaseClient, resolveOwnStudentDb } = await import("@/server/ao-data");
+      const { studentPortalAccessAllowed } = await import("@/lib/signup-fee-gate");
+      const client = requireAoSupabaseClient();
+      // Attempt email-based claim when Front Desk registered first (RPC; no client student id).
+      const { error: claimErr } = await client.rpc("claim_own_student_record");
+      void claimErr; // optional — resolveOwnStudentDb remains authoritative if unlinked
+      // Ownership from students.profile_id = auth user — never from a client student id.
+      const student = await resolveOwnStudentDb(client, session);
+      const { data: liveRow, error: liveErr } = await client
+        .from("students")
+        .select("portal_activated_at")
+        .eq("id", student.id)
+        .maybeSingle();
+      if (liveErr) throw new Error(liveErr.message);
+      if (
+        !studentPortalAccessAllowed({
+          source: "supabase",
+          portalActivatedAt: liveRow?.portal_activated_at ?? null,
+        })
+      ) {
+        throw new AuthError(
+          "Your student portal is not activated yet. Signup fee must be verified by Accounts/Admin.",
+          403,
+        );
+      }
+      return student;
+    }
+
+    if (!isMockCrmAllowed(session.source)) {
+      return crmRecordOrNull(session.source, null);
+    }
     const rows = filterStudentsForSession(session);
-    return rows[0] ?? null;
+    return crmRecordOrNull(session.source, rows[0] ?? null);
   } catch (error) {
     toError(error);
   }
@@ -159,7 +203,7 @@ export const portalGetConsultants = createServerFn({ method: "GET" }).handler(as
   try {
     const session = await requireTrustedSession();
     requireRoles(session, ["admin", "super_admin"]);
-    return db.consultants;
+    return crmListOrEmpty(session.source, db.consultants);
   } catch (error) {
     toError(error);
   }
@@ -171,10 +215,17 @@ export const portalGetConsultant = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
-      if (session.role === "consultant" && session.consultantId && data.id !== session.consultantId) {
+      if (!isMockCrmAllowed(session.source)) {
+        return crmRecordOrNull(session.source, null);
+      }
+      if (
+        session.role === "consultant" &&
+        session.consultantId &&
+        data.id !== session.consultantId
+      ) {
         throw new AuthError("You do not have access to this consultant record.", 403);
       }
-      return db.consultants.find((c) => c.id === data.id) ?? null;
+      return crmRecordOrNull(session.source, db.consultants.find((c) => c.id === data.id) ?? null);
     } catch (error) {
       toError(error);
     }
@@ -186,19 +237,98 @@ export const portalGetAppointments = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["student", "consultant", "admin", "super_admin"]);
+
+      const { usesSupabaseDataPlane } = await import("@/server/ao-data");
+      if (usesSupabaseDataPlane(session)) {
+        const {
+          requireAoSupabaseClient,
+          resolveOwnStudentDb,
+          assertStudentVisibleDb,
+          namesForIds,
+        } = await import("@/server/ao-data");
+        const { listAppointments } = await import("@/services/db");
+        const { mapAppointmentRow } = await import("@/lib/appointment-mappers");
+        const client = requireAoSupabaseClient();
+
+        let studentFilter: string | undefined;
+        let ownStudent: Awaited<ReturnType<typeof resolveOwnStudentDb>> | null = null;
+
+        if (session.role === "student") {
+          // Client studentId is ignored for authorization — profile link only.
+          ownStudent = await resolveOwnStudentDb(client, session);
+          studentFilter = ownStudent.id;
+        } else if (data.studentId?.trim()) {
+          await assertStudentVisibleDb(client, session, data.studentId.trim());
+          studentFilter = data.studentId.trim();
+        }
+
+        // JWT user client — RLS appointments_access (SELECT) enforced. Errors propagate.
+        const rows = await listAppointments(client, studentFilter);
+
+        const studentIds = [...new Set(rows.map((r) => r.student_id))];
+        const consultantIds = [
+          ...new Set(rows.map((r) => r.consultant_id).filter((id): id is string => Boolean(id))),
+        ];
+
+        const studentById = new Map<
+          string,
+          { name: string; destination: string; studyLevel: string }
+        >();
+        if (ownStudent) {
+          studentById.set(ownStudent.id, {
+            name: ownStudent.name,
+            destination: ownStudent.destination || "—",
+            studyLevel: ownStudent.studyLevel || "—",
+          });
+        }
+        const missingStudentIds = studentIds.filter((id) => !studentById.has(id));
+        if (missingStudentIds.length) {
+          const { data: studentRows, error: studentErr } = await client
+            .from("students")
+            .select("id,full_name,destination,study_level")
+            .in("id", missingStudentIds);
+          if (studentErr) throw new Error(studentErr.message);
+          for (const s of studentRows ?? []) {
+            studentById.set(s.id, {
+              name: s.full_name,
+              destination: s.destination?.trim() || "—",
+              studyLevel: s.study_level?.trim() || "—",
+            });
+          }
+        }
+
+        const consultantNames = await namesForIds(client, consultantIds);
+
+        return rows.map((row) => {
+          const st = studentById.get(row.student_id);
+          return mapAppointmentRow(row, {
+            destination: st?.destination ?? null,
+            studyLevel: st?.studyLevel ?? null,
+            studentName: st?.name ?? null,
+            consultantName: row.consultant_id
+              ? (consultantNames.get(row.consultant_id) ?? null)
+              : null,
+          });
+        });
+      }
+
+      if (!isMockCrmAllowed(session.source)) {
+        return crmListOrEmpty(session.source, []);
+      }
       let rows = db.appointments;
       if (session.role === "student") {
         const me = filterStudentsForSession(session)[0];
         rows = me ? rows.filter((a) => a.studentId === me.id) : [];
       } else if (session.role === "consultant") {
         const cid = consultantScopeId(session);
-        rows = rows.filter((a) => a.consultantId === cid);
+        // Fail closed when the trusted session has no consultant desk id.
+        rows = cid ? rows.filter((a) => a.consultantId === cid) : [];
       }
       if (data.studentId) {
         assertStudentVisible(session, data.studentId);
         rows = rows.filter((a) => a.studentId === data.studentId);
       }
-      return rows;
+      return crmListOrEmpty(session.source, rows);
     } catch (error) {
       toError(error);
     }
@@ -210,13 +340,16 @@ export const portalGetDocuments = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["student", "consultant", "admin", "super_admin"]);
+      if (!isMockCrmAllowed(session.source)) {
+        return crmListOrEmpty(session.source, []);
+      }
       const visibleIds = new Set(filterStudentsForSession(session).map((s) => s.id));
       let rows = db.documents.filter((d) => visibleIds.has(d.studentId));
       if (data.studentId) {
         assertStudentVisible(session, data.studentId);
         rows = rows.filter((d) => d.studentId === data.studentId);
       }
-      return rows;
+      return crmListOrEmpty(session.source, rows);
     } catch (error) {
       toError(error);
     }
@@ -228,13 +361,16 @@ export const portalGetApplications = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["student", "consultant", "admin", "super_admin"]);
+      if (!isMockCrmAllowed(session.source)) {
+        return crmListOrEmpty(session.source, []);
+      }
       const visibleIds = new Set(filterStudentsForSession(session).map((s) => s.id));
       let rows = db.applications.filter((a) => visibleIds.has(a.studentId));
       if (data.studentId) {
         assertStudentVisible(session, data.studentId);
         rows = rows.filter((a) => a.studentId === data.studentId);
       }
-      return rows;
+      return crmListOrEmpty(session.source, rows);
     } catch (error) {
       toError(error);
     }
@@ -244,11 +380,17 @@ export const portalGetLeads = createServerFn({ method: "GET" }).handler(async ()
   try {
     const session = await requireTrustedSession();
     requireRoles(session, ["consultant", "admin", "super_admin"]);
+    if (!isMockCrmAllowed(session.source)) {
+      return crmListOrEmpty(session.source, []);
+    }
     if (session.role === "consultant") {
       const cid = consultantScopeId(session);
-      return db.leads.filter((l) => l.consultantId === cid);
+      return crmListOrEmpty(
+        session.source,
+        cid ? db.leads.filter((l) => l.consultantId === cid) : [],
+      );
     }
-    return db.leads;
+    return crmListOrEmpty(session.source, db.leads);
   } catch (error) {
     toError(error);
   }
@@ -262,7 +404,10 @@ export const portalGetNotifications = createServerFn({ method: "GET" })
       if (data.audience === "student") requireRoles(session, ["student"]);
       else if (data.audience === "staff") requireRoles(session, ["consultant"]);
       else requireRoles(session, ["admin", "super_admin"]);
-      return db.notifications.filter((n) => n.audience === data.audience);
+      return crmListOrEmpty(
+        session.source,
+        db.notifications.filter((n) => n.audience === data.audience),
+      );
     } catch (error) {
       toError(error);
     }
@@ -274,8 +419,12 @@ export const portalGetActivity = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin", "student"]);
+      if (!isMockCrmAllowed(session.source)) {
+        return crmListOrEmpty(session.source, []);
+      }
       assertStudentVisible(session, data.studentId);
-      return db.activity[data.studentId] ?? db.activity["s1"] ?? [];
+      // Never fall back to another student's timeline when this id has no rows.
+      return activityForStudent(db.activity, data.studentId);
     } catch (error) {
       toError(error);
     }
@@ -285,7 +434,7 @@ export const portalGetAuditLogs = createServerFn({ method: "GET" }).handler(asyn
   try {
     const session = await requireTrustedSession();
     requireRoles(session, ["admin", "super_admin"]);
-    return db.auditLogs;
+    return crmListOrEmpty(session.source, db.auditLogs);
   } catch (error) {
     toError(error);
   }
@@ -295,7 +444,7 @@ export const portalGetMonthlyStats = createServerFn({ method: "GET" }).handler(a
   try {
     const session = await requireTrustedSession();
     requireRoles(session, ["admin", "super_admin"]);
-    return db.monthlyLeads;
+    return crmListOrEmpty(session.source, db.monthlyLeads);
   } catch (error) {
     toError(error);
   }

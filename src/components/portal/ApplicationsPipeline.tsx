@@ -27,6 +27,8 @@ import {
   createPipelineApplication,
   getApplicationDetail,
   getApplicationsPipeline,
+  listAdmissionHandovers,
+  updateAdmissionHandover,
 } from "@/services";
 import {
   ALLOWED_STAGE_TRANSITIONS,
@@ -72,6 +74,12 @@ export function ApplicationsPipeline() {
     staleTime: 20_000,
   });
 
+  const handoversQ = useQuery({
+    queryKey: ["officer", "admission-handovers", "submitted"],
+    queryFn: () => listAdmissionHandovers({ status: "submitted" }),
+    staleTime: 20_000,
+  });
+
   const detailQ = useQuery({
     queryKey: ["officer", "application-detail", detailId],
     queryFn: () => getApplicationDetail(detailId!),
@@ -80,6 +88,7 @@ export function ApplicationsPipeline() {
 
   const invalidate = async () => {
     await queryClient.invalidateQueries({ queryKey: ["officer", "applications-pipeline"] });
+    await queryClient.invalidateQueries({ queryKey: ["officer", "admission-handovers"] });
     await queryClient.invalidateQueries({ queryKey: ["officer", "dashboard"] });
     await queryClient.invalidateQueries({ queryKey: ["officer", "student-profile"] });
     await queryClient.invalidateQueries({ queryKey: ["applications"] });
@@ -87,6 +96,16 @@ export function ApplicationsPipeline() {
       await queryClient.invalidateQueries({ queryKey: ["officer", "application-detail", detailId] });
     }
   };
+
+  const handoverM = useMutation({
+    mutationFn: (input: { handoverId: string; action: "accept" | "return" }) =>
+      updateAdmissionHandover(input),
+    onSuccess: async () => {
+      setStageError(null);
+      await invalidate();
+    },
+    onError: (err) => setStageError(portalErrorMessage(err, "Handover update failed.")),
+  });
 
   const stageM = useMutation({
     mutationFn: ({ id, to }: { id: string; to: ApplicationPipelineStage }) =>
@@ -170,6 +189,59 @@ export function ApplicationsPipeline() {
           </>
         }
       />
+
+      {(handoversQ.data?.handovers?.length ?? 0) > 0 ? (
+        <Panel title="Admission handover queue" className="mb-4">
+          <TableWrap>
+            <thead>
+              <tr>
+                <th>Student</th>
+                <th>Summary</th>
+                <th>Handed over</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {handoversQ.data!.handovers.map((h) => (
+                <tr key={h.id}>
+                  <td className="font-medium text-navy">
+                    <Link
+                      to="/staff/students/$studentId"
+                      params={{ studentId: h.studentId }}
+                      search={{ tab: "assessment" }}
+                      className="hover:underline"
+                    >
+                      {h.studentName ?? h.studentCaseId ?? h.studentId.slice(0, 8)}
+                    </Link>
+                  </td>
+                  <td className="max-w-md text-sm text-muted-foreground">{h.summary}</td>
+                  <td>{fmtDate(h.handedOverAt)}</td>
+                  <td>
+                    <div className="flex flex-wrap gap-1">
+                      <Button
+                        size="sm"
+                        variant="navy"
+                        disabled={handoverM.isPending}
+                        onClick={() => handoverM.mutate({ handoverId: h.id, action: "accept" })}
+                      >
+                        Accept
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        disabled={handoverM.isPending}
+                        onClick={() => handoverM.mutate({ handoverId: h.id, action: "return" })}
+                      >
+                        Return
+                      </Button>
+                    </div>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </TableWrap>
+        </Panel>
+      ) : null}
 
       <div className="mb-4 flex flex-wrap gap-2">
         <StageChip

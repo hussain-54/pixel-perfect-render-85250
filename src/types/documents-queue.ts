@@ -124,14 +124,20 @@ export type DocumentInspectionPayload = {
 
 export type DocumentUploadInput = {
   studentId: string;
-  /** Existing document id, or omit to create from category. */
+  /**
+   * Existing document requirement id.
+   * Required for student uploads (students cannot create requirements).
+   * Staff may omit to ensure/create by category on the staff upload path.
+   */
   documentId?: string;
   category: string;
   fileName: string;
   mimeType: string;
   /** Base64 file bytes (no data-URL prefix). */
   contentBase64: string;
+  /** Staff-only; ignored for student uploads. */
   expiresOn?: string;
+  /** Staff-only; ignored for student uploads. */
   linkedApplicationId?: string;
   idempotencyKey?: string;
 };

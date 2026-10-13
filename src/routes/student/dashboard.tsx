@@ -10,6 +10,7 @@ import {
   getAppointments,
   getDocuments,
   getApplications,
+  getStudentJourneyTimeline,
   lookupConsultant,
 } from "@/services";
 
@@ -31,10 +32,13 @@ function StudentDashboard() {
   const appsQ = useData(["student", sid, "apps"], () =>
     sid ? getApplications(sid) : Promise.resolve([]),
   );
+  const timelineQ = useData(["student", sid, "timeline"], () =>
+    sid ? getStudentJourneyTimeline() : Promise.resolve(null),
+  );
 
   if (studentQ.isLoading) return <LoadingRows rows={6} />;
   if (studentQ.isError || !studentQ.data)
-    return <ErrorState body="Could not load your demo profile." />;
+    return <ErrorState body="Could not load your student profile." />;
 
   const student = studentQ.data;
   const consultant = lookupConsultant(student.consultantId);
@@ -44,21 +48,21 @@ function StudentDashboard() {
     .filter((a) => a.status === "Confirmed" || a.status === "Requested")
     .sort((a, b) => a.date.localeCompare(b.date))[0];
   const apps = appsQ.data ?? [];
+  const timeline = timelineQ.data;
 
   return (
     <div>
       <PageHeader
         title={`Welcome, ${student.name.split(" ")[0]}`}
-        subtitle={`Demo student · Case ${student.caseId} · ${student.destination} · ${student.program}`}
+        subtitle={`Case ${student.caseId} · ${student.destination} · ${student.program}`}
       />
 
-      <p className="mb-4 rounded-md border border-dashed border-royal/30 bg-accent/50 px-3 py-2 text-xs text-muted-foreground">
-        You are viewing the portal as <strong className="text-navy">{student.name}</strong> (first
-        mock student). Data is read-only demo content.
-      </p>
-
       <div className="mb-6">
-        <JourneyTracker stage={student.stage} />
+        <JourneyTracker
+          stage={student.stage}
+          {...(timeline?.items ? { timelineItems: timeline.items } : {})}
+          {...(timeline?.pendingActions ? { pendingActions: timeline.pendingActions } : {})}
+        />
       </div>
 
       <ActionRequiredBanner docs={docs} uploadLink="/student/documents" />
@@ -100,7 +104,9 @@ function StudentDashboard() {
               <p className="text-sm text-muted-foreground">
                 {fmtDate(upcoming.date)} at {upcoming.time}
               </p>
-              <p className="text-sm">{lookupConsultant(upcoming.consultantId)?.name}</p>
+              <p className="text-sm">
+                {upcoming.consultantName ?? lookupConsultant(upcoming.consultantId)?.name ?? "—"}
+              </p>
               <StatusBadge status={upcoming.status} />
               <Link
                 to="/student/appointments"

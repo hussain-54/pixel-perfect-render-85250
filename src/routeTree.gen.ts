@@ -35,10 +35,14 @@ import { Route as AdminAuditLogsRouteImport } from './routes/admin/audit-logs'
 import { Route as AdminConsultantsRouteImport } from './routes/admin/consultants'
 import { Route as AdminDashboardRouteImport } from './routes/admin/dashboard'
 import { Route as AdminDocumentsRouteImport } from './routes/admin/documents'
+import { Route as AdminFinanceRouteImport } from './routes/admin/finance'
+import { Route as AdminHrRouteImport } from './routes/admin/hr'
 import { Route as AdminImportExportRouteImport } from './routes/admin/import-export'
 import { Route as AdminLeaderboardRouteImport } from './routes/admin/leaderboard'
 import { Route as AdminLeadsRouteImport } from './routes/admin/leads'
+import { Route as AdminMarketingRouteImport } from './routes/admin/marketing'
 import { Route as AdminNotificationsRouteImport } from './routes/admin/notifications'
+import { Route as AdminOperationsRouteImport } from './routes/admin/operations'
 import { Route as AdminProgramsRouteImport } from './routes/admin/programs'
 import { Route as AdminReportsRouteImport } from './routes/admin/reports'
 import { Route as AdminScholarshipsRouteImport } from './routes/admin/scholarships'
@@ -195,6 +199,16 @@ const AdminDocumentsRoute = AdminDocumentsRouteImport.update({
   path: '/documents',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const AdminFinanceRoute = AdminFinanceRouteImport.update({
+  id: '/finance',
+  path: '/finance',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminHrRoute = AdminHrRouteImport.update({
+  id: '/hr',
+  path: '/hr',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const AdminImportExportRoute = AdminImportExportRouteImport.update({
   id: '/import-export',
   path: '/import-export',
@@ -210,9 +224,19 @@ const AdminLeadsRoute = AdminLeadsRouteImport.update({
   path: '/leads',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const AdminMarketingRoute = AdminMarketingRouteImport.update({
+  id: '/marketing',
+  path: '/marketing',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const AdminNotificationsRoute = AdminNotificationsRouteImport.update({
   id: '/notifications',
   path: '/notifications',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminOperationsRoute = AdminOperationsRouteImport.update({
+  id: '/operations',
+  path: '/operations',
   getParentRoute: () => AdminRouteRoute,
 } as any)
 const AdminProgramsRoute = AdminProgramsRouteImport.update({
@@ -367,10 +391,14 @@ export interface FileRoutesByFullPath {
   '/admin/consultants': typeof AdminConsultantsRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/documents': typeof AdminDocumentsRoute
+  '/admin/finance': typeof AdminFinanceRoute
+  '/admin/hr': typeof AdminHrRoute
   '/admin/import-export': typeof AdminImportExportRoute
   '/admin/leaderboard': typeof AdminLeaderboardRoute
   '/admin/leads': typeof AdminLeadsRoute
+  '/admin/marketing': typeof AdminMarketingRoute
   '/admin/notifications': typeof AdminNotificationsRoute
+  '/admin/operations': typeof AdminOperationsRoute
   '/admin/programs': typeof AdminProgramsRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/scholarships': typeof AdminScholarshipsRoute
@@ -421,10 +449,14 @@ export interface FileRoutesByTo {
   '/admin/consultants': typeof AdminConsultantsRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/documents': typeof AdminDocumentsRoute
+  '/admin/finance': typeof AdminFinanceRoute
+  '/admin/hr': typeof AdminHrRoute
   '/admin/import-export': typeof AdminImportExportRoute
   '/admin/leaderboard': typeof AdminLeaderboardRoute
   '/admin/leads': typeof AdminLeadsRoute
+  '/admin/marketing': typeof AdminMarketingRoute
   '/admin/notifications': typeof AdminNotificationsRoute
+  '/admin/operations': typeof AdminOperationsRoute
   '/admin/programs': typeof AdminProgramsRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/scholarships': typeof AdminScholarshipsRoute
@@ -479,10 +511,14 @@ export interface FileRoutesById {
   '/admin/consultants': typeof AdminConsultantsRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/documents': typeof AdminDocumentsRoute
+  '/admin/finance': typeof AdminFinanceRoute
+  '/admin/hr': typeof AdminHrRoute
   '/admin/import-export': typeof AdminImportExportRoute
   '/admin/leaderboard': typeof AdminLeaderboardRoute
   '/admin/leads': typeof AdminLeadsRoute
+  '/admin/marketing': typeof AdminMarketingRoute
   '/admin/notifications': typeof AdminNotificationsRoute
+  '/admin/operations': typeof AdminOperationsRoute
   '/admin/programs': typeof AdminProgramsRoute
   '/admin/reports': typeof AdminReportsRoute
   '/admin/scholarships': typeof AdminScholarshipsRoute
@@ -538,10 +574,14 @@ export interface FileRouteTypes {
     | '/admin/consultants'
     | '/admin/dashboard'
     | '/admin/documents'
+    | '/admin/finance'
+    | '/admin/hr'
     | '/admin/import-export'
     | '/admin/leaderboard'
     | '/admin/leads'
+    | '/admin/marketing'
     | '/admin/notifications'
+    | '/admin/operations'
     | '/admin/programs'
     | '/admin/reports'
     | '/admin/scholarships'
@@ -592,10 +632,14 @@ export interface FileRouteTypes {
     | '/admin/consultants'
     | '/admin/dashboard'
     | '/admin/documents'
+    | '/admin/finance'
+    | '/admin/hr'
     | '/admin/import-export'
     | '/admin/leaderboard'
     | '/admin/leads'
+    | '/admin/marketing'
     | '/admin/notifications'
+    | '/admin/operations'
     | '/admin/programs'
     | '/admin/reports'
     | '/admin/scholarships'
@@ -649,10 +693,14 @@ export interface FileRouteTypes {
     | '/admin/consultants'
     | '/admin/dashboard'
     | '/admin/documents'
+    | '/admin/finance'
+    | '/admin/hr'
     | '/admin/import-export'
     | '/admin/leaderboard'
     | '/admin/leads'
+    | '/admin/marketing'
     | '/admin/notifications'
+    | '/admin/operations'
     | '/admin/programs'
     | '/admin/reports'
     | '/admin/scholarships'
@@ -887,6 +935,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminDocumentsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/admin/finance': {
+      id: '/admin/finance'
+      path: '/finance'
+      fullPath: '/admin/finance'
+      preLoaderRoute: typeof AdminFinanceRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/hr': {
+      id: '/admin/hr'
+      path: '/hr'
+      fullPath: '/admin/hr'
+      preLoaderRoute: typeof AdminHrRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/admin/import-export': {
       id: '/admin/import-export'
       path: '/import-export'
@@ -908,11 +970,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminLeadsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/admin/marketing': {
+      id: '/admin/marketing'
+      path: '/marketing'
+      fullPath: '/admin/marketing'
+      preLoaderRoute: typeof AdminMarketingRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/admin/notifications': {
       id: '/admin/notifications'
       path: '/notifications'
       fullPath: '/admin/notifications'
       preLoaderRoute: typeof AdminNotificationsRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/operations': {
+      id: '/admin/operations'
+      path: '/operations'
+      fullPath: '/admin/operations'
+      preLoaderRoute: typeof AdminOperationsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/admin/programs': {
@@ -1100,10 +1176,14 @@ interface AdminRouteRouteChildren {
   AdminConsultantsRoute: typeof AdminConsultantsRoute
   AdminDashboardRoute: typeof AdminDashboardRoute
   AdminDocumentsRoute: typeof AdminDocumentsRoute
+  AdminFinanceRoute: typeof AdminFinanceRoute
+  AdminHrRoute: typeof AdminHrRoute
   AdminImportExportRoute: typeof AdminImportExportRoute
   AdminLeaderboardRoute: typeof AdminLeaderboardRoute
   AdminLeadsRoute: typeof AdminLeadsRoute
+  AdminMarketingRoute: typeof AdminMarketingRoute
   AdminNotificationsRoute: typeof AdminNotificationsRoute
+  AdminOperationsRoute: typeof AdminOperationsRoute
   AdminProgramsRoute: typeof AdminProgramsRoute
   AdminReportsRoute: typeof AdminReportsRoute
   AdminScholarshipsRoute: typeof AdminScholarshipsRoute
@@ -1120,10 +1200,14 @@ const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminConsultantsRoute: AdminConsultantsRoute,
   AdminDashboardRoute: AdminDashboardRoute,
   AdminDocumentsRoute: AdminDocumentsRoute,
+  AdminFinanceRoute: AdminFinanceRoute,
+  AdminHrRoute: AdminHrRoute,
   AdminImportExportRoute: AdminImportExportRoute,
   AdminLeaderboardRoute: AdminLeaderboardRoute,
   AdminLeadsRoute: AdminLeadsRoute,
+  AdminMarketingRoute: AdminMarketingRoute,
   AdminNotificationsRoute: AdminNotificationsRoute,
+  AdminOperationsRoute: AdminOperationsRoute,
   AdminProgramsRoute: AdminProgramsRoute,
   AdminReportsRoute: AdminReportsRoute,
   AdminScholarshipsRoute: AdminScholarshipsRoute,

@@ -5,10 +5,8 @@
 import { createServerFn } from "@tanstack/react-start";
 import * as db from "@/data/mock";
 import { appendStageHistory } from "@/data/application-history";
-import { appendDocumentReview } from "@/data/document-reviews";
 import { rolesAtLeastAdmin } from "@/lib/roles";
 import { appendAuditEvent } from "@/data/immutable-audit";
-import { automateDocumentRejectionFollowUp } from "@/server/task-automation";
 import {
   AuthError,
   requireRoles,
@@ -27,7 +25,7 @@ import type {
   NewApplicationInput,
   StudentProfileWorkspace,
 } from "@/types/student-profile";
-import type { Application, DocumentStatus, Student } from "@/types";
+import type { Application, Student } from "@/types";
 import * as workspace from "@/data/student-workspace";
 
 function toError(error: unknown): never {
@@ -430,53 +428,29 @@ export const portalSearchStudents = createServerFn({ method: "GET" })
     }
   });
 
+/**
+ * Dashboard Approve/Reject — same authorized dual-plane path as the document queue.
+ * Does not report success when the shared review operation fails.
+ */
 export const portalReviewDocument = createServerFn({ method: "POST" })
   .validator((data: { documentId: string; action: "Approved" | "Rejected" }) => data)
   .handler(async ({ data }) => {
     try {
-      const session = await requireTrustedSession();
-      requireRoles(session, ["consultant", "admin", "super_admin"]);
-      const doc = db.documents.find((d) => d.id === data.documentId);
-      if (!doc) throw new AuthError("Document not found.", 404);
-      assertStudentVisible(session, doc.studentId);
-      if (doc.awaitingUpload && data.action === "Approved") {
-        throw new AuthError("No file has been uploaded yet.", 400);
-      }
-      const fromStatus = doc.status;
-      const next: DocumentStatus = data.action;
-      if (fromStatus === next) {
-        return { ok: true as const, document: doc, unchanged: true as const };
-      }
-      const cid = session.role === "consultant" ? session.consultantId : null;
-      const consultant = cid ? db.consultants.find((c) => c.id === cid) : undefined;
-      const actorName = consultant?.name ?? session.email;
-      doc.status = next;
-      doc.reviewer = actorName;
-      const note =
-        data.action === "Rejected" ? (doc.comment ?? "Rejected during officer review.") : null;
-      if (data.action === "Rejected") {
-        doc.comment = doc.comment ?? "Rejected during officer review.";
-        automateDocumentRejectionFollowUp({
-          documentId: doc.id,
-          studentId: doc.studentId,
-          category: doc.category,
-          note: doc.comment,
-        });
-      }
-      if (data.action === "Approved") delete doc.comment;
-      appendDocumentReview({
-        id: `drv-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-        documentId: doc.id,
-        action: "dashboard_review",
-        fromStatus,
-        toStatus: doc.status,
-        actorId: consultant?.id ?? session.userId ?? null,
-        actorName,
-        at: new Date().toISOString(),
-        note,
-        version: doc.version ?? 1,
+      const { dashboardReviewToQueueAction } = await import("@/lib/portal-data-plane");
+      const { portalReviewQueueDocument } = await import("@/server/portal-documents");
+      const mapped = dashboardReviewToQueueAction(data.action);
+      const result = await portalReviewQueueDocument({
+        data: {
+          documentId: data.documentId,
+          action: mapped.action,
+          ...(mapped.note ? { note: mapped.note } : {}),
+        },
       });
-      return { ok: true as const, document: doc, unchanged: false as const };
+      return {
+        ok: result.ok,
+        document: result.document,
+        unchanged: result.unchanged,
+      };
     } catch (error) {
       toError(error);
     }

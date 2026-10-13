@@ -1,12 +1,7 @@
 import type { User } from "@supabase/supabase-js";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { findDemoAccount, findDemoAccountByEmail, isDemoAuthEnabled } from "@/lib/demo-auth";
-import {
-  portalHomeByRole,
-  normalizeAppRole,
-  type AppRole,
-  type PortalHome,
-} from "@/lib/roles";
+import { portalHomeByRole, normalizeAppRole, type AppRole, type PortalHome } from "@/lib/roles";
 import {
   clearSession,
   establishSession,
@@ -24,8 +19,7 @@ const REMEMBER_EMAIL_KEY = "gr_remember_email";
 const DEMO_SESSION_KEY = "gr_demo_session";
 
 export type SignInResult =
-  | { ok: true; role: AppRole; redirectTo: PortalHome }
-  | { ok: false; error: string };
+  { ok: true; role: AppRole; redirectTo: PortalHome } | { ok: false; error: string };
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -50,7 +44,12 @@ export function setRememberedEmail(email: string | null) {
   }
 }
 
-function setClientDemoSession(role: AppRole, email: string, remember: boolean, consultantId?: string) {
+function setClientDemoSession(
+  role: AppRole,
+  email: string,
+  remember: boolean,
+  consultantId?: string,
+) {
   if (typeof window === "undefined" || !isDemoAuthEnabled()) return;
   const payload = JSON.stringify({ role, email, consultantId, at: Date.now() });
   try {
@@ -365,6 +364,15 @@ export async function signUpStudent(options: {
       const established = await establishSession({
         data: { accessToken: data.session.access_token },
       });
+      // Link Front Desk CRM registration to this Auth user (email match only).
+      if (established.role === "student") {
+        try {
+          const { claimOwnStudentRecord } = await import("@/services");
+          await claimOwnStudentRecord();
+        } catch {
+          /* registration may not exist yet — portal will explain on first load */
+        }
+      }
       return {
         ok: true,
         role: established.role,

@@ -896,6 +896,25 @@ export const portalCreateOfferRecord = createServerFn({ method: "POST" })
         const conditions = conditionRows.map(mapOfferConditionRow);
         const offer = mapOfferRow(createdRow);
 
+        const { nextJourneyStageIfAdvanced } = await import("@/lib/journey-stage");
+        const { data: journeyRow } = await client
+          .from("students")
+          .select("journey_stage")
+          .eq("id", student.id)
+          .maybeSingle();
+        const nextStage = nextJourneyStageIfAdvanced(journeyRow?.journey_stage, "offer_received");
+        if (nextStage) {
+          await client.from("students").update({ journey_stage: nextStage }).eq("id", student.id);
+        }
+        const { writeAudit } = await import("@/services/db");
+        await writeAudit(client, {
+          action: "offer.create",
+          entity_type: "offers",
+          entity_id: createdRow.id,
+          student_id: student.id,
+          metadata: { application_id: app.id, status, journey_stage: nextStage },
+        });
+
         return {
           ok: true as const,
           duplicate: false as const,

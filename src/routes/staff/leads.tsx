@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { DEMO_CONSULTANT_ID } from "@/components/portal/demo";
 import { PageHeader, TableWrap, fmtDate, LoadingRows, EmptyState } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useData } from "@/lib/useData";
@@ -10,12 +9,13 @@ export const Route = createFileRoute("/staff/leads")({
 });
 
 function StaffLeads() {
+  // Desk scoping is enforced server-side via the trusted session consultant id.
   const leadsQ = useData(["leads"], getLeads);
-  const rows = (leadsQ.data ?? []).filter((l) => l.consultantId === DEMO_CONSULTANT_ID);
+  const rows = leadsQ.data ?? [];
 
   return (
     <div>
-      <PageHeader title="Leads" subtitle="Prospects assigned to you in the demo CRM." />
+      <PageHeader title="Leads" subtitle="Prospects assigned to your desk." />
       {leadsQ.isLoading ? (
         <LoadingRows />
       ) : !rows.length ? (

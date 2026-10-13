@@ -437,6 +437,29 @@ export async function assertStudentVisibleDb(
   return student;
 }
 
+/**
+ * Resolve the authenticated student's CRM row via profile link (trusted session.userId).
+ * Fail closed when the account is not linked — never trust a client-supplied student id alone.
+ */
+export async function resolveOwnStudentDb(client: AoDb, session: TrustedSession): Promise<Student> {
+  if (session.role !== "student") {
+    throw new AuthError("Only student sessions can resolve an own student record.", 403);
+  }
+  if (!session.userId) {
+    throw new AuthError("Student profile is not linked to this account.", 403);
+  }
+  const { data, error } = await client
+    .from("students")
+    .select("*")
+    .eq("profile_id", session.userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) {
+    throw new AuthError("Student record not found for this account.", 403);
+  }
+  return mapStudentRow(data);
+}
+
 /** Loads an application and asserts its student is in scope. */
 export async function getScopedApplication(
   client: AoDb,

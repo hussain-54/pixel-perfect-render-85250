@@ -114,15 +114,21 @@ export const portalGetApplicationsPipeline = createServerFn({ method: "GET" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
 
-      const { usesSupabaseDataPlane, listVisibleStudentsDb, listAppsForStudents, requireAoSupabaseClient } =
-        await import("@/server/ao-data");
+      const {
+        usesSupabaseDataPlane,
+        listVisibleStudentsDb,
+        listAppsForStudents,
+        requireAoSupabaseClient,
+      } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
         const client = requireAoSupabaseClient();
         const students = await listVisibleStudentsDb(client, session);
-        let apps = (await listAppsForStudents(
-          client,
-          students.map((s) => s.id),
-        )).filter((a) => isPipelineStage(a.status));
+        let apps = (
+          await listAppsForStudents(
+            client,
+            students.map((s) => s.id),
+          )
+        ).filter((a) => isPipelineStage(a.status));
         const stageFilter = data.stage && data.stage !== "all" ? data.stage : null;
         if (stageFilter) apps = apps.filter((a) => a.status === stageFilter);
         if (data.studentId) {
@@ -304,7 +310,9 @@ export const portalGetApplicationDetail = createServerFn({ method: "GET" })
   });
 
 export const portalChangeApplicationStage = createServerFn({ method: "POST" })
-  .validator((data: { applicationId: string; toStage: ApplicationPipelineStage; note?: string }) => data)
+  .validator(
+    (data: { applicationId: string; toStage: ApplicationPipelineStage; note?: string }) => data,
+  )
   .handler(async ({ data }) => {
     try {
       const session = await requireTrustedSession();
@@ -440,8 +448,12 @@ export const portalCreatePipelineApplication = createServerFn({ method: "POST" }
         throw new AuthError("Deadline must be a valid date.", 400);
       }
 
-      const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb, resolveConsultantDeskId } =
-        await import("@/server/ao-data");
+      const {
+        usesSupabaseDataPlane,
+        requireAoSupabaseClient,
+        assertStudentVisibleDb,
+        resolveConsultantDeskId,
+      } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
         const { createApplication, listApplications } = await import("@/services/db");
         const client = requireAoSupabaseClient();
@@ -450,8 +462,7 @@ export const portalCreatePipelineApplication = createServerFn({ method: "POST" }
         const key = normalizeKey(student.id, university, program, intake);
         const existingApps = await listApplications(client, student.id);
         const duplicate = existingApps.find(
-          (a) =>
-            normalizeKey(a.student_id, a.university_name, a.program_name, a.intake) === key,
+          (a) => normalizeKey(a.student_id, a.university_name, a.program_name, a.intake) === key,
         );
         if (duplicate) {
           throw new AuthError(
@@ -470,6 +481,29 @@ export const portalCreatePipelineApplication = createServerFn({ method: "POST" }
           deadline: deadline || null,
           stage: "docs_pending",
           owned_by_consultant_id: ownedByConsultantId,
+        });
+
+        const { nextJourneyStageIfAdvanced } = await import("@/lib/journey-stage");
+        const { data: journeyRow } = await client
+          .from("students")
+          .select("journey_stage")
+          .eq("id", student.id)
+          .maybeSingle();
+        const nextStage = nextJourneyStageIfAdvanced(
+          journeyRow?.journey_stage,
+          "application_submitted",
+        );
+        if (nextStage) {
+          await client.from("students").update({ journey_stage: nextStage }).eq("id", student.id);
+        }
+
+        const { writeAudit } = await import("@/services/db");
+        await writeAudit(client, {
+          action: "application.create",
+          entity_type: "applications",
+          entity_id: created.id,
+          student_id: student.id,
+          metadata: { university, program, intake, journey_stage: nextStage },
         });
 
         const { mapApplicationRow } = await import("@/lib/ao-mappers");

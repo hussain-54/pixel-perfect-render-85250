@@ -21,8 +21,9 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { getStudentsDirectory, registerStudent } from "@/services";
+import { getStudentsDirectory, intakeRegisterStudent } from "@/services";
 import type { StudentDirectoryFilters } from "@/types/portal-officer";
+import type { InquiryChannelDb } from "@/types/database";
 
 export const Route = createFileRoute("/staff/students")({
   component: StaffStudents,
@@ -55,6 +56,15 @@ function StudentsDirectory() {
     phone: "",
     destination: "",
     program: "",
+    studyLevel: "",
+    inquirySource: "",
+    inquiryChannel: "" as "" | InquiryChannelDb,
+    intakeDate: "",
+    registrationNotes: "",
+    feeAmount: "",
+    feeMethod: "",
+    feeReference: "",
+    feeClaimed: false,
   });
 
   const queryFilters = useMemo((): StudentDirectoryFilters => {
@@ -80,10 +90,48 @@ function StudentsDirectory() {
   });
 
   const registerM = useMutation({
-    mutationFn: () => registerStudent(form),
+    mutationFn: () => {
+      const amount = Number(form.feeAmount);
+      const payload: Parameters<typeof intakeRegisterStudent>[0] = {
+        fullName: form.fullName,
+        email: form.email,
+        phone: form.phone,
+        destination: form.destination,
+        program: form.program,
+      };
+      if (form.studyLevel.trim()) payload.studyLevel = form.studyLevel.trim();
+      if (form.inquirySource.trim()) payload.inquirySource = form.inquirySource.trim();
+      if (form.inquiryChannel) payload.inquiryChannel = form.inquiryChannel;
+      if (form.intakeDate.trim()) payload.intakeDate = form.intakeDate.trim();
+      if (form.registrationNotes.trim()) payload.registrationNotes = form.registrationNotes.trim();
+      if (form.feeAmount.trim() && !Number.isNaN(amount)) {
+        payload.signupFee = {
+          amount,
+          markClaimed: form.feeClaimed,
+        };
+        if (form.feeMethod.trim()) payload.signupFee.paymentMethod = form.feeMethod.trim();
+        if (form.feeReference.trim()) payload.signupFee.referenceReceipt = form.feeReference.trim();
+      }
+      return intakeRegisterStudent(payload);
+    },
     onSuccess: async () => {
       setRegisterOpen(false);
-      setForm({ fullName: "", email: "", phone: "", destination: "", program: "" });
+      setForm({
+        fullName: "",
+        email: "",
+        phone: "",
+        destination: "",
+        program: "",
+        studyLevel: "",
+        inquirySource: "",
+        inquiryChannel: "",
+        intakeDate: "",
+        registrationNotes: "",
+        feeAmount: "",
+        feeMethod: "",
+        feeReference: "",
+        feeClaimed: false,
+      });
       await queryClient.invalidateQueries({ queryKey: ["officer", "students-directory"] });
       await queryClient.invalidateQueries({ queryKey: ["officer", "dashboard"] });
     },
@@ -333,9 +381,9 @@ function StudentsDirectory() {
       )}
 
       <Dialog open={registerOpen} onOpenChange={setRegisterOpen}>
-        <DialogContent>
+        <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Register new student</DialogTitle>
+            <DialogTitle>Front desk intake / register student</DialogTitle>
           </DialogHeader>
           <div className="grid gap-3 py-2">
             {(
@@ -343,8 +391,11 @@ function StudentsDirectory() {
                 ["fullName", "Full name"],
                 ["email", "Email"],
                 ["phone", "Phone"],
-                ["destination", "Destination"],
-                ["program", "Program"],
+                ["destination", "Preferred country / destination"],
+                ["program", "Preferred course / program"],
+                ["studyLevel", "Study level"],
+                ["inquirySource", "Inquiry source"],
+                ["intakeDate", "Intake date (YYYY-MM-DD)"],
               ] as const
             ).map(([key, label]) => (
               <Input
@@ -355,6 +406,56 @@ function StudentsDirectory() {
                 onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
               />
             ))}
+            <select
+              aria-label="Inquiry channel"
+              className="h-11 rounded-md border border-input bg-white px-3 text-sm"
+              value={form.inquiryChannel}
+              onChange={(e) =>
+                setForm((f) => ({
+                  ...f,
+                  inquiryChannel: e.target.value as "" | InquiryChannelDb,
+                }))
+              }
+            >
+              <option value="">Channel: select</option>
+              <option value="physical">Physical (walk-in)</option>
+              <option value="online">Online</option>
+            </select>
+            <Input
+              placeholder="Registration notes"
+              aria-label="Registration notes"
+              value={form.registrationNotes}
+              onChange={(e) => setForm((f) => ({ ...f, registrationNotes: e.target.value }))}
+            />
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Signup fee (optional claim — not verified payment)
+            </p>
+            <Input
+              placeholder="Fee amount"
+              aria-label="Fee amount"
+              value={form.feeAmount}
+              onChange={(e) => setForm((f) => ({ ...f, feeAmount: e.target.value }))}
+            />
+            <Input
+              placeholder="Payment method"
+              aria-label="Payment method"
+              value={form.feeMethod}
+              onChange={(e) => setForm((f) => ({ ...f, feeMethod: e.target.value }))}
+            />
+            <Input
+              placeholder="Reference / receipt"
+              aria-label="Reference receipt"
+              value={form.feeReference}
+              onChange={(e) => setForm((f) => ({ ...f, feeReference: e.target.value }))}
+            />
+            <label className="flex items-center gap-2 text-sm text-navy">
+              <input
+                type="checkbox"
+                checked={form.feeClaimed}
+                onChange={(e) => setForm((f) => ({ ...f, feeClaimed: e.target.checked }))}
+              />
+              Mark fee as claimed (still requires Accounts verification)
+            </label>
             {registerM.isError ? (
               <ErrorState body={portalErrorMessage(registerM.error, "Registration failed.")} />
             ) : null}

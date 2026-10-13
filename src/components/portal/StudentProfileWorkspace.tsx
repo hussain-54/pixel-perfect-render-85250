@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState, type ReactNode } from "react";
+﻿import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   EmptyState,
   ErrorState,
@@ -25,8 +25,13 @@ import {
 import {
   addStudentNote,
   createStudentApplication,
+  getSignupFeeStatus,
+  getStudentJourneyTimeline,
+  handoverToAdmission,
+  recordCounsellingAgreement,
   saveShortlistItem,
   saveStudentAssessment,
+  verifySignupFee,
 } from "@/services";
 import type { StudentProfileWorkspace } from "@/types/student-profile";
 import {
@@ -44,13 +49,7 @@ type Props = {
   onTabChange: (tab: ProfileTabId) => void;
 };
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block text-sm">
       <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -76,6 +75,13 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
     program: "",
     intake: s.intake === "-" ? "" : s.intake,
     deadline: "",
+  });
+  const [handoverSummary, setHandoverSummary] = useState("");
+  const [lifecycleMsg, setLifecycleMsg] = useState<string | null>(null);
+  const feeQ = useQuery({
+    queryKey: ["officer", "signup-fee", s.id],
+    queryFn: () => getSignupFeeStatus(s.id),
+    staleTime: 30_000,
   });
   const [shortForm, setShortForm] = useState({
     universityName: "",
@@ -171,15 +177,14 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
             Student profile
           </p>
           <h1 className="font-display text-2xl font-semibold text-navy md:text-[1.75rem]">
-            {s.name}{" "}
-            <span className="text-lg font-medium text-muted-foreground">({s.caseId})</span>
+            {s.name} <span className="text-lg font-medium text-muted-foreground">({s.caseId})</span>
           </h1>
           <div className="mt-2 flex flex-wrap items-center gap-2">
             <StatusBadge status={s.stageLabel} />
             <span className="text-xs text-muted-foreground">{docsLabel}</span>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
-            Destination: {s.destination} · Intake: {s.intake} · Assigned consultant:{" "}
+            Destination: {s.destination} Â· Intake: {s.intake} Â· Assigned consultant:{" "}
             {s.consultantName}
           </p>
         </div>
@@ -200,11 +205,99 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
         </div>
       </div>
 
-      <Tabs
-        value={tab}
-        onValueChange={(v) => onTabChange(v as ProfileTabId)}
-        className="space-y-5"
-      >
+      <Panel title="Lifecycle — fee, agreement, admission handover">
+        <div className="space-y-3 text-sm">
+          <p className="text-muted-foreground">
+            Signup fee:{" "}
+            <span className="font-medium text-navy">{feeQ.data?.fee?.status ?? "loading…"}</span>
+            {feeQ.data?.fee?.portalActivatedAt ? " · Portal activated" : " · Portal not activated"}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={!workspace.canEdit}
+              onClick={async () => {
+                try {
+                  setLifecycleMsg(null);
+                  await recordCounsellingAgreement({
+                    studentId: s.id,
+                    consented: true,
+                    summary: "Counselling session consent recorded in portal.",
+                    outcome: "Proceed to assessment / handover",
+                  });
+                  setLifecycleMsg("Counselling agreement recorded.");
+                  await queryClient.invalidateQueries({
+                    queryKey: ["officer", "student-profile", s.id],
+                  });
+                } catch (e) {
+                  setLifecycleMsg(portalErrorMessage(e, "Could not record agreement."));
+                }
+              }}
+            >
+              Record counselling consent
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={async () => {
+                try {
+                  setLifecycleMsg(null);
+                  await verifySignupFee({
+                    studentId: s.id,
+                    action: "verify",
+                    activatePortal: true,
+                  });
+                  setLifecycleMsg("Signup fee verified and portal activated (if authorized).");
+                  await feeQ.refetch();
+                } catch (e) {
+                  setLifecycleMsg(portalErrorMessage(e, "Fee verification denied or failed."));
+                }
+              }}
+            >
+              Verify signup fee (Accounts/Admin)
+            </Button>
+          </div>
+          <Textarea
+            placeholder="Admission handover summary (required, min 10 chars)"
+            value={handoverSummary}
+            disabled={!workspace.canEdit}
+            onChange={(e) => setHandoverSummary(e.target.value)}
+          />
+          <Button
+            size="sm"
+            variant="navy"
+            disabled={!workspace.canEdit || handoverSummary.trim().length < 10}
+            onClick={async () => {
+              try {
+                setLifecycleMsg(null);
+                await handoverToAdmission({
+                  studentId: s.id,
+                  summary: handoverSummary,
+                  checklist: { assessmentComplete: true, agreementRecorded: true },
+                });
+                setLifecycleMsg("Handed over to Admission Team queue.");
+                setHandoverSummary("");
+                await queryClient.invalidateQueries({
+                  queryKey: ["officer", "student-profile", s.id],
+                });
+                await queryClient.invalidateQueries({
+                  queryKey: ["officer", "students-directory"],
+                });
+              } catch (e) {
+                setLifecycleMsg(
+                  portalErrorMessage(e, "Handover blocked — check assessment/agreement."),
+                );
+              }
+            }}
+          >
+            Hand over to Admission
+          </Button>
+          {lifecycleMsg ? <p className="text-xs text-navy">{lifecycleMsg}</p> : null}
+        </div>
+      </Panel>
+
+      <Tabs value={tab} onValueChange={(v) => onTabChange(v as ProfileTabId)} className="space-y-5">
         <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1 rounded-none border-b border-border bg-transparent p-0">
           {STUDENT_PROFILE_TABS.map((t) => (
             <TabsTrigger
@@ -224,12 +317,12 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
 
         <TabsContent value="assessment" className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="Eligibility" value={form.eligibility || "—"} />
+            <StatCard label="Eligibility" value={form.eligibility || "â€”"} />
             <StatCard
               label="IELTS / Language"
-              value={form.languageScore || form.languageTest || "—"}
+              value={form.languageScore || form.languageTest || "â€”"}
             />
-            <StatCard label="Annual budget" value={form.annualBudget || "—"} />
+            <StatCard label="Annual budget" value={form.annualBudget || "â€”"} />
             <StatCard
               label="Apps submitted"
               value={`${workspace.appsSubmittedCount} of ${form.applicationTarget || 0} target`}
@@ -364,7 +457,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 <p className="text-xs text-muted-foreground">
                   Assessed by:{" "}
                   <span className="font-medium text-navy">
-                    {workspace.assessment.assessedByName || "—"}
+                    {workspace.assessment.assessedByName || "â€”"}
                   </span>
                   {workspace.assessment.assessedAt
                     ? ` (${fmtDate(workspace.assessment.assessedAt.slice(0, 10))})`
@@ -388,17 +481,12 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
               </Button>
               {saveMsg ? (
                 <p
-                  className={cn(
-                    "text-sm",
-                    saveM.isError ? "text-danger" : "text-muted-foreground",
-                  )}
+                  className={cn("text-sm", saveM.isError ? "text-danger" : "text-muted-foreground")}
                 >
                   {saveMsg}
                 </p>
               ) : null}
-              {saveM.isError ? (
-                <ErrorState body={portalErrorMessage(saveM.error)} />
-              ) : null}
+              {saveM.isError ? <ErrorState body={portalErrorMessage(saveM.error)} /> : null}
             </div>
           ) : null}
 
@@ -423,7 +511,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                   <div key={item.id} className="border-b border-border pb-3">
                     <p className="font-semibold text-navy">{item.universityName}</p>
                     <p className="text-sm text-muted-foreground">{item.programName}</p>
-                    <p className="mt-2 text-xs text-navy">{item.suitabilityNote || "—"}</p>
+                    <p className="mt-2 text-xs text-navy">{item.suitabilityNote || "â€”"}</p>
                   </div>
                 ))}
               </div>
@@ -443,22 +531,44 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
               <OverviewItem label="Stage" value={s.stageLabel} />
               <OverviewItem label="Consultant" value={s.consultantName} />
               <OverviewItem label="Last activity" value={fmtDate(s.lastActivity)} />
-              <OverviewItem label="Next step" value={workspace.assessment.immediateNextStep || "—"} />
+              <OverviewItem
+                label="Next step"
+                value={workspace.assessment.immediateNextStep || "—"}
+              />
             </dl>
           </Panel>
+          <StaffJourneyTimeline studentId={s.id} />
         </TabsContent>
 
         <TabsContent value="academic">
           <Panel title="Academic profile">
             <dl className="grid gap-3 sm:grid-cols-2 text-sm">
-              <OverviewItem label="Last qualification" value={workspace.assessment.lastQualification || s.qualification} />
+              <OverviewItem
+                label="Last qualification"
+                value={workspace.assessment.lastQualification || s.qualification}
+              />
               <OverviewItem label="Institution" value={s.institution} />
-              <OverviewItem label="Marks / CGPA" value={workspace.assessment.marksCgpa || s.grade} />
-              <OverviewItem label="Education gap" value={workspace.assessment.educationGap || "—"} />
-              <OverviewItem label="Work experience" value={workspace.assessment.workExperience || "—"} />
-              <OverviewItem label="Preferred level" value={workspace.assessment.preferredLevel || s.studyLevel} />
-              <OverviewItem label="Language" value={workspace.assessment.languageScore || s.englishTest} />
-              <OverviewItem label="Funding" value={workspace.assessment.fundingSource || "—"} />
+              <OverviewItem
+                label="Marks / CGPA"
+                value={workspace.assessment.marksCgpa || s.grade}
+              />
+              <OverviewItem
+                label="Education gap"
+                value={workspace.assessment.educationGap || "â€”"}
+              />
+              <OverviewItem
+                label="Work experience"
+                value={workspace.assessment.workExperience || "â€”"}
+              />
+              <OverviewItem
+                label="Preferred level"
+                value={workspace.assessment.preferredLevel || s.studyLevel}
+              />
+              <OverviewItem
+                label="Language"
+                value={workspace.assessment.languageScore || s.englishTest}
+              />
+              <OverviewItem label="Funding" value={workspace.assessment.fundingSource || "â€”"} />
             </dl>
           </Panel>
         </TabsContent>
@@ -497,7 +607,10 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
         <TabsContent value="applications">
           <Panel title="Applications">
             {!workspace.applications.length ? (
-              <EmptyState title="No applications yet" body="Use New application to create a draft." />
+              <EmptyState
+                title="No applications yet"
+                body="Use New application to create a draft."
+              />
             ) : (
               <TableWrap>
                 <thead>
@@ -585,11 +698,14 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
             ) : (
               <ul className="space-y-4">
                 {workspace.notes.map((n) => (
-                  <li key={n.id} className="border-t border-border/70 pt-3 first:border-0 first:pt-0">
+                  <li
+                    key={n.id}
+                    className="border-t border-border/70 pt-3 first:border-0 first:pt-0"
+                  >
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        {n.authorName} · {fmtDate(n.createdAt.slice(0, 10))}
-                        {n.pinned ? " · Pinned" : ""}
+                        {n.authorName} Â· {fmtDate(n.createdAt.slice(0, 10))}
+                        {n.pinned ? " Â· Pinned" : ""}
                       </p>
                     </div>
                     <p className="mt-1 text-sm text-navy whitespace-pre-wrap">{n.body}</p>
@@ -720,6 +836,53 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+function StaffJourneyTimeline({ studentId }: { studentId: string }) {
+  const timelineQ = useQuery({
+    queryKey: ["officer", "student-timeline", studentId],
+    queryFn: () => getStudentJourneyTimeline(studentId),
+    staleTime: 20_000,
+  });
+
+  return (
+    <Panel title="Journey timeline" className="mt-4">
+      {timelineQ.isLoading ? (
+        <p className="text-sm text-muted-foreground">Loading timeline…</p>
+      ) : timelineQ.isError ? (
+        <p className="text-sm text-muted-foreground">
+          {portalErrorMessage(timelineQ.error, "Timeline unavailable.")}
+        </p>
+      ) : !timelineQ.data?.items.length ? (
+        <p className="text-sm text-muted-foreground">
+          No persisted journey events yet for this student.
+        </p>
+      ) : (
+        <ul className="space-y-3 text-sm">
+          {timelineQ.data.items.map((item) => (
+            <li
+              key={item.id}
+              className="flex flex-wrap items-start justify-between gap-2 border-t border-border/70 pt-2 first:border-0 first:pt-0"
+            >
+              <div>
+                <p className="font-medium text-navy">{item.title}</p>
+                {item.detail ? (
+                  <p className="text-xs text-muted-foreground">{item.detail}</p>
+                ) : null}
+                {item.pendingAction ? (
+                  <p className="text-xs text-royal">{item.pendingAction}</p>
+                ) : null}
+              </div>
+              <div className="text-right text-xs text-muted-foreground">
+                <p className="font-semibold uppercase tracking-wide text-navy">{item.status}</p>
+                <p>{item.at ? fmtDate(item.at) : "—"}</p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
   );
 }
 

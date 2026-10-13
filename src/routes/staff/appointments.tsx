@@ -1,5 +1,4 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { DEMO_CONSULTANT_ID } from "@/components/portal/demo";
 import { PageHeader, TableWrap, fmtDate, LoadingRows, EmptyState } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useData } from "@/lib/useData";
@@ -10,14 +9,13 @@ export const Route = createFileRoute("/staff/appointments")({
 });
 
 function StaffAppointments() {
+  // Desk scoping is enforced server-side via the trusted session consultant id.
   const apptsQ = useData(["appointments"], getAppointments);
-  const rows = (apptsQ.data ?? [])
-    .filter((a) => a.consultantId === DEMO_CONSULTANT_ID)
-    .sort((a, b) => b.date.localeCompare(a.date));
+  const rows = [...(apptsQ.data ?? [])].sort((a, b) => b.date.localeCompare(a.date));
 
   return (
     <div>
-      <PageHeader title="Appointments" subtitle="Your demo consultation calendar." />
+      <PageHeader title="Appointments" subtitle="Your consultation calendar." />
       {apptsQ.isLoading ? (
         <LoadingRows />
       ) : !rows.length ? (
@@ -39,7 +37,9 @@ function StaffAppointments() {
                 <td>
                   {fmtDate(a.date)} · {a.time}
                 </td>
-                <td className="font-medium text-navy">{lookupStudent(a.studentId)?.name ?? "—"}</td>
+                <td className="font-medium text-navy">
+                  {a.studentName ?? lookupStudent(a.studentId)?.name ?? "—"}
+                </td>
                 <td>{a.type}</td>
                 <td>
                   <StatusBadge status={a.status} />

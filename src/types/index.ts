@@ -85,7 +85,8 @@ export type AppointmentType =
 export interface Appointment {
   id: string;
   studentId: string;
-  type: AppointmentType;
+  /** DB has no type column; live rows may use the neutral "—" placeholder. */
+  type: AppointmentType | "—";
   date: string;
   time: string;
   consultantId: string;
@@ -93,6 +94,10 @@ export interface Appointment {
   studyLevel: string;
   status: AppointmentStatus;
   notes?: string;
+  /** Server-enriched display name (live plane); mock UI may still use lookupStudent. */
+  studentName?: string;
+  /** Server-enriched display name (live plane); mock UI may still use lookupConsultant. */
+  consultantName?: string;
 }
 
 export type DocumentStatus = "Pending Review" | "Approved" | "Rejected" | "Needs Correction";
