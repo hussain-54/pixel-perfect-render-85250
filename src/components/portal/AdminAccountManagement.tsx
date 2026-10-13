@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   EmptyState,
@@ -185,8 +185,12 @@ export function AdminAccountManagement() {
     deskStatusM.isPending ||
     revokeM.isPending;
 
-  if (accountsQ.isLoading) return <LoadingRows rows={6} />;
-  if (accountsQ.isError) {
+  // Keep section chrome visible on loading/error so Settings never looks like
+  // only Organization + Notifications when the API is unavailable.
+  let body: ReactNode;
+  if (accountsQ.isLoading) {
+    body = <LoadingRows rows={6} />;
+  } else if (accountsQ.isError) {
     const text = portalErrorMessage(accountsQ.error);
     if (
       text.includes("403") ||
@@ -194,21 +198,222 @@ export function AdminAccountManagement() {
       text.toLowerCase().includes("permission") ||
       text.toLowerCase().includes("not configured") ||
       text.toLowerCase().includes("service_role") ||
-      text.toLowerCase().includes("service-role")
+      text.toLowerCase().includes("service-role") ||
+      text.toLowerCase().includes("secret_key")
     ) {
-      return (
+      body = (
         <PermissionDenied
           body={
             text ||
-            "Account management is unavailable. Sign in as an admin and set SUPABASE_SERVICE_ROLE_KEY on the server (never VITE_*)."
+            "Account management is unavailable. Sign in as an admin, set SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_SECRET_KEY) in Vercel Production (never VITE_*), then Redeploy."
           }
         />
       );
+    } else {
+      body = <ErrorState body={text} />;
     }
-    return <ErrorState body={text} />;
-  }
+  } else if (!accountsQ.data) {
+    body = <ErrorState body="Account list unavailable." />;
+  } else {
+    body = (
+      <>
+        {msg ? (
+          <p
+            className="rounded-md border border-success/30 bg-success-soft px-3 py-2 text-sm text-navy"
+            role="status"
+          >
+            {msg}
+          </p>
+        ) : null}
+        {err ? (
+          <p
+            className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+            role="alert"
+          >
+            {err}
+          </p>
+        ) : null}
 
-  if (!accountsQ.data) return <ErrorState body="Account list unavailable." />;
+        <div className="grid gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
+          <Panel title="Create account">
+            <form
+              className="grid gap-3 text-sm"
+              onSubmit={(e) => {
+                e.preventDefault();
+                setErr(null);
+                setMsg(null);
+                if (!selectedOption) {
+                  setMessage("Select a valid app role and business role pair.", true);
+                  return;
+                }
+                createM.mutate();
+              }}
+            >
+              <div>
+                <Label htmlFor="settings-acct-name">Full name</Label>
+                <Input
+                  id="settings-acct-name"
+                  className="mt-1.5"
+                  value={form.fullName}
+                  onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
+                  placeholder="Full name"
+                  required
+                  disabled={createM.isPending}
+                />
+              </div>
+              <div>
+                <Label htmlFor="settings-acct-email">Work email</Label>
+                <Input
+                  id="settings-acct-email"
+                  type="email"
+                  className="mt-1.5"
+                  value={form.email}
+                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                  placeholder="name@company.com"
+                  required
+                  disabled={createM.isPending}
+                />
+              </div>
+              <div>
+                <Label htmlFor="settings-acct-phone">Phone (optional)</Label>
+                <Input
+                  id="settings-acct-phone"
+                  className="mt-1.5"
+                  value={form.phone}
+                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                  placeholder="Phone"
+                  disabled={createM.isPending}
+                />
+              </div>
+              <div>
+                <Label htmlFor="settings-acct-app-role">App role</Label>
+                <select
+                  id="settings-acct-app-role"
+                  className="mt-1.5 h-9 w-full rounded-md border border-border bg-background px-2"
+                  value={form.appRole}
+                  disabled={createM.isPending}
+                  onChange={(e) => {
+                    const appRole = e.target.value as Exclude<AppRole, "super_admin">;
+                    const nextBiz =
+                      optionsForAppRole(appRole)[0]?.businessRole ?? form.businessRole;
+                    const opt = ACCOUNT_PROVISIONING_OPTIONS.find(
+                      (o) => o.businessRole === nextBiz,
+                    );
+                    setForm((f) => ({
+                      ...f,
+                      appRole,
+                      businessRole: nextBiz,
+                      department: f.department.trim() || opt?.departmentSuggested || f.department,
+                    }));
+                  }}
+                >
+                  {CREATABLE_APP_ROLES.map((role) => (
+                    <option key={role} value={role}>
+                      {role}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="settings-acct-biz-role">Business role</Label>
+                <select
+                  id="settings-acct-biz-role"
+                  className="mt-1.5 h-9 w-full rounded-md border border-border bg-background px-2"
+                  value={form.businessRole}
+                  disabled={createM.isPending || businessOptions.length === 0}
+                  onChange={(e) => {
+                    const businessRole = e.target.value as BusinessRole;
+                    const opt = ACCOUNT_PROVISIONING_OPTIONS.find(
+                      (o) => o.businessRole === businessRole,
+                    );
+                    setForm((f) => ({
+                      ...f,
+                      businessRole,
+                      appRole: (opt?.appRole as Exclude<AppRole, "super_admin">) ?? f.appRole,
+                      department: f.department.trim() || opt?.departmentSuggested || f.department,
+                    }));
+                  }}
+                >
+                  {businessOptions.map((o) => (
+                    <option key={o.businessRole} value={o.businessRole}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  {selectedOption?.needsConsultantDesk
+                    ? "Creates an active consultant desk (assignment-scoped — not org-wide student access)."
+                    : "No consultant desk (admin/student)."}{" "}
+                  <span className="font-medium text-navy">super_admin</span> is never offered here.
+                </p>
+              </div>
+              {selectedOption?.needsConsultantDesk ? (
+                <div>
+                  <Label htmlFor="settings-acct-dept">Department / designation</Label>
+                  <Input
+                    id="settings-acct-dept"
+                    className="mt-1.5"
+                    value={form.department}
+                    onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))}
+                    placeholder={selectedOption.departmentSuggested || "Department"}
+                    disabled={createM.isPending}
+                  />
+                </div>
+              ) : null}
+              <Button type="submit" disabled={createM.isPending} className="w-fit">
+                {createM.isPending ? "Sending invite…" : "Send invite"}
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Sends a Supabase invitation / password-setup link. Duplicate emails are rejected.
+              </p>
+            </form>
+          </Panel>
+
+          <Panel title="Directory">
+            <div className="mb-3">
+              <Input
+                placeholder="Search by name, email, role, department…"
+                value={filter}
+                onChange={(e) => setFilter(e.target.value)}
+                aria-label="Search accounts"
+              />
+            </div>
+            {filtered.length === 0 ? (
+              <EmptyState title="No accounts" body="Invite a user or adjust the search." />
+            ) : (
+              <TableWrap>
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Email</th>
+                    <th>App role</th>
+                    <th>Business role</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filtered.map((account) => (
+                    <AccountRow
+                      key={account.id}
+                      account={account}
+                      busy={actionBusy}
+                      onResendInvite={() => resendInviteM.mutate(account.id)}
+                      onPasswordReset={() => resetPasswordM.mutate(account.id)}
+                      onSetDeskStatus={(status) =>
+                        deskStatusM.mutate({ userId: account.id, status })
+                      }
+                      onRevokeSessions={() => revokeM.mutate(account.id)}
+                    />
+                  ))}
+                </tbody>
+              </TableWrap>
+            )}
+          </Panel>
+        </div>
+      </>
+    );
+  }
 
   return (
     <div id="accounts" className="scroll-mt-6 space-y-4">
@@ -219,199 +424,11 @@ export function AdminAccountManagement() {
         <p className="mt-1 text-sm text-muted-foreground">
           Invite staff and students with a secure password-setup email. Passwords are never stored
           in application tables. Requires a live admin session and server-only{" "}
-          <code className="text-xs">SUPABASE_SERVICE_ROLE_KEY</code>.
+          <code className="text-xs">SUPABASE_SERVICE_ROLE_KEY</code> (or{" "}
+          <code className="text-xs">SUPABASE_SECRET_KEY</code>) on Vercel Production, then Redeploy.
         </p>
       </div>
-
-      {msg ? (
-        <p
-          className="rounded-md border border-success/30 bg-success-soft px-3 py-2 text-sm text-navy"
-          role="status"
-        >
-          {msg}
-        </p>
-      ) : null}
-      {err ? (
-        <p
-          className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
-          role="alert"
-        >
-          {err}
-        </p>
-      ) : null}
-
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,22rem)_minmax(0,1fr)]">
-        <Panel title="Create account">
-          <form
-            className="grid gap-3 text-sm"
-            onSubmit={(e) => {
-              e.preventDefault();
-              setErr(null);
-              setMsg(null);
-              if (!selectedOption) {
-                setMessage("Select a valid app role and business role pair.", true);
-                return;
-              }
-              createM.mutate();
-            }}
-          >
-            <div>
-              <Label htmlFor="settings-acct-name">Full name</Label>
-              <Input
-                id="settings-acct-name"
-                className="mt-1.5"
-                value={form.fullName}
-                onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
-                placeholder="Full name"
-                required
-                disabled={createM.isPending}
-              />
-            </div>
-            <div>
-              <Label htmlFor="settings-acct-email">Work email</Label>
-              <Input
-                id="settings-acct-email"
-                type="email"
-                className="mt-1.5"
-                value={form.email}
-                onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                placeholder="name@company.com"
-                required
-                disabled={createM.isPending}
-              />
-            </div>
-            <div>
-              <Label htmlFor="settings-acct-phone">Phone (optional)</Label>
-              <Input
-                id="settings-acct-phone"
-                className="mt-1.5"
-                value={form.phone}
-                onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                placeholder="Phone"
-                disabled={createM.isPending}
-              />
-            </div>
-            <div>
-              <Label htmlFor="settings-acct-app-role">App role</Label>
-              <select
-                id="settings-acct-app-role"
-                className="mt-1.5 h-9 w-full rounded-md border border-border bg-background px-2"
-                value={form.appRole}
-                disabled={createM.isPending}
-                onChange={(e) => {
-                  const appRole = e.target.value as Exclude<AppRole, "super_admin">;
-                  const nextBiz = optionsForAppRole(appRole)[0]?.businessRole ?? form.businessRole;
-                  const opt = ACCOUNT_PROVISIONING_OPTIONS.find((o) => o.businessRole === nextBiz);
-                  setForm((f) => ({
-                    ...f,
-                    appRole,
-                    businessRole: nextBiz,
-                    department: f.department.trim() || opt?.departmentSuggested || f.department,
-                  }));
-                }}
-              >
-                {CREATABLE_APP_ROLES.map((role) => (
-                  <option key={role} value={role}>
-                    {role}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <Label htmlFor="settings-acct-biz-role">Business role</Label>
-              <select
-                id="settings-acct-biz-role"
-                className="mt-1.5 h-9 w-full rounded-md border border-border bg-background px-2"
-                value={form.businessRole}
-                disabled={createM.isPending || businessOptions.length === 0}
-                onChange={(e) => {
-                  const businessRole = e.target.value as BusinessRole;
-                  const opt = ACCOUNT_PROVISIONING_OPTIONS.find(
-                    (o) => o.businessRole === businessRole,
-                  );
-                  setForm((f) => ({
-                    ...f,
-                    businessRole,
-                    appRole: (opt?.appRole as Exclude<AppRole, "super_admin">) ?? f.appRole,
-                    department: f.department.trim() || opt?.departmentSuggested || f.department,
-                  }));
-                }}
-              >
-                {businessOptions.map((o) => (
-                  <option key={o.businessRole} value={o.businessRole}>
-                    {o.label}
-                  </option>
-                ))}
-              </select>
-              <p className="mt-1.5 text-xs text-muted-foreground">
-                {selectedOption?.needsConsultantDesk
-                  ? "Creates an active consultant desk (assignment-scoped — not org-wide student access)."
-                  : "No consultant desk (admin/student)."}{" "}
-                <span className="font-medium text-navy">super_admin</span> is never offered here.
-              </p>
-            </div>
-            {selectedOption?.needsConsultantDesk ? (
-              <div>
-                <Label htmlFor="settings-acct-dept">Department / designation</Label>
-                <Input
-                  id="settings-acct-dept"
-                  className="mt-1.5"
-                  value={form.department}
-                  onChange={(e) => setForm((f) => ({ ...f, department: e.target.value }))}
-                  placeholder={selectedOption.departmentSuggested || "Department"}
-                  disabled={createM.isPending}
-                />
-              </div>
-            ) : null}
-            <Button type="submit" disabled={createM.isPending} className="w-fit">
-              {createM.isPending ? "Sending invite…" : "Send invite"}
-            </Button>
-            <p className="text-xs text-muted-foreground">
-              Sends a Supabase invitation / password-setup link. Duplicate emails are rejected.
-            </p>
-          </form>
-        </Panel>
-
-        <Panel title="Directory">
-          <div className="mb-3">
-            <Input
-              placeholder="Search by name, email, role, department…"
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              aria-label="Search accounts"
-            />
-          </div>
-          {filtered.length === 0 ? (
-            <EmptyState title="No accounts" body="Invite a user or adjust the search." />
-          ) : (
-            <TableWrap>
-              <thead>
-                <tr>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>App role</th>
-                  <th>Business role</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filtered.map((account) => (
-                  <AccountRow
-                    key={account.id}
-                    account={account}
-                    busy={actionBusy}
-                    onResendInvite={() => resendInviteM.mutate(account.id)}
-                    onPasswordReset={() => resetPasswordM.mutate(account.id)}
-                    onSetDeskStatus={(status) => deskStatusM.mutate({ userId: account.id, status })}
-                    onRevokeSessions={() => revokeM.mutate(account.id)}
-                  />
-                ))}
-              </tbody>
-            </TableWrap>
-          )}
-        </Panel>
-      </div>
+      {body}
     </div>
   );
 }

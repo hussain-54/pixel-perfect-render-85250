@@ -10,7 +10,11 @@ import {
   requireTrustedSession,
   type TrustedSession,
 } from "@/server/portal-auth";
-import { requireAdminSupabase, isAdminSupabaseConfigured } from "@/server/supabase-admin";
+import {
+  requireAdminSupabase,
+  isAdminSupabaseConfigured,
+  adminConfigErrorMessage,
+} from "@/server/supabase-admin";
 import {
   ACCOUNT_PROVISIONING_OPTIONS,
   appRoleForBusinessRole,
@@ -58,10 +62,8 @@ async function requireAdminAccountManager(): Promise<TrustedSession> {
     throw new AuthError("Only an authorized admin may manage accounts.", 403);
   }
   if (!isAdminSupabaseConfigured()) {
-    throw new AuthError(
-      "Account management is not configured. Set SUPABASE_SERVICE_ROLE_KEY on the server.",
-      503,
-    );
+    // Missing server env (typical: Vercel Production var not set or not redeployed).
+    throw new AuthError(adminConfigErrorMessage(), 503);
   }
   return session;
 }
