@@ -128,12 +128,18 @@ import {
   portalCreateAccount,
   portalListAccountOptions,
   portalListAccounts,
-  portalResendAccountInvite,
   portalResendPasswordReset,
   portalRevokeAccountSessions,
   portalSetConsultantDeskStatus,
+  portalSetTemporaryPassword,
   type CreateAccountInput,
+  type SetTemporaryPasswordInput,
 } from "@/server/portal-accounts";
+import {
+  portalChangeOwnPassword,
+  portalClearMustChangePassword,
+  type ChangeOwnPasswordInput,
+} from "@/server/portal-password";
 import type { HrAttendanceStatus, HrEmploymentStatus } from "@/lib/hr-rules";
 import type { MarketingCampaignStatus } from "@/lib/marketing-rules";
 import type { OpsExpenseStatus, OpsPurchaseStatus } from "@/lib/ops-rules";
@@ -492,8 +498,8 @@ export const listPortalAccountOptions = () => withAuth((opts) => portalListAccou
 export const createPortalAccount = (data: CreateAccountInput) =>
   withAuth((opts) => portalCreateAccount({ ...opts, data }));
 
-export const resendPortalAccountInvite = (data: { userId: string }) =>
-  withAuth((opts) => portalResendAccountInvite({ ...opts, data }));
+export const setPortalTemporaryPassword = (data: SetTemporaryPasswordInput) =>
+  withAuth((opts) => portalSetTemporaryPassword({ ...opts, data }));
 
 export const resendPortalPasswordReset = (data: { userId: string }) =>
   withAuth((opts) => portalResendPasswordReset({ ...opts, data }));
@@ -505,6 +511,12 @@ export const setPortalConsultantDeskStatus = (data: {
 
 export const revokePortalAccountSessions = (data: { userId: string }) =>
   withAuth((opts) => portalRevokeAccountSessions({ ...opts, data }));
+
+export const changePortalOwnPassword = (data: ChangeOwnPasswordInput) =>
+  withAuth((opts) => portalChangeOwnPassword({ ...opts, data }));
+
+export const clearPortalMustChangePassword = () =>
+  withAuth((opts) => portalClearMustChangePassword(opts));
 
 export const listHrEmployees = () => withAuth((opts) => portalListHrEmployees(opts));
 

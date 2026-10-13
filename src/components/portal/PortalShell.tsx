@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
 import { Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
-import { LogOut, Menu, Search } from "lucide-react";
+import { KeyRound, LogOut, Menu, Search } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { RoleSwitcher } from "@/components/site/RoleSwitcher";
@@ -169,6 +169,16 @@ export function PortalShell({ role, nav, children, barTitle }: PortalShellProps)
             variant="outline"
             size="sm"
             className="w-full justify-start gap-2 border-sidebar-border bg-transparent text-sidebar-foreground hover:bg-sidebar-accent"
+            onClick={() => void navigate({ to: "/change-password" })}
+          >
+            <KeyRound className="h-4 w-4" aria-hidden />
+            Change password
+          </Button>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="w-full justify-start gap-2 border-sidebar-border bg-transparent text-sidebar-foreground hover:bg-sidebar-accent"
             onClick={onSignOut}
             disabled={signingOut}
           >
@@ -192,7 +202,20 @@ export function PortalShell({ role, nav, children, barTitle }: PortalShellProps)
             </SheetTitle>
           </SheetHeader>
           <SidebarNav items={nav} onNavigate={() => setMobileOpen(false)} />
-          <div className="border-t border-sidebar-border p-4">
+          <div className="space-y-2 border-t border-sidebar-border p-4">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full justify-start gap-2"
+              onClick={() => {
+                setMobileOpen(false);
+                void navigate({ to: "/change-password" });
+              }}
+            >
+              <KeyRound className="h-4 w-4" aria-hidden />
+              Change password
+            </Button>
             <Button
               type="button"
               variant="outline"

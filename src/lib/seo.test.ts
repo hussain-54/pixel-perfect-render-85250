@@ -68,7 +68,16 @@ describe("seo helpers", () => {
   });
 
   it("excludes portal and auth paths from the public indexable list", () => {
-    for (const blocked of ["/staff", "/admin", "/student", "/sign-in", "/sign-up", "/forgot-password"]) {
+    for (const blocked of [
+      "/staff",
+      "/admin",
+      "/student",
+      "/sign-in",
+      "/sign-up",
+      "/forgot-password",
+      "/reset-password",
+      "/change-password",
+    ]) {
       expect(PUBLIC_INDEXABLE_PATHS).not.toContain(blocked);
     }
   });

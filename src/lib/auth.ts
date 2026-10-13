@@ -8,6 +8,8 @@ import {
   type AppRole,
   type PortalHome,
 } from "@/lib/roles";
+import { CHANGE_PASSWORD_PATH, passwordRecoveryRedirectUrl } from "@/lib/auth-redirects";
+import { readMustChangePasswordFlag, validatePasswordConfirmation } from "@/lib/password-policy";
 import {
   clearSession,
   establishSession,
@@ -24,8 +26,16 @@ export type AuthRole = AppRole;
 const REMEMBER_EMAIL_KEY = "gr_remember_email";
 const DEMO_SESSION_KEY = "gr_demo_session";
 
+export type PasswordChangeRedirect = typeof CHANGE_PASSWORD_PATH;
+
 export type SignInResult =
-  { ok: true; role: AppRole; redirectTo: PortalHome } | { ok: false; error: string };
+  | {
+      ok: true;
+      role: AppRole;
+      redirectTo: PortalHome | PasswordChangeRedirect;
+      mustChangePassword?: boolean;
+    }
+  | { ok: false; error: string };
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -152,10 +162,12 @@ export async function getAuthSession(): Promise<PublicSession | null> {
         } catch {
           if (data.session.user) {
             const role = await resolveSupabaseRole(data.session.user);
+            const mustChangePassword = readMustChangePasswordFlag(data.session.user.app_metadata);
             return {
               role,
               email: (data.session.user.email ?? "").toLowerCase(),
               source: "supabase" as const,
+              ...(mustChangePassword ? { mustChangePassword: true } : {}),
             };
           }
         }
@@ -258,6 +270,17 @@ export async function signInWithPassword(options: {
           data: { accessToken: data.session.access_token },
         });
         const role = established.role;
+        const mustChangePassword =
+          Boolean(established.mustChangePassword) ||
+          readMustChangePasswordFlag(data.user.app_metadata);
+        if (mustChangePassword) {
+          return {
+            ok: true,
+            role,
+            redirectTo: CHANGE_PASSWORD_PATH,
+            mustChangePassword: true,
+          };
+        }
         return { ok: true, role, redirectTo: portalHomeByRole[role] };
       }
 
@@ -314,15 +337,115 @@ export async function requestPasswordReset(
 
   try {
     const supabase = getSupabase();
-    const redirectTo =
-      typeof window !== "undefined" ? `${window.location.origin}/sign-in` : undefined;
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      ...(redirectTo ? { redirectTo } : {}),
-    });
+    const origin =
+      typeof window !== "undefined" ? window.location.origin.replace(/\/$/, "") : undefined;
+    const redirectTo = passwordRecoveryRedirectUrl(origin);
+    const { error } = await supabase.auth.resetPasswordForEmail(email, { redirectTo });
     if (error) return { ok: false, error: error.message };
     return { ok: true };
   } catch {
     return { ok: false, error: "Unable to send reset email right now. Please try again." };
+  }
+}
+
+export type PasswordUpdateResult = { ok: true; message: string } | { ok: false; error: string };
+
+/** Recovery-session password update (after email link lands on /reset-password). */
+export async function updatePasswordFromRecovery(
+  newPassword: string,
+  confirmPassword: string,
+): Promise<PasswordUpdateResult> {
+  const check = validatePasswordConfirmation(newPassword, confirmPassword);
+  if (!check.ok) return { ok: false, error: check.error };
+
+  if (!isSupabaseConfigured()) {
+    return { ok: false, error: "Authentication is not configured." };
+  }
+
+  try {
+    const supabase = getSupabase();
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData.session) {
+      return {
+        ok: false,
+        error: "This reset link is invalid or has expired. Request a new password reset email.",
+      };
+    }
+
+    const { error } = await supabase.auth.updateUser({ password: newPassword });
+    if (error) {
+      const msg = error.message || "Could not update password.";
+      if (/session|expired|invalid/i.test(msg)) {
+        return {
+          ok: false,
+          error: "This reset link is invalid or has expired. Request a new password reset email.",
+        };
+      }
+      return { ok: false, error: msg };
+    }
+
+    try {
+      const { portalClearMustChangePassword } = await import("@/server/portal-password");
+      const headers = await authHeaders();
+      await portalClearMustChangePassword(headers ? { headers } : undefined);
+    } catch {
+      /* flag clear best-effort; password already updated */
+    }
+
+    if (sessionData.session.access_token) {
+      try {
+        await establishSession({ data: { accessToken: sessionData.session.access_token } });
+      } catch {
+        /* cookie refresh optional */
+      }
+    }
+
+    return { ok: true, message: "Password updated. You can sign in with your new password." };
+  } catch {
+    return { ok: false, error: "Unable to update password right now. Please try again." };
+  }
+}
+
+/** Authenticated change-password (voluntary or forced first login). */
+export async function changeOwnPassword(options: {
+  currentPassword?: string;
+  newPassword: string;
+  confirmPassword: string;
+}): Promise<PasswordUpdateResult> {
+  const check = validatePasswordConfirmation(options.newPassword, options.confirmPassword);
+  if (!check.ok) return { ok: false, error: check.error };
+
+  try {
+    const { portalChangeOwnPassword } = await import("@/server/portal-password");
+    const headers = await authHeaders();
+    const result = await portalChangeOwnPassword({
+      ...(headers ? { headers } : {}),
+      data: {
+        newPassword: options.newPassword,
+        confirmPassword: options.confirmPassword,
+        ...(options.currentPassword ? { currentPassword: options.currentPassword } : {}),
+      },
+    });
+
+    // Refresh local session so mustChangePassword clears in JWT/cookie.
+    if (isSupabaseConfigured()) {
+      try {
+        const supabase = getSupabase();
+        await supabase.auth.refreshSession();
+        const { data } = await supabase.auth.getSession();
+        if (data.session?.access_token) {
+          await establishSession({ data: { accessToken: data.session.access_token } });
+        }
+      } catch {
+        /* refresh best-effort */
+      }
+    }
+
+    return { ok: true, message: result.message };
+  } catch (error) {
+    const raw = error instanceof Error ? error.message : String(error);
+    const cleaned = raw.replace(/^\d+:/, "").trim() || "Could not change password.";
+    return { ok: false, error: cleaned };
   }
 }
 

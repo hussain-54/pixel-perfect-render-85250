@@ -8,14 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { getRememberedEmail, signInWithPassword } from "@/lib/auth";
+import { CHANGE_PASSWORD_PATH } from "@/lib/auth-redirects";
 import { portalHomeByRole, roleCanAccessPortal, type AppRole, type PortalHome } from "@/lib/roles";
 import { pageHead } from "@/lib/seo";
 
-const PORTAL_HOMES: PortalHome[] = [
-  "/student/dashboard",
-  "/staff/dashboard",
-  "/admin/dashboard",
-];
+const PORTAL_HOMES: PortalHome[] = ["/student/dashboard", "/staff/dashboard", "/admin/dashboard"];
 
 function isPortalHome(value: unknown): value is PortalHome {
   return typeof value === "string" && (PORTAL_HOMES as string[]).includes(value);
@@ -102,6 +99,10 @@ function SignInPage() {
       const result = await signInWithPassword({ email, password, remember });
       if (!result.ok) {
         setError(result.error);
+        return;
+      }
+      if (result.mustChangePassword || result.redirectTo === CHANGE_PASSWORD_PATH) {
+        await navigate({ to: CHANGE_PASSWORD_PATH });
         return;
       }
       await navigate({ to: resolveDestination(result.role) });

@@ -28,6 +28,8 @@ export type AppPath =
   | "/sign-in"
   | "/sign-up"
   | "/forgot-password"
+  | "/reset-password"
+  | "/change-password"
   | "/student/dashboard"
   | "/staff/dashboard"
   | "/admin/dashboard";

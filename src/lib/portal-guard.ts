@@ -1,5 +1,6 @@
 import { redirect } from "@tanstack/react-router";
-import { getPortalSession } from "@/server/portal-data";
+import { getPortalSession, type PublicSession } from "@/server/portal-data";
+import { CHANGE_PASSWORD_PATH } from "@/lib/auth-redirects";
 import {
   portalHomeByRole,
   roleCanAccessPortal,
@@ -35,7 +36,7 @@ function portalHomePath(portal: PortalKind): PortalHome {
  */
 export function requirePortalAccess(portal: PortalKind) {
   return async () => {
-    let session: Awaited<ReturnType<typeof getPortalSession>> = null;
+    let session: PublicSession | null = null;
 
     // Live JWT path first — refreshes httpOnly cookie from profiles/app_metadata.
     if (typeof window !== "undefined" && isSupabaseConfigured()) {
@@ -66,6 +67,10 @@ export function requirePortalAccess(portal: PortalKind) {
         to: "/sign-in",
         search: { redirect: portalHomePath(portal) },
       });
+    }
+
+    if (session.mustChangePassword) {
+      throw redirect({ to: CHANGE_PASSWORD_PATH });
     }
 
     if (!roleCanAccessPortal(session.role, portal)) {

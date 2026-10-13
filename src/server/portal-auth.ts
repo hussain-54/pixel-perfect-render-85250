@@ -9,6 +9,7 @@ import {
   type PortalSessionPayload,
 } from "@/lib/portal-session";
 import { normalizeAppRole, resolveAppRoleFromTrustedSources, type AppRole } from "@/lib/roles";
+import { readMustChangePasswordFlag } from "@/lib/password-policy";
 
 export class AuthError extends Error {
   status: number;
@@ -25,6 +26,8 @@ export type TrustedSession = {
   source: "supabase" | "demo";
   userId?: string;
   consultantId?: string;
+  /** Trusted Auth app_metadata flag — never client-controlled user_metadata. */
+  mustChangePassword?: boolean;
 };
 
 const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 7;
@@ -114,11 +117,13 @@ async function sessionFromAccessToken(accessToken: string): Promise<TrustedSessi
 
   const role = await resolveTrustedRole(data.user, accessToken);
   const email = (data.user.email ?? "").toLowerCase();
+  const mustChangePassword = readMustChangePasswordFlag(data.user.app_metadata);
   const session: TrustedSession = {
     role,
     email,
     source: "supabase",
     userId: data.user.id,
+    ...(mustChangePassword ? { mustChangePassword: true } : {}),
   };
 
   // Consultant / Admission Officer desk id is the consultants row (= auth.uid()).

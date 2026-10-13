@@ -16,14 +16,15 @@ import { Label } from "@/components/ui/label";
 import { ACCOUNT_PROVISIONING_OPTIONS, type AccountListItem } from "@/lib/account-provisioning";
 import { BUSINESS_ROLE_LABELS, type BusinessRole } from "@/lib/business-permissions";
 import type { AppRole } from "@/lib/roles";
+import { PASSWORD_MIN_LENGTH, validatePasswordConfirmation } from "@/lib/password-policy";
 import {
   createPortalAccount,
   listPortalAccountOptions,
   listPortalAccounts,
-  resendPortalAccountInvite,
   resendPortalPasswordReset,
   revokePortalAccountSessions,
   setPortalConsultantDeskStatus,
+  setPortalTemporaryPassword,
 } from "@/services";
 
 const CREATABLE_APP_ROLES: Exclude<AppRole, "super_admin">[] = ["student", "consultant", "admin"];
@@ -50,7 +51,11 @@ export function AdminAccountManagement() {
     department: "",
     appRole: DEFAULT_APP_ROLE as Exclude<AppRole, "super_admin">,
     businessRole: DEFAULT_BUSINESS_ROLE as BusinessRole,
+    temporaryPassword: "",
+    confirmPassword: "",
   });
+  const [tempPwTarget, setTempPwTarget] = useState<string | null>(null);
+  const [tempPwForm, setTempPwForm] = useState({ temporaryPassword: "", confirmPassword: "" });
 
   const accountsQ = useQuery({
     queryKey: ["admin", "accounts"],
@@ -109,6 +114,8 @@ export function AdminAccountManagement() {
         fullName: form.fullName,
         email: form.email,
         businessRole: form.businessRole,
+        temporaryPassword: form.temporaryPassword,
+        confirmPassword: form.confirmPassword,
       };
       if (form.phone.trim()) payload.phone = form.phone.trim();
       if (form.department.trim()) payload.department = form.department.trim();
@@ -123,19 +130,24 @@ export function AdminAccountManagement() {
         department: "",
         appRole: DEFAULT_APP_ROLE,
         businessRole: DEFAULT_BUSINESS_ROLE,
+        temporaryPassword: "",
+        confirmPassword: "",
       });
       await invalidate();
     },
     onError: (e) => setMessage(portalErrorMessage(e, "Could not create account."), true),
   });
 
-  const resendInviteM = useMutation({
-    mutationFn: (userId: string) => resendPortalAccountInvite({ userId }),
+  const setTempPasswordM = useMutation({
+    mutationFn: (input: { userId: string; temporaryPassword: string; confirmPassword: string }) =>
+      setPortalTemporaryPassword(input),
     onSuccess: async (result) => {
       setMessage(result.message);
+      setTempPwTarget(null);
+      setTempPwForm({ temporaryPassword: "", confirmPassword: "" });
       await invalidate();
     },
-    onError: (e) => setMessage(portalErrorMessage(e, "Could not resend invite."), true),
+    onError: (e) => setMessage(portalErrorMessage(e, "Could not set temporary password."), true),
   });
 
   const resetPasswordM = useMutation({
@@ -180,7 +192,7 @@ export function AdminAccountManagement() {
   }, [accounts, filter]);
 
   const actionBusy =
-    resendInviteM.isPending ||
+    setTempPasswordM.isPending ||
     resetPasswordM.isPending ||
     deskStatusM.isPending ||
     revokeM.isPending;
@@ -244,6 +256,14 @@ export function AdminAccountManagement() {
                 setMsg(null);
                 if (!selectedOption) {
                   setMessage("Select a valid app role and business role pair.", true);
+                  return;
+                }
+                const pw = validatePasswordConfirmation(
+                  form.temporaryPassword,
+                  form.confirmPassword,
+                );
+                if (!pw.ok) {
+                  setMessage(pw.error, true);
                   return;
                 }
                 createM.mutate();
@@ -360,11 +380,41 @@ export function AdminAccountManagement() {
                   />
                 </div>
               ) : null}
+              <div>
+                <Label htmlFor="settings-acct-temp-pw">Temporary password</Label>
+                <Input
+                  id="settings-acct-temp-pw"
+                  type="password"
+                  autoComplete="new-password"
+                  className="mt-1.5"
+                  value={form.temporaryPassword}
+                  onChange={(e) => setForm((f) => ({ ...f, temporaryPassword: e.target.value }))}
+                  placeholder={`Min ${PASSWORD_MIN_LENGTH} chars, letter + number`}
+                  required
+                  disabled={createM.isPending}
+                />
+              </div>
+              <div>
+                <Label htmlFor="settings-acct-confirm-pw">Confirm temporary password</Label>
+                <Input
+                  id="settings-acct-confirm-pw"
+                  type="password"
+                  autoComplete="new-password"
+                  className="mt-1.5"
+                  value={form.confirmPassword}
+                  onChange={(e) => setForm((f) => ({ ...f, confirmPassword: e.target.value }))}
+                  placeholder="Confirm password"
+                  required
+                  disabled={createM.isPending}
+                />
+              </div>
               <Button type="submit" disabled={createM.isPending} className="w-fit">
-                {createM.isPending ? "Sending invite…" : "Send invite"}
+                {createM.isPending ? "Creating account…" : "Create account"}
               </Button>
               <p className="text-xs text-muted-foreground">
-                Sends a Supabase invitation / password-setup link. Duplicate emails are rejected.
+                Creates the Auth user directly (no invitation email). Share the temporary password
+                through your secure channel. The employee must change it on first sign-in. Duplicate
+                emails are rejected. Passwords are never stored in application tables.
               </p>
             </form>
           </Panel>
@@ -379,7 +429,7 @@ export function AdminAccountManagement() {
               />
             </div>
             {filtered.length === 0 ? (
-              <EmptyState title="No accounts" body="Invite a user or adjust the search." />
+              <EmptyState title="No accounts" body="Create an account or adjust the search." />
             ) : (
               <TableWrap>
                 <thead>
@@ -398,7 +448,29 @@ export function AdminAccountManagement() {
                       key={account.id}
                       account={account}
                       busy={actionBusy}
-                      onResendInvite={() => resendInviteM.mutate(account.id)}
+                      tempPwOpen={tempPwTarget === account.id}
+                      tempPwForm={tempPwForm}
+                      onTempPwFormChange={setTempPwForm}
+                      onToggleTempPw={() => {
+                        setTempPwTarget((id) => (id === account.id ? null : account.id));
+                        setTempPwForm({ temporaryPassword: "", confirmPassword: "" });
+                      }}
+                      onSubmitTempPw={() => {
+                        const pw = validatePasswordConfirmation(
+                          tempPwForm.temporaryPassword,
+                          tempPwForm.confirmPassword,
+                        );
+                        if (!pw.ok) {
+                          setMessage(pw.error, true);
+                          return;
+                        }
+                        setTempPasswordM.mutate({
+                          userId: account.id,
+                          temporaryPassword: tempPwForm.temporaryPassword,
+                          confirmPassword: tempPwForm.confirmPassword,
+                        });
+                      }}
+                      tempPwPending={setTempPasswordM.isPending}
                       onPasswordReset={() => resetPasswordM.mutate(account.id)}
                       onSetDeskStatus={(status) =>
                         deskStatusM.mutate({ userId: account.id, status })
@@ -422,8 +494,9 @@ export function AdminAccountManagement() {
           User &amp; Account Management
         </h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Invite staff and students with a secure password-setup email. Passwords are never stored
-          in application tables. Requires a live admin session and server-only{" "}
+          Create staff and student accounts with a temporary password (no invitation email).
+          Passwords are never stored in application tables or returned from the directory. Requires
+          a live admin session and server-only{" "}
           <code className="text-xs">SUPABASE_SERVICE_ROLE_KEY</code> (or{" "}
           <code className="text-xs">SUPABASE_SECRET_KEY</code>) on Vercel Production, then Redeploy.
         </p>
@@ -436,14 +509,24 @@ export function AdminAccountManagement() {
 function AccountRow({
   account,
   busy,
-  onResendInvite,
+  tempPwOpen,
+  tempPwForm,
+  onTempPwFormChange,
+  onToggleTempPw,
+  onSubmitTempPw,
+  tempPwPending,
   onPasswordReset,
   onSetDeskStatus,
   onRevokeSessions,
 }: {
   account: AccountListItem;
   busy: boolean;
-  onResendInvite: () => void;
+  tempPwOpen: boolean;
+  tempPwForm: { temporaryPassword: string; confirmPassword: string };
+  onTempPwFormChange: (next: { temporaryPassword: string; confirmPassword: string }) => void;
+  onToggleTempPw: () => void;
+  onSubmitTempPw: () => void;
+  tempPwPending: boolean;
   onPasswordReset: () => void;
   onSetDeskStatus: (status: "active" | "inactive") => void;
   onRevokeSessions: () => void;
@@ -477,46 +560,86 @@ function AccountRow({
         )}
       </td>
       <td>
-        <div className="flex flex-wrap gap-1.5">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={onResendInvite}
-          >
-            Resend invite
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={onPasswordReset}
-          >
-            Password reset
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={busy}
-            onClick={onRevokeSessions}
-          >
-            Revoke sessions
-          </Button>
-          {canToggleDesk ? (
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap gap-1.5">
             <Button
               type="button"
               variant="outline"
               size="sm"
               disabled={busy}
-              onClick={() =>
-                onSetDeskStatus(account.deskStatus === "inactive" ? "active" : "inactive")
-              }
+              onClick={onToggleTempPw}
             >
-              {account.deskStatus === "inactive" ? "Reactivate" : "Deactivate"}
+              {tempPwOpen ? "Cancel temp password" : "Set temp password"}
             </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={onPasswordReset}
+            >
+              Email reset link
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={busy}
+              onClick={onRevokeSessions}
+            >
+              Revoke sessions
+            </Button>
+            {canToggleDesk ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={() =>
+                  onSetDeskStatus(account.deskStatus === "inactive" ? "active" : "inactive")
+                }
+              >
+                {account.deskStatus === "inactive" ? "Reactivate" : "Deactivate"}
+              </Button>
+            ) : null}
+          </div>
+          {tempPwOpen ? (
+            <div className="grid max-w-sm gap-2 rounded-md border border-border bg-muted/30 p-2">
+              <Input
+                type="password"
+                autoComplete="new-password"
+                placeholder={`Temporary password (min ${PASSWORD_MIN_LENGTH})`}
+                value={tempPwForm.temporaryPassword}
+                onChange={(e) =>
+                  onTempPwFormChange({ ...tempPwForm, temporaryPassword: e.target.value })
+                }
+                disabled={tempPwPending}
+                aria-label="Temporary password"
+              />
+              <Input
+                type="password"
+                autoComplete="new-password"
+                placeholder="Confirm temporary password"
+                value={tempPwForm.confirmPassword}
+                onChange={(e) =>
+                  onTempPwFormChange({ ...tempPwForm, confirmPassword: e.target.value })
+                }
+                disabled={tempPwPending}
+                aria-label="Confirm temporary password"
+              />
+              <Button
+                type="button"
+                size="sm"
+                className="w-fit"
+                disabled={tempPwPending}
+                onClick={onSubmitTempPw}
+              >
+                {tempPwPending ? "Saving…" : "Save temporary password"}
+              </Button>
+              <p className="text-[0.7rem] text-muted-foreground">
+                Share out-of-band. Employee must change it on next sign-in. Never shown after save.
+              </p>
+            </div>
           ) : null}
         </div>
       </td>

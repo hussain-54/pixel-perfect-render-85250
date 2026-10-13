@@ -25,6 +25,8 @@ import {
   normalizeWorkEmail,
   type AccountListItem,
 } from "@/lib/account-provisioning";
+import { passwordRecoveryRedirectUrl, resolveAuthAppOrigin } from "@/lib/auth-redirects";
+import { validatePasswordConfirmation } from "@/lib/password-policy";
 import type { BusinessRole } from "@/lib/business-permissions";
 import type { AppRole } from "@/lib/roles";
 import { rolesAtLeastAdmin } from "@/lib/roles";
@@ -42,13 +44,21 @@ function resolveAppOrigin(): string {
     process.env["SITE_URL"]?.trim() ||
     process.env["VITE_APP_ORIGIN"]?.trim() ||
     "";
-  if (fromEnv) return fromEnv.replace(/\/$/, "");
   const origin = getRequestHeader("origin");
-  if (origin) return origin.replace(/\/$/, "");
   const host = getRequestHeader("x-forwarded-host") || getRequestHeader("host");
   const proto = getRequestHeader("x-forwarded-proto") || "http";
-  if (host) return `${proto}://${host}`.replace(/\/$/, "");
-  return "";
+  const requestOrigin = origin || (host ? `${proto}://${host}` : "");
+  const isProduction =
+    process.env["VERCEL_ENV"] === "production" || process.env["NODE_ENV"] === "production";
+  return resolveAuthAppOrigin({
+    envOrigin: fromEnv,
+    requestOrigin,
+    isProduction,
+  });
+}
+
+function recoveryRedirectTo(): string {
+  return passwordRecoveryRedirectUrl(resolveAppOrigin());
 }
 
 /** Only real Supabase admin sessions may manage accounts — never demo. */
@@ -74,6 +84,14 @@ export type CreateAccountInput = {
   phone?: string;
   department?: string;
   businessRole: BusinessRole;
+  temporaryPassword: string;
+  confirmPassword: string;
+};
+
+export type SetTemporaryPasswordInput = {
+  userId: string;
+  temporaryPassword: string;
+  confirmPassword: string;
 };
 
 export const portalListAccountOptions = createServerFn({ method: "GET" }).handler(async () => {
@@ -193,6 +211,12 @@ export const portalCreateAccount = createServerFn({ method: "POST" })
         throw new AuthError("Enter a valid work email address.", 400);
       }
 
+      const passwordCheck = validatePasswordConfirmation(
+        data.temporaryPassword,
+        data.confirmPassword,
+      );
+      if (!passwordCheck.ok) throw new AuthError(passwordCheck.error, 400);
+
       const option = getProvisioningOption(businessRole);
       if (!option) throw new AuthError("Unsupported business role.", 400);
       const appRole = appRoleForBusinessRole(businessRole);
@@ -204,47 +228,33 @@ export const portalCreateAccount = createServerFn({ method: "POST" })
       }
 
       const admin = requireAdminSupabase();
-      const origin = resolveAppOrigin();
-      const redirectTo = origin ? `${origin}/sign-in` : undefined;
 
-      const inviteOpts: {
-        data: { full_name: string; phone?: string };
-        redirectTo?: string;
-      } = {
-        data: {
+      // Direct Auth Admin create — no invitation email / invite link.
+      const { data: created, error: createErr } = await admin.auth.admin.createUser({
+        email,
+        password: data.temporaryPassword,
+        email_confirm: true,
+        user_metadata: {
           full_name: fullName,
           ...(phone ? { phone } : {}),
         },
-      };
-      if (redirectTo) inviteOpts.redirectTo = redirectTo;
+        app_metadata: {
+          role: appRole,
+          must_change_password: true,
+        },
+      });
 
-      const { data: invited, error: inviteErr } = await admin.auth.admin.inviteUserByEmail(
-        email,
-        inviteOpts,
-      );
-
-      if (inviteErr) {
-        const msg = inviteErr.message || "Could not invite user.";
+      if (createErr) {
+        const msg = createErr.message || "Could not create user.";
         if (/already|registered|exists/i.test(msg)) {
           throw new AuthError("An account with this email already exists.", 409);
         }
         throw new AuthError(msg, 400);
       }
 
-      const userId = invited.user?.id;
+      const userId = created.user?.id;
       if (!userId) {
-        throw new AuthError("Invitation did not return a user id.", 500);
-      }
-
-      // Set trusted app_metadata role (never user_metadata for authorization).
-      const { error: metaErr } = await admin.auth.admin.updateUserById(userId, {
-        app_metadata: { role: appRole },
-      });
-      if (metaErr) {
-        throw new AuthError(
-          `User invited but role metadata failed: ${metaErr.message}. Fix the profile manually.`,
-          500,
-        );
+        throw new AuthError("User creation did not return a user id.", 500);
       }
 
       // Role / business_role / desk writes must use the admin's JWT so
@@ -272,7 +282,7 @@ export const portalCreateAccount = createServerFn({ method: "POST" })
           business_role: null,
         });
         if (insertErr) {
-          throw new AuthError(`User invited but profile insert failed: ${insertErr.message}.`, 500);
+          throw new AuthError(`User created but profile insert failed: ${insertErr.message}.`, 500);
         }
       }
 
@@ -281,7 +291,7 @@ export const portalCreateAccount = createServerFn({ method: "POST" })
           await adminSetUserRole(userClient, userId, appRole);
         } catch (roleErr) {
           const message = roleErr instanceof Error ? roleErr.message : "Role assignment failed.";
-          throw new AuthError(`User invited but role assignment failed: ${message}`, 500);
+          throw new AuthError(`User created but role assignment failed: ${message}`, 500);
         }
       }
 
@@ -295,7 +305,7 @@ export const portalCreateAccount = createServerFn({ method: "POST" })
         })
         .eq("id", userId);
       if (profileErr) {
-        throw new AuthError(`User invited but profile update failed: ${profileErr.message}.`, 500);
+        throw new AuthError(`User created but profile update failed: ${profileErr.message}.`, 500);
       }
 
       if (option.needsConsultantDesk) {
@@ -309,24 +319,25 @@ export const portalCreateAccount = createServerFn({ method: "POST" })
           { onConflict: "id" },
         );
         if (deskErr) {
-          throw new AuthError(`User invited but consultant desk failed: ${deskErr.message}.`, 500);
+          throw new AuthError(`User created but consultant desk failed: ${deskErr.message}.`, 500);
         }
       }
 
       try {
         await writeAudit(userClient, {
-          action: "account.invited",
+          action: "account.created",
           entity_type: "profiles",
           entity_id: userId,
           metadata: {
             email,
             appRole,
             businessRole,
-            invitedBy: session.userId,
+            createdBy: session.userId,
+            mustChangePassword: true,
           },
         });
       } catch {
-        /* audit failure should not hide invite success */
+        /* audit failure should not hide create success */
       }
 
       return {
@@ -337,46 +348,51 @@ export const portalCreateAccount = createServerFn({ method: "POST" })
           fullName,
           appRole,
           businessRole,
-          invited: true,
+          invited: false,
         },
-        message: "Invitation sent. The person will set their own password from the email link.",
+        message:
+          "Account created. Share the temporary password through your secure channel. The employee must change it on first sign-in.",
       };
     } catch (error) {
       toError(error);
     }
   });
 
-export const portalResendAccountInvite = createServerFn({ method: "POST" })
-  .validator((data: { userId: string }) => data)
+/** Admin provisions a new temporary password (never returns the password). */
+export const portalSetTemporaryPassword = createServerFn({ method: "POST" })
+  .validator((data: SetTemporaryPasswordInput) => data)
   .handler(async ({ data }) => {
     try {
       const session = await requireAdminAccountManager();
       if (!data.userId?.trim()) throw new AuthError("Account id is required.", 400);
 
+      const passwordCheck = validatePasswordConfirmation(
+        data.temporaryPassword,
+        data.confirmPassword,
+      );
+      if (!passwordCheck.ok) throw new AuthError(passwordCheck.error, 400);
+
       const admin = requireAdminSupabase();
       const { data: profile, error: profileErr } = await admin
         .from("profiles")
-        .select("id, email, full_name")
+        .select("id, email")
         .eq("id", data.userId.trim())
         .maybeSingle();
       if (profileErr) throw new Error(profileErr.message);
       if (!profile?.email) throw new AuthError("Account not found.", 404);
 
-      const origin = resolveAppOrigin();
-      const redirectTo = origin ? `${origin}/sign-in` : undefined;
-
-      // Prefer invite email; if already registered, send password recovery instead.
-      const { error: inviteErr } = await admin.auth.admin.inviteUserByEmail(profile.email, {
-        ...(redirectTo ? { redirectTo } : {}),
-        data: { full_name: profile.full_name || "" },
+      const { error: updateErr } = await admin.auth.admin.updateUserById(profile.id, {
+        password: data.temporaryPassword,
+        app_metadata: { must_change_password: true },
       });
-      if (inviteErr) {
-        const { error: resetErr } = await admin.auth.resetPasswordForEmail(profile.email, {
-          ...(redirectTo ? { redirectTo } : {}),
-        });
-        if (resetErr) {
-          throw new AuthError(resetErr.message || inviteErr.message, 400);
-        }
+      if (updateErr) {
+        throw new AuthError(updateErr.message || "Could not set temporary password.", 400);
+      }
+
+      try {
+        await admin.auth.admin.signOut(profile.id, "global");
+      } catch {
+        /* best-effort revoke after temp password rotation */
       }
 
       try {
@@ -384,7 +400,7 @@ export const portalResendAccountInvite = createServerFn({ method: "POST" })
         const userClient = requireAoSupabaseClient();
         const { writeAudit } = await import("@/services/db");
         await writeAudit(userClient, {
-          action: "account.invite_resent",
+          action: "account.temporary_password_set",
           entity_type: "profiles",
           entity_id: profile.id,
           metadata: { email: profile.email, by: session.userId },
@@ -395,7 +411,8 @@ export const portalResendAccountInvite = createServerFn({ method: "POST" })
 
       return {
         ok: true as const,
-        message: "Invitation / password setup link sent.",
+        message:
+          "Temporary password set. Share it securely with the employee; they must change it on next sign-in. The password is not stored or shown here.",
       };
     } catch (error) {
       toError(error);
@@ -417,14 +434,16 @@ export const portalResendPasswordReset = createServerFn({ method: "POST" })
       if (error) throw new Error(error.message);
       if (!profile?.email) throw new AuthError("Account not found.", 404);
 
-      const origin = resolveAppOrigin();
-      const redirectTo = origin ? `${origin}/sign-in` : undefined;
+      const redirectTo = recoveryRedirectTo();
       const { error: resetErr } = await admin.auth.resetPasswordForEmail(profile.email, {
-        ...(redirectTo ? { redirectTo } : {}),
+        redirectTo,
       });
       if (resetErr) throw new AuthError(resetErr.message, 400);
 
-      return { ok: true as const, message: "Password reset email sent." };
+      return {
+        ok: true as const,
+        message: "Password reset email sent. The link opens the production reset page.",
+      };
     } catch (error) {
       toError(error);
     }

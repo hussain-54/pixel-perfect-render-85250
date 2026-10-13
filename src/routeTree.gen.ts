@@ -12,11 +12,13 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AdminRouteRouteImport } from './routes/admin/route'
+import { Route as ChangePasswordRouteImport } from './routes/change-password'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as DestinationsRouteImport } from './routes/destinations'
 import { Route as ForgotPasswordRouteImport } from './routes/forgot-password'
 import { Route as PrivacyRouteImport } from './routes/privacy'
 import { Route as ProgramsRouteImport } from './routes/programs'
+import { Route as ResetPasswordRouteImport } from './routes/reset-password'
 import { Route as ResourcesRouteImport } from './routes/resources'
 import { Route as ScholarshipsRouteImport } from './routes/scholarships'
 import { Route as ServicesRouteImport } from './routes/services'
@@ -85,6 +87,11 @@ const AdminRouteRoute = AdminRouteRouteImport.update({
   path: '/admin',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ChangePasswordRoute = ChangePasswordRouteImport.update({
+  id: '/change-password',
+  path: '/change-password',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ContactRoute = ContactRouteImport.update({
   id: '/contact',
   path: '/contact',
@@ -108,6 +115,11 @@ const PrivacyRoute = PrivacyRouteImport.update({
 const ProgramsRoute = ProgramsRouteImport.update({
   id: '/programs',
   path: '/programs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ResetPasswordRoute = ResetPasswordRouteImport.update({
+  id: '/reset-password',
+  path: '/reset-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ResourcesRoute = ResourcesRouteImport.update({
@@ -377,11 +389,13 @@ export interface FileRoutesByFullPath {
   '/staff': typeof StaffRouteRouteWithChildren
   '/student': typeof StudentRouteRouteWithChildren
   '/about': typeof AboutRoute
+  '/change-password': typeof ChangePasswordRoute
   '/contact': typeof ContactRoute
   '/destinations': typeof DestinationsRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/privacy': typeof PrivacyRoute
   '/programs': typeof ProgramsRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/resources': typeof ResourcesRoute
   '/scholarships': typeof ScholarshipsRoute
   '/services': typeof ServicesRoute
@@ -436,11 +450,13 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/change-password': typeof ChangePasswordRoute
   '/contact': typeof ContactRoute
   '/destinations': typeof DestinationsRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/privacy': typeof PrivacyRoute
   '/programs': typeof ProgramsRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/resources': typeof ResourcesRoute
   '/scholarships': typeof ScholarshipsRoute
   '/services': typeof ServicesRoute
@@ -499,11 +515,13 @@ export interface FileRoutesById {
   '/staff': typeof StaffRouteRouteWithChildren
   '/student': typeof StudentRouteRouteWithChildren
   '/about': typeof AboutRoute
+  '/change-password': typeof ChangePasswordRoute
   '/contact': typeof ContactRoute
   '/destinations': typeof DestinationsRoute
   '/forgot-password': typeof ForgotPasswordRoute
   '/privacy': typeof PrivacyRoute
   '/programs': typeof ProgramsRoute
+  '/reset-password': typeof ResetPasswordRoute
   '/resources': typeof ResourcesRoute
   '/scholarships': typeof ScholarshipsRoute
   '/services': typeof ServicesRoute
@@ -563,11 +581,13 @@ export interface FileRouteTypes {
     | '/staff'
     | '/student'
     | '/about'
+    | '/change-password'
     | '/contact'
     | '/destinations'
     | '/forgot-password'
     | '/privacy'
     | '/programs'
+    | '/reset-password'
     | '/resources'
     | '/scholarships'
     | '/services'
@@ -622,11 +642,13 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/about'
+    | '/change-password'
     | '/contact'
     | '/destinations'
     | '/forgot-password'
     | '/privacy'
     | '/programs'
+    | '/reset-password'
     | '/resources'
     | '/scholarships'
     | '/services'
@@ -684,11 +706,13 @@ export interface FileRouteTypes {
     | '/staff'
     | '/student'
     | '/about'
+    | '/change-password'
     | '/contact'
     | '/destinations'
     | '/forgot-password'
     | '/privacy'
     | '/programs'
+    | '/reset-password'
     | '/resources'
     | '/scholarships'
     | '/services'
@@ -747,11 +771,13 @@ export interface RootRouteChildren {
   StaffRouteRoute: typeof StaffRouteRouteWithChildren
   StudentRouteRoute: typeof StudentRouteRouteWithChildren
   AboutRoute: typeof AboutRoute
+  ChangePasswordRoute: typeof ChangePasswordRoute
   ContactRoute: typeof ContactRoute
   DestinationsRoute: typeof DestinationsRoute
   ForgotPasswordRoute: typeof ForgotPasswordRoute
   PrivacyRoute: typeof PrivacyRoute
   ProgramsRoute: typeof ProgramsRoute
+  ResetPasswordRoute: typeof ResetPasswordRoute
   ResourcesRoute: typeof ResourcesRoute
   ScholarshipsRoute: typeof ScholarshipsRoute
   ServicesRoute: typeof ServicesRoute
@@ -784,6 +810,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/change-password': {
+      id: '/change-password'
+      path: '/change-password'
+      fullPath: '/change-password'
+      preLoaderRoute: typeof ChangePasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/contact': {
@@ -819,6 +852,13 @@ declare module '@tanstack/react-router' {
       path: '/programs'
       fullPath: '/programs'
       preLoaderRoute: typeof ProgramsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/reset-password': {
+      id: '/reset-password'
+      path: '/reset-password'
+      fullPath: '/reset-password'
+      preLoaderRoute: typeof ResetPasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/resources': {
@@ -1316,11 +1356,13 @@ const rootRouteChildren: RootRouteChildren = {
   StaffRouteRoute: StaffRouteRouteWithChildren,
   StudentRouteRoute: StudentRouteRouteWithChildren,
   AboutRoute: AboutRoute,
+  ChangePasswordRoute: ChangePasswordRoute,
   ContactRoute: ContactRoute,
   DestinationsRoute: DestinationsRoute,
   ForgotPasswordRoute: ForgotPasswordRoute,
   PrivacyRoute: PrivacyRoute,
   ProgramsRoute: ProgramsRoute,
+  ResetPasswordRoute: ResetPasswordRoute,
   ResourcesRoute: ResourcesRoute,
   ScholarshipsRoute: ScholarshipsRoute,
   ServicesRoute: ServicesRoute,
