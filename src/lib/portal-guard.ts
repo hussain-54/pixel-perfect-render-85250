@@ -29,23 +29,16 @@ function portalHomePath(portal: PortalKind): PortalHome {
 
 /**
  * TanStack Router beforeLoad guard for portal layouts.
- * Authorization uses the httpOnly portal cookie and/or a validated Bearer JWT.
+ * When a live Supabase JWT is present, always re-resolve role via establishSession
+ * so profiles.role changes (e.g. owner admin SQL) are not masked by a stale cookie.
  * Client localStorage/sessionStorage roles are never trusted for portal access.
  */
 export function requirePortalAccess(portal: PortalKind) {
   return async () => {
     let session: Awaited<ReturnType<typeof getPortalSession>> = null;
 
-    try {
-      const headers = await bearerHeaders();
-      session = await getPortalSession(headers ? { headers } : undefined);
-    } catch {
-      session = null;
-    }
-
-    // Supabase JWT path: establish/refresh trusted cookie from access token only.
-    // Role comes from server resolveTrustedRole (app_metadata / profiles), never user_metadata.
-    if (!session && typeof window !== "undefined" && isSupabaseConfigured()) {
+    // Live JWT path first — refreshes httpOnly cookie from profiles/app_metadata.
+    if (typeof window !== "undefined" && isSupabaseConfigured()) {
       try {
         const { data } = await getSupabase().auth.getSession();
         const token = data.session?.access_token;
@@ -53,6 +46,16 @@ export function requirePortalAccess(portal: PortalKind) {
           const { establishSession } = await import("@/server/portal-data");
           session = await establishSession({ data: { accessToken: token } });
         }
+      } catch {
+        session = null;
+      }
+    }
+
+    // Demo / cookie fallback only when no JWT session was established.
+    if (!session) {
+      try {
+        const headers = await bearerHeaders();
+        session = await getPortalSession(headers ? { headers } : undefined);
       } catch {
         session = null;
       }

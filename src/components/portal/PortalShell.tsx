@@ -50,6 +50,7 @@ export type PortalNavItem = {
     | "/admin/programs"
     | "/admin/scholarships"
     | "/admin/consultants"
+    | "/admin/accounts"
     | "/admin/leaderboard"
     | "/admin/reports"
     | "/admin/import-export"

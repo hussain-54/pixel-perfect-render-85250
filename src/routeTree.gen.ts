@@ -29,6 +29,7 @@ import { Route as SuccessStoriesRouteImport } from './routes/success-stories'
 import { Route as TermsRouteImport } from './routes/terms'
 import { Route as UniversitiesRouteImport } from './routes/universities'
 import { Route as AdminIndexRouteImport } from './routes/admin/index'
+import { Route as AdminAccountsRouteImport } from './routes/admin/accounts'
 import { Route as AdminApplicationsRouteImport } from './routes/admin/applications'
 import { Route as AdminAppointmentsRouteImport } from './routes/admin/appointments'
 import { Route as AdminAuditLogsRouteImport } from './routes/admin/audit-logs'
@@ -167,6 +168,11 @@ const UniversitiesRoute = UniversitiesRouteImport.update({
 const AdminIndexRoute = AdminIndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminAccountsRoute = AdminAccountsRouteImport.update({
+  id: '/accounts',
+  path: '/accounts',
   getParentRoute: () => AdminRouteRoute,
 } as any)
 const AdminApplicationsRoute = AdminApplicationsRouteImport.update({
@@ -385,6 +391,7 @@ export interface FileRoutesByFullPath {
   '/success-stories': typeof SuccessStoriesRoute
   '/terms': typeof TermsRoute
   '/universities': typeof UniversitiesRoute
+  '/admin/accounts': typeof AdminAccountsRoute
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
@@ -443,6 +450,7 @@ export interface FileRoutesByTo {
   '/success-stories': typeof SuccessStoriesRoute
   '/terms': typeof TermsRoute
   '/universities': typeof UniversitiesRoute
+  '/admin/accounts': typeof AdminAccountsRoute
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
@@ -505,6 +513,7 @@ export interface FileRoutesById {
   '/success-stories': typeof SuccessStoriesRoute
   '/terms': typeof TermsRoute
   '/universities': typeof UniversitiesRoute
+  '/admin/accounts': typeof AdminAccountsRoute
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
@@ -568,6 +577,7 @@ export interface FileRouteTypes {
     | '/success-stories'
     | '/terms'
     | '/universities'
+    | '/admin/accounts'
     | '/admin/applications'
     | '/admin/appointments'
     | '/admin/audit-logs'
@@ -626,6 +636,7 @@ export interface FileRouteTypes {
     | '/success-stories'
     | '/terms'
     | '/universities'
+    | '/admin/accounts'
     | '/admin/applications'
     | '/admin/appointments'
     | '/admin/audit-logs'
@@ -687,6 +698,7 @@ export interface FileRouteTypes {
     | '/success-stories'
     | '/terms'
     | '/universities'
+    | '/admin/accounts'
     | '/admin/applications'
     | '/admin/appointments'
     | '/admin/audit-logs'
@@ -891,6 +903,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/admin/'
       preLoaderRoute: typeof AdminIndexRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/accounts': {
+      id: '/admin/accounts'
+      path: '/accounts'
+      fullPath: '/admin/accounts'
+      preLoaderRoute: typeof AdminAccountsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/admin/applications': {
@@ -1170,6 +1189,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AdminRouteRouteChildren {
+  AdminAccountsRoute: typeof AdminAccountsRoute
   AdminApplicationsRoute: typeof AdminApplicationsRoute
   AdminAppointmentsRoute: typeof AdminAppointmentsRoute
   AdminAuditLogsRoute: typeof AdminAuditLogsRoute
@@ -1194,6 +1214,7 @@ interface AdminRouteRouteChildren {
 }
 
 const AdminRouteRouteChildren: AdminRouteRouteChildren = {
+  AdminAccountsRoute: AdminAccountsRoute,
   AdminApplicationsRoute: AdminApplicationsRoute,
   AdminAppointmentsRoute: AdminAppointmentsRoute,
   AdminAuditLogsRoute: AdminAuditLogsRoute,

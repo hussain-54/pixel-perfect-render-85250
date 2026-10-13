@@ -63,3 +63,19 @@ export function rolesAtLeastAdmin(role: AppRole): boolean {
 export function rolesConsultantDesk(role: AppRole): boolean {
   return role === "consultant" || rolesAtLeastAdmin(role);
 }
+
+/**
+ * Resolve portal AppRole from trusted sources only (never user_metadata).
+ * Prefer `profiles.role` when readable — owner SQL / admin_set_user_role update
+ * that column. Fall back to Auth `app_metadata.role`, then least-privilege student.
+ */
+export function resolveAppRoleFromTrustedSources(options: {
+  profileRole?: unknown;
+  appMetadataRole?: unknown;
+}): AppRole {
+  const fromProfile = normalizeAppRole(options.profileRole);
+  if (fromProfile) return fromProfile;
+  const fromApp = normalizeAppRole(options.appMetadataRole);
+  if (fromApp) return fromApp;
+  return "student";
+}

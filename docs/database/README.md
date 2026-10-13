@@ -6,7 +6,15 @@ Local migration files do **not** prove remote apply. M1–M4 apply status on rem
 | Doc                                                                              | Purpose                                                 |
 | -------------------------------------------------------------------------------- | ------------------------------------------------------- |
 | [`M1-M4-OWNER-RUNBOOK.md`](./M1-M4-OWNER-RUNBOOK.md)                             | **Primary** ordered apply + verify + recovery checklist |
+| [`STAGING-OWNER-VERIFICATION.sql`](./STAGING-OWNER-VERIFICATION.sql)             | **Staging gate** — consolidated read-only SQL (S0–S9)   |
+| [`STAGING-E2E-TEST-MATRIX.md`](./STAGING-E2E-TEST-MATRIX.md)                     | Disposable-account E2E matrix (all NOT RUN until live)  |
+| [`SIGNUP-FEE-SECURITY-REVIEW.md`](./SIGNUP-FEE-SECURITY-REVIEW.md)               | Review of `…13010000` / `…13020000` (unapplied)         |
 | [`CLIENT-ACCEPTANCE-CHECKLIST.md`](./CLIENT-ACCEPTANCE-CHECKLIST.md)             | Live role-based acceptance + negative tests             |
+| [`../testing/STAGING-TEST-ACCOUNTS.md`](../testing/STAGING-TEST-ACCOUNTS.md)     | Active setup: primary admin + Admin → Accounts          |
+| [`../testing/DESIGNATE-PRIMARY-ADMIN.sql`](../testing/DESIGNATE-PRIMARY-ADMIN.sql) | Designate `hussaindurrani92@gmail.com` as admin        |
+| [`../testing/STAGING-ROLE-MAP-AUDIT.md`](../testing/STAGING-ROLE-MAP-AUDIT.md)   | Schema audit for role / business_role mapping           |
+| [`../testing/STAGING-MAP-AUTH-USERS-BY-EMAIL.sql`](../testing/STAGING-MAP-AUTH-USERS-BY-EMAIL.sql) | **OBSOLETE** — retired three-account placeholder SQL |
+| [`../testing/PORTAL-VISUAL-E2E-CHECKLIST.md`](../testing/PORTAL-VISUAL-E2E-CHECKLIST.md) | Visual portal E2E (all BLOCKED until owner runs)  |
 | [`phase-2c-owner-verification.sql`](./phase-2c-owner-verification.sql)           | Phase 2C read-only inspection                           |
 | [`milestone-1-owner-verification.sql`](./milestone-1-owner-verification.sql)     | M1 verify                                               |
 | [`milestone-2-owner-verification.sql`](./milestone-2-owner-verification.sql)     | M2 verify                                               |
@@ -17,6 +25,15 @@ Local migration files do **not** prove remote apply. M1–M4 apply status on rem
 | [`MILESTONE3-MARKETING-OWNER-APPLY.md`](./MILESTONE3-MARKETING-OWNER-APPLY.md)   | M3 marketing notes                                      |
 | [`MILESTONE4-OPS-OWNER-APPLY.md`](./MILESTONE4-OPS-OWNER-APPLY.md)               | M4 office operations notes                              |
 | [`REPORTS-PREP.md`](./REPORTS-PREP.md)                                           | Reliable vs unavailable report metrics                  |
+| [`../PROJECT_AUDIT.md`](../PROJECT_AUDIT.md)                                     | Full repository audit status                            |
+| [`../E2E_TEST_REPORT.md`](../E2E_TEST_REPORT.md)                                 | End-to-end verification report                          |
+
+**Authored, not applied (owner approval required):**
+
+- `supabase/migrations/20261013010000_signup_fee_update_restrict.sql` — signup fee UPDATE / student_id hardening
+- `supabase/migrations/20261013020000_signup_fee_verify_activate_rpc.sql` — atomic verify + activate RPC (app not wired until applied)
+
+**Read-only probe notes:** [`REMOTE-STATUS-PROBE-2026-10-13.md`](./REMOTE-STATUS-PROBE-2026-10-13.md)
 
 ---
 

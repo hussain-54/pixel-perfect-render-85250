@@ -124,6 +124,16 @@ import {
   portalUpsertOpsInventoryItem,
   portalUpsertOpsSupplier,
 } from "@/server/portal-operations";
+import {
+  portalCreateAccount,
+  portalListAccountOptions,
+  portalListAccounts,
+  portalResendAccountInvite,
+  portalResendPasswordReset,
+  portalRevokeAccountSessions,
+  portalSetConsultantDeskStatus,
+  type CreateAccountInput,
+} from "@/server/portal-accounts";
 import type { HrAttendanceStatus, HrEmploymentStatus } from "@/lib/hr-rules";
 import type { MarketingCampaignStatus } from "@/lib/marketing-rules";
 import type { OpsExpenseStatus, OpsPurchaseStatus } from "@/lib/ops-rules";
@@ -473,6 +483,28 @@ export const getStudentJourneyTimeline = (studentId?: string) =>
 
 /** Admin / manager operations overview aggregates (authorized + RLS). */
 export const getAdminOpsOverview = () => withAuth((opts) => portalGetAdminOpsOverview(opts));
+
+/** Admin employee/account management (service-role Auth Admin API, server-only). */
+export const listPortalAccounts = () => withAuth((opts) => portalListAccounts(opts));
+
+export const listPortalAccountOptions = () => withAuth((opts) => portalListAccountOptions(opts));
+
+export const createPortalAccount = (data: CreateAccountInput) =>
+  withAuth((opts) => portalCreateAccount({ ...opts, data }));
+
+export const resendPortalAccountInvite = (data: { userId: string }) =>
+  withAuth((opts) => portalResendAccountInvite({ ...opts, data }));
+
+export const resendPortalPasswordReset = (data: { userId: string }) =>
+  withAuth((opts) => portalResendPasswordReset({ ...opts, data }));
+
+export const setPortalConsultantDeskStatus = (data: {
+  userId: string;
+  status: "active" | "inactive";
+}) => withAuth((opts) => portalSetConsultantDeskStatus({ ...opts, data }));
+
+export const revokePortalAccountSessions = (data: { userId: string }) =>
+  withAuth((opts) => portalRevokeAccountSessions({ ...opts, data }));
 
 export const listHrEmployees = () => withAuth((opts) => portalListHrEmployees(opts));
 

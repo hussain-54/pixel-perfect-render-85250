@@ -52,19 +52,12 @@ After authentication, role is resolved automatically and the user is redirected 
 - Consultant → `/staff/dashboard`
 - Admin → `/admin/dashboard`
 
-Supabase Auth is used when configured. Until real users exist, these demo accounts work locally:
+Supabase Auth is required for real portals. Assign roles via trusted `app_metadata.role` or `profiles.role` (`student` \| `consultant` \| `admin` \| `super_admin`). Never use `user_metadata` for authorization.
 
-| Email | Password | Portal |
-| ----- | -------- | ------ |
-| `student@globalroots.pk` | `demo1234` | Student |
-| `consultant@globalroots.pk` | `demo1234` | Consultant |
-| `admin@globalroots.pk` | `demo1234` | Admin |
-
-Assign Supabase user roles via `app_metadata.role` / `user_metadata.role` (`student` \| `staff` \| `consultant` \| `admin`) or a `profiles.role` column.
+**Local development only:** `npm run dev` may enable temporary demo sessions for UI wiring. Production builds disable demo authentication entirely (including if `VITE_ENABLE_DEMO_AUTH` is set). Do not publish demo passwords.
 
 ## Notes
 
-- Public pages use static content in `src/data/site.ts`.
-- Portal UIs still use mock data in `src/data/mock.ts` via `src/services/index.ts`.
-- Supabase client is configured; swap service-layer reads/writes onto it as tables are ready.
-- Portal chrome still includes a demo role switcher for UI preview.
+- Public marketing pages use static content in `src/data/site.ts` (illustrative, not live CRM).
+- Portal CRM for Supabase sessions uses live server functions; mock fixtures in `src/data/mock.ts` are demo-session / test only.
+- Owner database apply: see `docs/database/M1-M4-OWNER-RUNBOOK.md`.

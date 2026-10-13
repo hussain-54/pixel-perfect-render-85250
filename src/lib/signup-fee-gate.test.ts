@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   canActivatePortalFromFeeStatus,
+  formatFeeActivationPartialFailure,
   isPortalActivated,
   isSignupFeeVerified,
   studentPortalAccessAllowed,
@@ -26,5 +27,16 @@ describe("signup fee gate", () => {
         portalActivatedAt: "2026-10-12T00:00:00Z",
       }),
     ).toBe(true);
+  });
+
+  it("surfaces partial failure when fee persists but activation fails", () => {
+    const msg = formatFeeActivationPartialFailure({
+      feeStatus: "verified",
+      activationError: "permission denied",
+    });
+    expect(msg).toContain("verified");
+    expect(msg).toContain("permission denied");
+    expect(msg.toLowerCase()).toContain("activation failed");
+    expect(msg.toLowerCase()).not.toContain("completed successfully");
   });
 });

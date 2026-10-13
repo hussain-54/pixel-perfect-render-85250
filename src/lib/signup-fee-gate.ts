@@ -30,3 +30,15 @@ export function studentPortalAccessAllowed(input: {
   if (input.source === "demo") return true;
   return isPortalActivated(input.portalActivatedAt);
 }
+
+/**
+ * Fee status may already be persisted when activation fails — never report a clean success.
+ * Callers must surface this error to the operator for retry/remediation.
+ */
+export function formatFeeActivationPartialFailure(input: {
+  feeStatus: SignupFeeStatusDb;
+  activationError: string;
+}): string {
+  const detail = input.activationError.trim() || "unknown error";
+  return `Signup fee was updated to ${input.feeStatus}, but portal activation failed: ${detail}. Resolve student access and re-run activation; do not treat the fee change as a completed activation.`;
+}

@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader, Panel } from "@/components/common";
+import { AdminAccountManagement } from "@/components/portal/AdminAccountManagement";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -12,8 +13,12 @@ export const Route = createFileRoute("/admin/settings")({
 
 function AdminSettings() {
   return (
-    <div>
-      <PageHeader title="Settings" subtitle="Configuration preview — changes are not persisted." />
+    <div className="space-y-10">
+      <PageHeader
+        title="Settings"
+        subtitle="Organization and notification fields below are a configuration preview only. User & Account Management uses live Supabase Auth."
+      />
+
       <form
         className="grid max-w-2xl gap-6"
         onSubmit={(e) => {
@@ -21,6 +26,9 @@ function AdminSettings() {
         }}
       >
         <Panel title="Organization">
+          <p className="mb-4 text-xs text-muted-foreground">
+            Preview only — not saved to Supabase yet.
+          </p>
           <div className="space-y-4">
             <div>
               <Label htmlFor="org-name">Consultancy name</Label>
@@ -39,7 +47,7 @@ function AdminSettings() {
               <Label htmlFor="footer">Portal footer note</Label>
               <Textarea
                 id="footer"
-                defaultValue="Mock data only — connect Supabase or your API to go live."
+                defaultValue="Global Roots Consultants — secure client portal."
                 className="mt-1.5"
                 rows={3}
               />
@@ -47,10 +55,13 @@ function AdminSettings() {
           </div>
         </Panel>
         <Panel title="Notifications">
+          <p className="mb-3 text-xs text-muted-foreground">
+            Preview only — toggles are not persisted.
+          </p>
           <div className="flex items-center justify-between gap-4 py-2">
             <div>
               <p className="text-sm font-semibold text-navy">Email admins on new leads</p>
-              <p className="text-xs text-muted-foreground">Demo toggle only</p>
+              <p className="text-xs text-muted-foreground">Preview toggle</p>
             </div>
             <Switch defaultChecked />
           </div>
@@ -65,9 +76,13 @@ function AdminSettings() {
           </div>
         </Panel>
         <Button type="submit" className="w-fit" disabled>
-          Save settings (demo)
+          Save organization settings (coming soon)
         </Button>
       </form>
+
+      <div className="border-t border-border pt-8">
+        <AdminAccountManagement />
+      </div>
     </div>
   );
 }

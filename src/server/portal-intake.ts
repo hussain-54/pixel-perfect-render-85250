@@ -319,6 +319,17 @@ export const portalVerifySignupFee = createServerFn({ method: "POST" })
 
       const nextStatus =
         data.action === "verify" ? "verified" : data.action === "waive" ? "waived" : "rejected";
+      // Load then update by primary key — never reassign student_id; only status/verifier fields.
+      const { data: existingFee, error: loadFeeErr } = await client
+        .from("signup_fee_payments")
+        .select("id, student_id, status")
+        .eq("student_id", data.studentId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (loadFeeErr) throw new Error(loadFeeErr.message);
+      if (!existingFee) throw new AuthError("Signup fee record not found.", 404);
+
       const { data: fee, error } = await client
         .from("signup_fee_payments")
         .update({
@@ -327,6 +338,7 @@ export const portalVerifySignupFee = createServerFn({ method: "POST" })
           verified_at: new Date().toISOString(),
           notes: data.notes?.trim() || null,
         })
+        .eq("id", existingFee.id)
         .eq("student_id", data.studentId)
         .select("*")
         .single();
@@ -343,7 +355,15 @@ export const portalVerifySignupFee = createServerFn({ method: "POST" })
           .eq("id", data.studentId)
           .select("portal_activated_at")
           .single();
-        if (actErr) throw new Error(actErr.message);
+        if (actErr) {
+          const { formatFeeActivationPartialFailure } = await import("@/lib/signup-fee-gate");
+          throw new Error(
+            formatFeeActivationPartialFailure({
+              feeStatus: nextStatus,
+              activationError: actErr.message,
+            }),
+          );
+        }
         portalActivatedAt = stu.portal_activated_at;
       }
 
@@ -451,10 +471,15 @@ export const portalRecordCounsellingAgreement = createServerFn({ method: "POST" 
       if (error) throw new Error(error.message);
 
       if (data.consented) {
-        await client
+        const { error: stageErr } = await client
           .from("students")
           .update({ journey_stage: "consultation_completed" })
           .eq("id", data.studentId);
+        if (stageErr) {
+          throw new Error(
+            `Counselling agreement was saved, but journey stage update failed: ${stageErr.message}. Re-run stage sync; do not treat activation of the next step as complete.`,
+          );
+        }
       }
 
       return { ok: true as const, agreementId: row.id, consented: row.consented };
@@ -529,10 +554,15 @@ export const portalHandoverToAdmission = createServerFn({ method: "POST" })
         .single();
       if (error) throw new Error(error.message);
 
-      await client
+      const { error: stageErr } = await client
         .from("students")
         .update({ journey_stage: "university_shortlisting" })
         .eq("id", data.studentId);
+      if (stageErr) {
+        throw new Error(
+          `Admission handover was saved, but journey stage update failed: ${stageErr.message}. Confirm handover row ${handover.id} and re-run stage sync; do not treat the case as fully advanced.`,
+        );
+      }
 
       const { writeAudit } = await import("@/services/db");
       await writeAudit(client, {

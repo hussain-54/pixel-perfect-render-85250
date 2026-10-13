@@ -6,8 +6,10 @@ import {
   ErrorState,
   LoadingRows,
   EmptyState,
+  portalErrorMessage,
 } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
+import { Button } from "@/components/ui/button";
 import { useData } from "@/lib/useData";
 import { getCurrentStudent, getApplications } from "@/services";
 
@@ -23,7 +25,34 @@ function StudentApplications() {
   );
 
   if (studentQ.isLoading) return <LoadingRows rows={5} />;
-  if (studentQ.isError || !studentQ.data) return <ErrorState />;
+
+  if (studentQ.isError || !studentQ.data) {
+    const body = studentQ.isError
+      ? portalErrorMessage(
+          studentQ.error,
+          "Could not load your student profile. If you are staff or admin, sign out and sign in again.",
+        )
+      : "No student profile is linked to this account yet. Ask Front Desk to register you, or sign out if you use a staff/admin account.";
+    return (
+      <div>
+        <PageHeader
+          title="Applications"
+          subtitle="Track each university submission and decision."
+        />
+        <ErrorState body={body} />
+        <Button
+          type="button"
+          variant="outline"
+          className="mt-3"
+          onClick={() => {
+            void studentQ.refetch();
+          }}
+        >
+          Retry
+        </Button>
+      </div>
+    );
+  }
 
   const apps = appsQ.data ?? [];
 
@@ -32,8 +61,25 @@ function StudentApplications() {
       <PageHeader title="Applications" subtitle="Track each university submission and decision." />
       {appsQ.isLoading ? (
         <LoadingRows />
+      ) : appsQ.isError ? (
+        <div>
+          <ErrorState body={portalErrorMessage(appsQ.error, "Could not load your applications.")} />
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-3"
+            onClick={() => {
+              void appsQ.refetch();
+            }}
+          >
+            Retry
+          </Button>
+        </div>
       ) : !apps.length ? (
-        <EmptyState title="No applications yet" />
+        <EmptyState
+          title="No applications yet"
+          body="When your counsellor submits a university application, it will appear here."
+        />
       ) : (
         <TableWrap>
           <thead>

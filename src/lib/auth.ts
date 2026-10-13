@@ -1,7 +1,13 @@
 import type { User } from "@supabase/supabase-js";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { findDemoAccount, findDemoAccountByEmail, isDemoAuthEnabled } from "@/lib/demo-auth";
-import { portalHomeByRole, normalizeAppRole, type AppRole, type PortalHome } from "@/lib/roles";
+import {
+  portalHomeByRole,
+  normalizeAppRole,
+  resolveAppRoleFromTrustedSources,
+  type AppRole,
+  type PortalHome,
+} from "@/lib/roles";
 import {
   clearSession,
   establishSession,
@@ -97,21 +103,25 @@ export function clearDemoSession() {
   }
 }
 
-/** Trusted role resolution — app_metadata then profiles. Never user_metadata. */
+/** Trusted role resolution — profiles then app_metadata. Never user_metadata. */
 async function resolveSupabaseRole(user: User): Promise<AppRole> {
-  const fromApp = normalizeAppRole(user.app_metadata?.["role"]);
-  if (fromApp) return fromApp;
-
+  let profileRole: unknown;
   try {
     const supabase = getSupabase();
-    const { data } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
-    const fromProfile = normalizeAppRole(data?.role);
-    if (fromProfile) return fromProfile;
+    const { data, error } = await supabase
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .maybeSingle();
+    if (!error) profileRole = data?.role;
   } catch {
     /* profiles table may not exist yet */
   }
 
-  return "student";
+  return resolveAppRoleFromTrustedSources({
+    profileRole,
+    appMetadataRole: user.app_metadata?.["role"],
+  });
 }
 
 async function authHeaders(): Promise<HeadersInit | undefined> {
@@ -132,28 +142,35 @@ export async function getAuthRequestHeaders(): Promise<HeadersInit | undefined> 
 }
 
 export async function getAuthSession(): Promise<PublicSession | null> {
+  // Prefer live JWT → establishSession so profiles.role changes are not masked by a stale cookie.
+  if (isSupabaseConfigured()) {
+    try {
+      const { data } = await getSupabase().auth.getSession();
+      if (data.session?.access_token) {
+        try {
+          return await establishSession({ data: { accessToken: data.session.access_token } });
+        } catch {
+          if (data.session.user) {
+            const role = await resolveSupabaseRole(data.session.user);
+            return {
+              role,
+              email: (data.session.user.email ?? "").toLowerCase(),
+              source: "supabase" as const,
+            };
+          }
+        }
+      }
+    } catch {
+      /* fall through */
+    }
+  }
+
   try {
     const headers = await authHeaders();
     const cookieSession = await getPortalSession(headers ? { headers } : undefined);
     if (cookieSession) return cookieSession;
   } catch {
     /* fall through */
-  }
-
-  if (isSupabaseConfigured()) {
-    try {
-      const { data } = await getSupabase().auth.getSession();
-      if (data.session?.user) {
-        const role = await resolveSupabaseRole(data.session.user);
-        return {
-          role,
-          email: (data.session.user.email ?? "").toLowerCase(),
-          source: "supabase" as const,
-        };
-      }
-    } catch {
-      /* ignore */
-    }
   }
 
   if (isDemoAuthEnabled()) {
@@ -245,12 +262,8 @@ export async function signInWithPassword(options: {
       }
 
       const supabaseMsg = error?.message ?? "Invalid email or password. Please try again.";
-      if (!isDemoAuthEnabled() && /invalid login credentials/i.test(supabaseMsg)) {
-        return {
-          ok: false,
-          error:
-            "Invalid login credentials. Demo portal accounts work with `npm run dev` (or set VITE_ENABLE_DEMO_AUTH=true and rebuild).",
-        };
+      if (/invalid login credentials/i.test(supabaseMsg)) {
+        return { ok: false, error: "Invalid email or password. Please try again." };
       }
       return { ok: false, error: supabaseMsg };
     } catch {

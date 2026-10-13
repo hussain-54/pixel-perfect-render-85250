@@ -8,7 +8,7 @@ import {
   encodePortalSession,
   type PortalSessionPayload,
 } from "@/lib/portal-session";
-import { normalizeAppRole, type AppRole } from "@/lib/roles";
+import { normalizeAppRole, resolveAppRoleFromTrustedSources, type AppRole } from "@/lib/roles";
 
 export class AuthError extends Error {
   status: number;
@@ -36,32 +36,49 @@ function supabaseEnv() {
     process.env["SUPABASE_URL"]?.trim() ||
     "";
   const key =
-    (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()) ||
+    (typeof import.meta !== "undefined" &&
+      import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()) ||
     process.env["VITE_SUPABASE_PUBLISHABLE_KEY"]?.trim() ||
     process.env["SUPABASE_ANON_KEY"]?.trim() ||
     "";
   return { url, key };
 }
 
-/** Role from trusted sources only â€” never user_metadata. */
-export async function resolveTrustedRole(user: User): Promise<AppRole> {
-  const fromApp = normalizeAppRole(user.app_metadata?.["role"]);
-  if (fromApp) return fromApp;
+/**
+ * Role from trusted sources only — never user_metadata.
+ * Prefer profiles.role (JWT-authorized read) over app_metadata so owner SQL /
+ * admin_set_user_role take effect without a stale app_metadata.student claim.
+ * Fail closed: missing/failed sources never invent staff/admin.
+ */
+export async function resolveTrustedRole(
+  user: User,
+  accessToken?: string | null,
+): Promise<AppRole> {
+  let profileRole: unknown;
 
   const { url, key } = supabaseEnv();
-  if (url && key) {
+  if (url && key && accessToken) {
     try {
-      const supabase = createClient(url, key);
-      const { data } = await supabase.from("profiles").select("role").eq("id", user.id).maybeSingle();
-      const fromProfile = normalizeAppRole(data?.role);
-      if (fromProfile) return fromProfile;
+      const supabase = createClient(url, key, {
+        global: { headers: { Authorization: `Bearer ${accessToken}` } },
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
+      });
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (!error) profileRole = data?.role;
+      // RLS denial / missing row: fall through to app_metadata, then student.
     } catch {
-      /* profiles may not exist yet */
+      /* profiles may be unavailable; fail closed via resolveAppRoleFromTrustedSources */
     }
   }
 
-  // New accounts without an assigned trusted role default to student.
-  return "student";
+  return resolveAppRoleFromTrustedSources({
+    profileRole,
+    appMetadataRole: user.app_metadata?.["role"],
+  });
 }
 
 export function readPortalSessionCookie(): PortalSessionPayload | null {
@@ -95,7 +112,7 @@ async function sessionFromAccessToken(accessToken: string): Promise<TrustedSessi
   const { data, error } = await supabase.auth.getUser(accessToken);
   if (error || !data.user) throw new AuthError("Invalid or expired session.");
 
-  const role = await resolveTrustedRole(data.user);
+  const role = await resolveTrustedRole(data.user, accessToken);
   const email = (data.user.email ?? "").toLowerCase();
   const session: TrustedSession = {
     role,
