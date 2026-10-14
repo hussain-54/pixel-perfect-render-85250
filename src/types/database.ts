@@ -1459,7 +1459,22 @@ export type Database = {
       };
       front_desk_assign_counsellor: {
         Args: { p_student_id: string; p_consultant_id: string };
-        Returns: Database["public"]["Tables"]["students"]["Row"];
+        Returns: {
+          id: string;
+          case_id: string;
+          full_name: string;
+          email: string;
+          phone: string | null;
+          whatsapp: string | null;
+          city: string | null;
+          destination: string | null;
+          program: string | null;
+          study_level: string | null;
+          journey_stage: JourneyStage;
+          assigned_consultant_id: string | null;
+          registered_by: string | null;
+          updated_at: string;
+        };
       };
       list_active_counsellor_desks: {
         Args: Record<string, never>;

@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest";
-import { canEditModule, canViewModule, hasMinPermission } from "./business-permissions";
-import { requireModulePermission } from "@/server/staff-access";
+import {
+  canEditModule,
+  canViewModule,
+  cloneDefaultPermissionMatrix,
+  getPermissionLevel,
+  hasMinPermission,
+  mergePermissionMatrixCells,
+} from "./business-permissions";
+import { assertModulePermission, requireModulePermission } from "@/server/staff-access";
 import type { TrustedSession } from "@/server/portal-auth";
 import { AuthError } from "@/server/portal-auth";
 
 function session(partial: Partial<TrustedSession> & Pick<TrustedSession, "role">): TrustedSession {
   return {
     email: "t@example.com",
-    source: "supabase",
+    source: "demo",
     userId: "u1",
     businessRole: null,
     ...partial,
@@ -28,13 +35,13 @@ describe("Phase 3 module permission gates (unit)", () => {
     expect(canViewModule("accounts_banking_finance", "documents")).toBe(false);
   });
 
-  it("requireModulePermission allows admin and denies counsellor admission edits", () => {
+  it("assertModulePermission allows admin and denies counsellor admission edits", () => {
     expect(() =>
-      requireModulePermission(session({ role: "admin", businessRole: "admin" }), "admissions", 2),
+      assertModulePermission(session({ role: "admin", businessRole: "admin" }), "admissions", 2),
     ).not.toThrow();
 
     expect(() =>
-      requireModulePermission(
+      assertModulePermission(
         session({ role: "consultant", businessRole: "counsellor_consultant" }),
         "admissions",
         2,
@@ -43,7 +50,7 @@ describe("Phase 3 module permission gates (unit)", () => {
     ).toThrow(AuthError);
 
     expect(() =>
-      requireModulePermission(
+      assertModulePermission(
         session({ role: "consultant", businessRole: "admission_team" }),
         "admissions",
         2,
@@ -51,28 +58,39 @@ describe("Phase 3 module permission gates (unit)", () => {
     ).not.toThrow();
   });
 
-  it("requireModulePermission fails closed without business role", () => {
+  it("assertModulePermission fails closed without business role", () => {
     expect(() =>
-      requireModulePermission(session({ role: "consultant", businessRole: null }), "documents", 1),
+      assertModulePermission(session({ role: "consultant", businessRole: null }), "documents", 1),
     ).toThrow(/business role is not configured/i);
   });
 
-  it("Phase 3C offers (counselling): admission may view but not mutate; counsellor may edit", () => {
-    expect(canViewModule("admission_team", "counselling")).toBe(true);
+  it("offers/visa gate on admissions: Admission Team Full; counsellor View-only for mutations", () => {
+    expect(getPermissionLevel("admission_team", "admissions")).toBe(3);
+    expect(getPermissionLevel("admission_team", "counselling")).toBe(1);
+    expect(canEditModule("admission_team", "admissions")).toBe(true);
     expect(canEditModule("admission_team", "counselling")).toBe(false);
-    expect(canEditModule("counsellor_consultant", "counselling")).toBe(true);
 
     expect(() =>
-      requireModulePermission(
+      assertModulePermission(
         session({ role: "consultant", businessRole: "admission_team" }),
-        "counselling",
+        "admissions",
         1,
         "offers and visa",
       ),
     ).not.toThrow();
 
     expect(() =>
-      requireModulePermission(
+      assertModulePermission(
+        session({ role: "consultant", businessRole: "admission_team" }),
+        "admissions",
+        2,
+        "offers and visa mutations",
+      ),
+    ).not.toThrow();
+
+    // Must not require counselling Edit for Admission Team offer work.
+    expect(() =>
+      assertModulePermission(
         session({ role: "consultant", businessRole: "admission_team" }),
         "counselling",
         2,
@@ -81,39 +99,39 @@ describe("Phase 3 module permission gates (unit)", () => {
     ).toThrow(AuthError);
 
     expect(() =>
-      requireModulePermission(
+      assertModulePermission(
         session({ role: "consultant", businessRole: "counsellor_consultant" }),
-        "counselling",
+        "admissions",
         2,
       ),
-    ).not.toThrow();
+    ).toThrow(AuthError);
 
     expect(() =>
-      requireModulePermission(
+      assertModulePermission(
         session({ role: "consultant", businessRole: "accounts_banking_finance" }),
-        "counselling",
+        "admissions",
         1,
       ),
-    ).toThrow(AuthError);
+    ).not.toThrow();
   });
 
-  it("Phase 3C finance (fees_payments): counsellor view-only; admission may record; accounts full", () => {
+  it("finance (fees_payments): counsellor view-only; admission may record; accounts full", () => {
     expect(canViewModule("counsellor_consultant", "fees_payments")).toBe(true);
     expect(canEditModule("counsellor_consultant", "fees_payments")).toBe(false);
     expect(canEditModule("admission_team", "fees_payments")).toBe(true);
     expect(hasMinPermission("accounts_banking_finance", "fees_payments", 3)).toBe(true);
 
     expect(() =>
-      requireModulePermission(
+      assertModulePermission(
         session({ role: "consultant", businessRole: "counsellor_consultant" }),
         "fees_payments",
         1,
-        "university fee queue",
+        "university fee viewing",
       ),
     ).not.toThrow();
 
     expect(() =>
-      requireModulePermission(
+      assertModulePermission(
         session({ role: "consultant", businessRole: "counsellor_consultant" }),
         "fees_payments",
         2,
@@ -122,7 +140,7 @@ describe("Phase 3 module permission gates (unit)", () => {
     ).toThrow(AuthError);
 
     expect(() =>
-      requireModulePermission(
+      assertModulePermission(
         session({ role: "consultant", businessRole: "admission_team" }),
         "fees_payments",
         2,
@@ -131,7 +149,7 @@ describe("Phase 3 module permission gates (unit)", () => {
     ).not.toThrow();
 
     expect(() =>
-      requireModulePermission(
+      assertModulePermission(
         session({ role: "consultant", businessRole: "hr_system" }),
         "fees_payments",
         1,
@@ -139,27 +157,26 @@ describe("Phase 3 module permission gates (unit)", () => {
     ).toThrow(AuthError);
   });
 
-  it("Phase 3C front desk remains denied counselling mutations by matrix level and separate FD gate", () => {
+  it("front desk remains denied counselling mutations by matrix level", () => {
     expect(canEditModule("front_desk_student_affairs", "counselling")).toBe(false);
     expect(() =>
-      requireModulePermission(
+      assertModulePermission(
         session({ role: "consultant", businessRole: "front_desk_student_affairs" }),
         "counselling",
         2,
       ),
     ).toThrow(AuthError);
-    // FD may edit fees_payments by matrix; university fee verify stays behind canVerify + denyFrontDesk.
     expect(canEditModule("front_desk_student_affairs", "fees_payments")).toBe(true);
   });
 
-  it("Phase 3D tasks/students: counsellor may mutate; admission view-only; accounts unauthorized for edit", () => {
+  it("tasks/students: counsellor may mutate; admission view-only; accounts unauthorized for edit", () => {
     expect(canViewModule("counsellor_consultant", "students")).toBe(true);
     expect(canEditModule("counsellor_consultant", "students")).toBe(true);
     expect(canViewModule("admission_team", "students")).toBe(true);
     expect(canEditModule("admission_team", "students")).toBe(false);
 
     expect(() =>
-      requireModulePermission(
+      assertModulePermission(
         session({ role: "consultant", businessRole: "counsellor_consultant" }),
         "students",
         2,
@@ -168,7 +185,7 @@ describe("Phase 3 module permission gates (unit)", () => {
     ).not.toThrow();
 
     expect(() =>
-      requireModulePermission(
+      assertModulePermission(
         session({ role: "consultant", businessRole: "admission_team" }),
         "students",
         2,
@@ -177,7 +194,7 @@ describe("Phase 3 module permission gates (unit)", () => {
     ).toThrow(AuthError);
 
     expect(() =>
-      requireModulePermission(
+      assertModulePermission(
         session({ role: "consultant", businessRole: "hr_system" }),
         "students",
         1,
@@ -186,13 +203,13 @@ describe("Phase 3 module permission gates (unit)", () => {
     ).toThrow(AuthError);
   });
 
-  it("Phase 3D reports/activity: view grants export; hr may view reports; missing role fails closed", () => {
+  it("reports/activity: view grants export; hr may view reports; missing role fails closed", () => {
     expect(canViewModule("counsellor_consultant", "reports")).toBe(true);
     expect(canViewModule("hr_system", "reports")).toBe(true);
     expect(canViewModule("digital_manager", "reports")).toBe(true);
 
     expect(() =>
-      requireModulePermission(
+      assertModulePermission(
         session({ role: "consultant", businessRole: "counsellor_consultant" }),
         "reports",
         1,
@@ -201,7 +218,7 @@ describe("Phase 3 module permission gates (unit)", () => {
     ).not.toThrow();
 
     expect(() =>
-      requireModulePermission(
+      assertModulePermission(
         session({ role: "consultant", businessRole: "student_portal" }),
         "reports",
         1,
@@ -210,15 +227,15 @@ describe("Phase 3 module permission gates (unit)", () => {
     ).toThrow(AuthError);
 
     expect(() =>
-      requireModulePermission(session({ role: "consultant", businessRole: null }), "reports", 1),
+      assertModulePermission(session({ role: "consultant", businessRole: null }), "reports", 1),
     ).toThrow(/business role is not configured/i);
   });
 
-  it("Phase 3D admissions create still works for admission_team with students view-only", () => {
+  it("admissions create still works for admission_team with students view-only", () => {
     expect(canEditModule("admission_team", "admissions")).toBe(true);
     expect(canEditModule("admission_team", "students")).toBe(false);
     expect(() =>
-      requireModulePermission(
+      assertModulePermission(
         session({ role: "consultant", businessRole: "admission_team" }),
         "admissions",
         2,
@@ -226,12 +243,143 @@ describe("Phase 3 module permission gates (unit)", () => {
       ),
     ).not.toThrow();
     expect(() =>
-      requireModulePermission(
+      assertModulePermission(
         session({ role: "consultant", businessRole: "counsellor_consultant" }),
         "admissions",
         2,
         "creating applications from student workspace",
       ),
     ).toThrow(AuthError);
+  });
+
+  it("View cannot Edit; Edit cannot Full/Approve-only", () => {
+    // Admission Team counselling=1
+    expect(() =>
+      assertModulePermission(
+        session({ role: "consultant", businessRole: "admission_team" }),
+        "counselling",
+        1,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertModulePermission(
+        session({ role: "consultant", businessRole: "admission_team" }),
+        "counselling",
+        2,
+      ),
+    ).toThrow(AuthError);
+
+    // Manager banking_finance=2 (Edit, not Full)
+    expect(getPermissionLevel("manager", "banking_finance")).toBe(2);
+    expect(() =>
+      assertModulePermission(
+        session({ role: "consultant", businessRole: "manager" }),
+        "banking_finance",
+        2,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertModulePermission(
+        session({ role: "consultant", businessRole: "manager" }),
+        "banking_finance",
+        3,
+      ),
+    ).toThrow(AuthError);
+  });
+
+  it("Admin retains level 3 across every module", () => {
+    for (const module of [
+      "students",
+      "counselling",
+      "admissions",
+      "documents",
+      "fees_payments",
+      "banking_finance",
+      "hr_attendance",
+      "digital_marketing",
+      "orders_sales_purchase",
+      "reports",
+      "users_roles",
+      "settings",
+    ] as const) {
+      expect(getPermissionLevel("admin", module)).toBe(3);
+      expect(() =>
+        assertModulePermission(session({ role: "admin", businessRole: "admin" }), module, 3),
+      ).not.toThrow();
+    }
+  });
+
+  it("department denials: HR/Digital/Ops denied unauthorized modules", () => {
+    expect(() =>
+      assertModulePermission(
+        session({ role: "consultant", businessRole: "hr_system" }),
+        "admissions",
+        1,
+      ),
+    ).toThrow(AuthError);
+    expect(() =>
+      assertModulePermission(
+        session({ role: "consultant", businessRole: "digital_manager" }),
+        "counselling",
+        1,
+      ),
+    ).toThrow(AuthError);
+    expect(() =>
+      assertModulePermission(
+        session({ role: "consultant", businessRole: "office_ops" }),
+        "students",
+        1,
+      ),
+    ).toThrow(AuthError);
+    expect(() =>
+      assertModulePermission(
+        session({ role: "consultant", businessRole: "office_ops" }),
+        "orders_sales_purchase",
+        3,
+      ),
+    ).not.toThrow();
+  });
+
+  it("persisted matrix cells change assertModulePermission authorization", () => {
+    const lowered = mergePermissionMatrixCells([
+      { businessRole: "admission_team", module: "admissions", level: 1 },
+    ]);
+    expect(() =>
+      assertModulePermission(
+        session({ role: "consultant", businessRole: "admission_team" }),
+        "admissions",
+        2,
+        "offers",
+        lowered,
+      ),
+    ).toThrow(AuthError);
+
+    expect(() =>
+      assertModulePermission(
+        session({ role: "consultant", businessRole: "admission_team" }),
+        "admissions",
+        2,
+        "offers",
+        cloneDefaultPermissionMatrix(),
+      ),
+    ).not.toThrow();
+  });
+
+  it("requireModulePermission (async) uses defaults on demo sessions", async () => {
+    await expect(
+      requireModulePermission(
+        session({ role: "consultant", businessRole: "admission_team", source: "demo" }),
+        "admissions",
+        2,
+      ),
+    ).resolves.toBeUndefined();
+
+    await expect(
+      requireModulePermission(
+        session({ role: "consultant", businessRole: "counsellor_consultant", source: "demo" }),
+        "admissions",
+        2,
+      ),
+    ).rejects.toThrow(AuthError);
   });
 });

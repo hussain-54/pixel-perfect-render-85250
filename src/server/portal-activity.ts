@@ -212,7 +212,7 @@ export const portalGetActivityLog = createServerFn({ method: "GET" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "activity logs");
-      requireModulePermission(session, "reports", 1, "activity logs");
+      await requireModulePermission(session, "reports", 1, "activity logs");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
@@ -233,7 +233,7 @@ export const portalExportActivityLog = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "activity logs");
-      requireModulePermission(session, "reports", 1, "activity logs");
+      await requireModulePermission(session, "reports", 1, "activity logs");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       let rows: PortalAuditEvent[];

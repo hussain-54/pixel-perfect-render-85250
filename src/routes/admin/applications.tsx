@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader, TableWrap, fmtDate, LoadingRows } from "@/components/common";
+import { AdminModuleSubnav } from "@/components/portal/AdminModuleSubnav";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useData } from "@/lib/useData";
 import { getApplications, lookupStudent } from "@/services";
@@ -13,7 +14,18 @@ function AdminApplications() {
 
   return (
     <div>
-      <PageHeader title="Applications" subtitle="All university applications." />
+      <PageHeader
+        title="Admissions"
+        subtitle="University applications and catalog references for admissions work."
+      />
+      <AdminModuleSubnav
+        items={[
+          { to: "/admin/applications", label: "Applications" },
+          { to: "/admin/universities", label: "Universities" },
+          { to: "/admin/programs", label: "Programs" },
+          { to: "/admin/scholarships", label: "Scholarships" },
+        ]}
+      />
       {appsQ.isLoading ? (
         <LoadingRows />
       ) : (

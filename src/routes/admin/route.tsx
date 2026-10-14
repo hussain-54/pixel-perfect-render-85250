@@ -6,28 +6,21 @@ import {
   GraduationCap,
   FileText,
   Wallet,
+  Landmark,
   IdCard,
   Megaphone,
-  BarChart3,
-  Settings,
-  UserPlus,
   Package,
-  Building2,
-  Layers,
-  Award,
+  BarChart3,
   UserCog,
-  Trophy,
-  ArrowUpDown,
-  Bell,
-  ScrollText,
+  Settings,
 } from "lucide-react";
 import { PortalShell, type PortalNavItem } from "@/components/portal/PortalShell";
 import { requirePortalAccess } from "@/lib/portal-guard";
 import { pageHead } from "@/lib/seo";
 
 /**
- * Concise admin nav aligned to RBAC modules (reference sidebar),
- * with short secondary groups for workspace / catalog / system routes.
+ * Admin sidebar — exactly one entry per approved module (+ Dashboard).
+ * Sub-features live inside module pages via local tabs / links.
  */
 const adminNav: PortalNavItem[] = [
   { to: "/admin/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -36,20 +29,13 @@ const adminNav: PortalNavItem[] = [
   { to: "/admin/applications", label: "Admissions", icon: GraduationCap },
   { to: "/admin/documents", label: "Documents", icon: FileText },
   { to: "/admin/finance", label: "Fees & Payments", icon: Wallet },
+  { to: "/admin/banking", label: "Banking & Finance", icon: Landmark },
   { to: "/admin/hr", label: "HR & Attendance", icon: IdCard },
   { to: "/admin/marketing", label: "Digital Marketing", icon: Megaphone },
+  { to: "/admin/operations", label: "Orders / Sales / Purchase", icon: Package },
   { to: "/admin/reports", label: "Reports", icon: BarChart3 },
+  { to: "/admin/users-roles", label: "Users & Roles", icon: UserCog },
   { to: "/admin/settings", label: "Settings", icon: Settings },
-  { to: "/admin/leads", label: "Leads", icon: UserPlus, section: "Workspace" },
-  { to: "/admin/operations", label: "Office Ops", icon: Package },
-  { to: "/admin/universities", label: "Universities", icon: Building2, section: "Catalog" },
-  { to: "/admin/programs", label: "Programs", icon: Layers },
-  { to: "/admin/scholarships", label: "Scholarships", icon: Award },
-  { to: "/admin/consultants", label: "Consultants", icon: UserCog },
-  { to: "/admin/leaderboard", label: "Leaderboard", icon: Trophy },
-  { to: "/admin/import-export", label: "Import / Export", icon: ArrowUpDown, section: "System" },
-  { to: "/admin/notifications", label: "Notifications", icon: Bell },
-  { to: "/admin/audit-logs", label: "Audit logs", icon: ScrollText },
 ];
 
 export const Route = createFileRoute("/admin")({

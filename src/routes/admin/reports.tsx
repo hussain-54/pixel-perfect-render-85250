@@ -12,6 +12,7 @@ import {
   TableWrap,
   portalErrorMessage,
 } from "@/components/common";
+import { AdminModuleSubnav } from "@/components/portal/AdminModuleSubnav";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { downloadBase64File } from "@/lib/export-formats";
@@ -104,6 +105,14 @@ function AdminReports() {
             </div>
           ) : null
         }
+      />
+      <AdminModuleSubnav
+        items={[
+          { to: "/admin/reports", label: "Module reports" },
+          { to: "/admin/import-export", label: "Import / Export" },
+          { to: "/admin/audit-logs", label: "Audit Logs" },
+          { to: "/admin/leaderboard", label: "Leaderboard" },
+        ]}
       />
 
       <Panel title="Filters" className="mb-6">

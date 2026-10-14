@@ -14,7 +14,7 @@ function AdminAppointments() {
 
   return (
     <div>
-      <PageHeader title="Appointments" subtitle="Firm-wide schedule (demo)." />
+      <PageHeader title="Counselling" subtitle="Firm-wide counselling appointments and schedule." />
       {apptsQ.isLoading ? (
         <LoadingRows />
       ) : (

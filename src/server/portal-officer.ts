@@ -16,14 +16,14 @@ import {
 import { denyFrontDeskConsultantWorkflows, requireModulePermission } from "@/server/staff-access";
 import type { PermissionLevel } from "@/lib/business-permissions";
 
-function requireConsultantDesk(
+async function requireConsultantDesk(
   session: TrustedSession,
   label = "consultant desk workflows",
   studentsMinimum: PermissionLevel = 1,
 ) {
   requireRoles(session, ["consultant", "admin", "super_admin"]);
   denyFrontDeskConsultantWorkflows(session, label);
-  requireModulePermission(session, "students", studentsMinimum, label);
+  await requireModulePermission(session, "students", studentsMinimum, label);
 }
 import type {
   OfficerDashboardPayload,
@@ -144,7 +144,7 @@ function buildDirectoryRow(s: Student): StudentDirectoryRow {
 export const portalGetOfficerDashboard = createServerFn({ method: "GET" }).handler(async () => {
   try {
     const session = await requireTrustedSession();
-    requireConsultantDesk(session);
+    await requireConsultantDesk(session);
 
     const { usesSupabaseDataPlane, buildOfficerDashboardFromDb } = await import("@/server/ao-data");
     if (usesSupabaseDataPlane(session)) {
@@ -268,7 +268,7 @@ export const portalGetStudentsDirectory = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<StudentDirectoryResult> => {
     try {
       const session = await requireTrustedSession();
-      requireConsultantDesk(session);
+      await requireConsultantDesk(session);
 
       const { usesSupabaseDataPlane, buildStudentsDirectoryFromDb } =
         await import("@/server/ao-data");
@@ -384,7 +384,7 @@ export const portalSearchStudents = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<StudentSearchHit[]> => {
     try {
       const session = await requireTrustedSession();
-      requireConsultantDesk(session);
+      await requireConsultantDesk(session);
       const q = data.q.trim().toLowerCase();
       if (q.length < 2) return [];
 
@@ -526,7 +526,7 @@ export const portalGetStudentProfile = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<StudentProfileWorkspace> => {
     try {
       const session = await requireTrustedSession();
-      requireConsultantDesk(session);
+      await requireConsultantDesk(session);
 
       const { usesSupabaseDataPlane, buildStudentWorkspaceFromDb } =
         await import("@/server/ao-data");
@@ -546,7 +546,7 @@ export const portalSaveStudentAssessment = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       const session = await requireTrustedSession();
-      requireConsultantDesk(session, "student assessment", 2);
+      await requireConsultantDesk(session, "student assessment", 2);
 
       const a = data.assessment;
       if (!a.eligibility?.trim()) throw new AuthError("Eligibility assessment is required.", 400);
@@ -619,7 +619,7 @@ export const portalAddStudentNote = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       const session = await requireTrustedSession();
-      requireConsultantDesk(session, "student notes", 2);
+      await requireConsultantDesk(session, "student notes", 2);
       const body = data.body.trim();
       if (body.length < 2) throw new AuthError("Note body is required.", 400);
 
@@ -685,8 +685,8 @@ export const portalCreateStudentApplication = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       // Admission Team is students View-only in the matrix; admissions Edit/Full authorizes create.
-      requireConsultantDesk(session, "creating applications from student workspace", 1);
-      requireModulePermission(
+      await requireConsultantDesk(session, "creating applications from student workspace", 1);
+      await requireModulePermission(
         session,
         "admissions",
         2,
@@ -817,7 +817,7 @@ export const portalSaveShortlistItem = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       const session = await requireTrustedSession();
-      requireConsultantDesk(session, "student shortlist", 2);
+      await requireConsultantDesk(session, "student shortlist", 2);
       const universityName = data.universityName.trim();
       const programName = data.programName.trim();
       if (!universityName || !programName) {
@@ -880,7 +880,7 @@ export const portalRegisterStudent = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       const session = await requireTrustedSession();
-      requireConsultantDesk(session, "student registration", 2);
+      await requireConsultantDesk(session, "student registration", 2);
       const name = data.fullName.trim();
       const email = data.email.trim().toLowerCase();
       if (!name || !email) throw new AuthError("Name and email are required.", 400);

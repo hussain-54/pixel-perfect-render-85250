@@ -1,5 +1,6 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { PageHeader, TableWrap, fmtDate, LoadingRows } from "@/components/common";
+import { AdminModuleSubnav } from "@/components/portal/AdminModuleSubnav";
 import { useData } from "@/lib/useData";
 import { getStudents, lookupConsultant, stageLabel } from "@/services";
 
@@ -12,7 +13,27 @@ function AdminStudents() {
 
   return (
     <div>
-      <PageHeader title="Students" subtitle="Full student roster (demo)." />
+      <PageHeader
+        title="Students"
+        subtitle="Full student roster. Related workspace tools stay inside this module."
+      />
+      <AdminModuleSubnav
+        items={[
+          { to: "/admin/students", label: "Roster" },
+          { to: "/admin/leads", label: "Leads" },
+          { to: "/admin/consultants", label: "Consultants" },
+        ]}
+      />
+      <p className="mb-4 text-sm text-muted-foreground">
+        Need the firm leaderboard?{" "}
+        <Link
+          to="/admin/leaderboard"
+          className="font-medium text-bright underline-offset-2 hover:underline"
+        >
+          Open leaderboard
+        </Link>
+        .
+      </p>
       {studentsQ.isLoading ? (
         <LoadingRows />
       ) : (

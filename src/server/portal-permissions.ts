@@ -16,7 +16,6 @@ import {
   BUSINESS_PERMISSION_MATRIX,
   cloneDefaultPermissionMatrix,
   flattenPermissionMatrix,
-  mergePermissionMatrixCells,
   validatePermissionMatrixChange,
   type BusinessModule,
   type BusinessRole,
@@ -24,6 +23,7 @@ import {
   type PermissionMatrix,
   type PermissionMatrixCell,
 } from "@/lib/business-permissions";
+import { loadPermissionMatrixForDisplay } from "@/server/permission-matrix-store";
 
 function toError(error: unknown): never {
   if (error instanceof AuthError) {
@@ -61,40 +61,6 @@ function snapshotFromMatrix(
   };
 }
 
-async function loadMatrixFromDatabase(): Promise<{
-  matrix: PermissionMatrix;
-  source: "database" | "defaults";
-}> {
-  const { requireAoSupabaseClient } = await import("@/server/ao-data");
-  const client = requireAoSupabaseClient();
-  const { data, error } = await client
-    .from("business_module_permissions")
-    .select("business_role, module, permission_level");
-
-  if (error) {
-    // Table missing or RLS denial — fail closed to defaults for display; edits will fail separately.
-    if (/does not exist|relation|permission|policy/i.test(error.message)) {
-      return { matrix: cloneDefaultPermissionMatrix(), source: "defaults" };
-    }
-    throw new Error(error.message);
-  }
-
-  if (!data?.length) {
-    return { matrix: cloneDefaultPermissionMatrix(), source: "defaults" };
-  }
-
-  const cells: PermissionMatrixCell[] = data.map((row) => ({
-    businessRole: row.business_role as BusinessRole,
-    module: row.module as BusinessModule,
-    level: row.permission_level as PermissionLevel,
-  }));
-
-  return {
-    matrix: mergePermissionMatrixCells(cells),
-    source: "database",
-  };
-}
-
 export const portalGetPermissionMatrix = createServerFn({ method: "GET" }).handler(async () => {
   try {
     const session = await requireTrustedSession();
@@ -105,7 +71,7 @@ export const portalGetPermissionMatrix = createServerFn({ method: "GET" }).handl
     }
 
     try {
-      const loaded = await loadMatrixFromDatabase();
+      const loaded = await loadPermissionMatrixForDisplay();
       // Only allow edits when the live table responded successfully.
       return snapshotFromMatrix(loaded.matrix, loaded.source, loaded.source === "database");
     } catch {
@@ -166,7 +132,7 @@ export const portalUpdatePermissionMatrixCell = createServerFn({ method: "POST" 
         0;
 
       if (previousLevel === validated.level) {
-        const loaded = await loadMatrixFromDatabase();
+        const loaded = await loadPermissionMatrixForDisplay();
         return {
           ok: true as const,
           message: "No change — permission already set to that level.",
@@ -221,7 +187,7 @@ export const portalUpdatePermissionMatrixCell = createServerFn({ method: "POST" 
         /* audit failure must not hide successful persist */
       }
 
-      const loaded = await loadMatrixFromDatabase();
+      const loaded = await loadPermissionMatrixForDisplay();
       return {
         ok: true as const,
         message: "Permission saved.",

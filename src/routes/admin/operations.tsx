@@ -232,7 +232,7 @@ function AdminOperations() {
   return (
     <div>
       <PageHeader
-        title="Office Operations"
+        title="Orders / Sales / Purchase"
         subtitle="Suppliers, purchases, stock, operational sales and expenses — separate from student fees."
       />
       {msg ? <p className="mb-3 text-sm text-navy">{msg}</p> : null}

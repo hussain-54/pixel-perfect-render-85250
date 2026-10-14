@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import {
   canCallFrontDeskAssignCounsellor,
   canListActiveCounsellorDesks,
+  FRONT_DESK_ASSIGN_EXCLUDED_COLUMNS,
+  FRONT_DESK_ASSIGN_RETURN_COLUMNS,
+  frontDeskAssignExcludesSensitive,
+  frontDeskAssignReturnsColumn,
   isEligibleCounsellorDesk,
   studentStaffFieldUpdateDenied,
   type StudentStaffFieldActor,
@@ -114,6 +118,17 @@ describe("enforce_student_staff_fields mirror (Phase 2 remediated)", () => {
 });
 
 describe("front_desk_assign_counsellor / desk list mirrors", () => {
+  it("narrows assign RPC return (excludes DOB / activation / profile_id)", () => {
+    expect(frontDeskAssignReturnsColumn("assigned_consultant_id")).toBe(true);
+    expect(frontDeskAssignReturnsColumn("dob")).toBe(false);
+    expect(frontDeskAssignExcludesSensitive("dob")).toBe(true);
+    expect(frontDeskAssignExcludesSensitive("portal_activated_at")).toBe(true);
+    expect(FRONT_DESK_ASSIGN_RETURN_COLUMNS).not.toContain("dob");
+    for (const col of FRONT_DESK_ASSIGN_EXCLUDED_COLUMNS) {
+      expect(FRONT_DESK_ASSIGN_RETURN_COLUMNS).not.toContain(col);
+    }
+  });
+
   it("rejects non-Front-Desk/non-admin callers for assign RPC", () => {
     expect(
       canCallFrontDeskAssignCounsellor({

@@ -232,7 +232,7 @@ export const portalGetDocumentQueue = createServerFn({ method: "GET" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "document review");
-      requireModulePermission(session, "documents", 1, "document queue");
+      await requireModulePermission(session, "documents", 1, "document queue");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       let students = visibleStudents(session);
@@ -313,7 +313,7 @@ export const portalGetDocumentInspection = createServerFn({ method: "GET" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "document review");
-      requireModulePermission(session, "documents", 1, "document inspection");
+      await requireModulePermission(session, "documents", 1, "document inspection");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
@@ -416,7 +416,7 @@ export const portalGetDocumentChecklist = createServerFn({ method: "GET" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "document review");
-      requireModulePermission(session, "documents", 1, "document checklist");
+      await requireModulePermission(session, "documents", 1, "document checklist");
       assertStudentVisible(session, data.studentId);
       const student = visibleStudents(session).find((s) => s.id === data.studentId);
       if (!student) throw new AuthError("Student not found.", 404);
@@ -457,7 +457,7 @@ export const portalRequestDocument = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "document review");
-      requireModulePermission(session, "documents", 2, "requesting documents");
+      await requireModulePermission(session, "documents", 2, "requesting documents");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
@@ -593,7 +593,7 @@ export const portalReviewQueueDocument = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "document review");
-      requireModulePermission(session, "documents", 2, "document review decisions");
+      await requireModulePermission(session, "documents", 2, "document review decisions");
 
       const note = data.note?.trim() ?? "";
 
@@ -807,7 +807,12 @@ export const portalUploadStudentDocument = createServerFn({ method: "POST" })
       requireRoles(session, ["student", "consultant", "admin", "super_admin"]);
       if (session.role === "consultant") {
         denyFrontDeskConsultantWorkflows(session, "document upload on behalf of students");
-        requireModulePermission(session, "documents", 2, "document upload on behalf of students");
+        await requireModulePermission(
+          session,
+          "documents",
+          2,
+          "document upload on behalf of students",
+        );
       }
 
       let bytes: Buffer;

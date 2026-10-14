@@ -89,7 +89,8 @@ export const M1_OUT_OF_SCOPE_RESIDUALS = [
   },
   {
     id: "R2",
-    description: "front_desk_assign_counsellor — DEFINER returns full public.students row",
+    description:
+      "front_desk_assign_counsellor — DEFINER previously returned full public.students; local …14080000 narrows return (remote apply + JWT proof still required)",
   },
   {
     id: "R3",

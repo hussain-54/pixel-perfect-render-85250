@@ -548,7 +548,7 @@ export const portalGetOffersVisa = createServerFn({ method: "GET" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "offers and visa");
-      requireModulePermission(session, "counselling", 1, "offers and visa");
+      await requireModulePermission(session, "admissions", 1, "offers and visa");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
@@ -800,7 +800,7 @@ export const portalGetOfferDetail = createServerFn({ method: "GET" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "offers and visa");
-      requireModulePermission(session, "counselling", 1, "offers and visa");
+      await requireModulePermission(session, "admissions", 1, "offers and visa");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
@@ -899,7 +899,7 @@ export const portalCreateOfferRecord = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "offers and visa");
-      requireModulePermission(session, "counselling", 2, "offers and visa mutations");
+      await requireModulePermission(session, "admissions", 2, "offers and visa mutations");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
@@ -1080,7 +1080,7 @@ export const portalSetOfferConditionMet = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "offers and visa");
-      requireModulePermission(session, "counselling", 2, "offers and visa mutations");
+      await requireModulePermission(session, "admissions", 2, "offers and visa mutations");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
@@ -1206,7 +1206,7 @@ export const portalAcceptOffer = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "offers and visa");
-      requireModulePermission(session, "counselling", 2, "offers and visa mutations");
+      await requireModulePermission(session, "admissions", 2, "offers and visa mutations");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
@@ -1305,7 +1305,7 @@ export const portalDeclineOffer = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "offers and visa");
-      requireModulePermission(session, "counselling", 2, "offers and visa mutations");
+      await requireModulePermission(session, "admissions", 2, "offers and visa mutations");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
@@ -1379,7 +1379,7 @@ export const portalRecordDepositPaid = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "offers and visa");
-      requireModulePermission(session, "counselling", 2, "offers and visa mutations");
+      await requireModulePermission(session, "admissions", 2, "offers and visa mutations");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
@@ -1472,7 +1472,7 @@ export const portalAdvanceCasI20 = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "offers and visa");
-      requireModulePermission(session, "counselling", 2, "offers and visa mutations");
+      await requireModulePermission(session, "admissions", 2, "offers and visa mutations");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
@@ -1586,7 +1586,7 @@ export const portalAdvanceVisa = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "offers and visa");
-      requireModulePermission(session, "counselling", 2, "offers and visa mutations");
+      await requireModulePermission(session, "admissions", 2, "offers and visa mutations");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
@@ -1707,7 +1707,7 @@ export const portalExportOffersSummary = createServerFn({ method: "GET" }).handl
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "offers and visa");
-      requireModulePermission(session, "counselling", 1, "offers and visa");
+      await requireModulePermission(session, "admissions", 1, "offers and visa");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       let rows: OfferRowView[];

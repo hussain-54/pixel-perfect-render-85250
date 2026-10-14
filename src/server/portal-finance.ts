@@ -138,7 +138,12 @@ export const portalCreateUniversityFeeObligation = createServerFn({ method: "POS
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
-      requireModulePermission(session, "fees_payments", 2, "creating university fee obligations");
+      await requireModulePermission(
+        session,
+        "fees_payments",
+        2,
+        "creating university fee obligations",
+      );
       const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb } =
         await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {
@@ -194,7 +199,12 @@ export const portalClaimUniversityFeePayment = createServerFn({ method: "POST" }
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
-      requireModulePermission(session, "fees_payments", 2, "claiming university fee payments");
+      await requireModulePermission(
+        session,
+        "fees_payments",
+        2,
+        "claiming university fee payments",
+      );
       const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb } =
         await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {
@@ -322,7 +332,7 @@ export const portalListUniversityFeeQueue = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
-      requireModulePermission(session, "fees_payments", 1, "university fee queue");
+      await requireModulePermission(session, "fees_payments", 1, "university fee queue");
       const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb } =
         await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {

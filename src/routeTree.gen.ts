@@ -35,6 +35,7 @@ import { Route as AdminAccountsRouteImport } from './routes/admin/accounts'
 import { Route as AdminApplicationsRouteImport } from './routes/admin/applications'
 import { Route as AdminAppointmentsRouteImport } from './routes/admin/appointments'
 import { Route as AdminAuditLogsRouteImport } from './routes/admin/audit-logs'
+import { Route as AdminBankingRouteImport } from './routes/admin/banking'
 import { Route as AdminConsultantsRouteImport } from './routes/admin/consultants'
 import { Route as AdminDashboardRouteImport } from './routes/admin/dashboard'
 import { Route as AdminDocumentsRouteImport } from './routes/admin/documents'
@@ -52,6 +53,7 @@ import { Route as AdminScholarshipsRouteImport } from './routes/admin/scholarshi
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
 import { Route as AdminStudentsRouteImport } from './routes/admin/students'
 import { Route as AdminUniversitiesRouteImport } from './routes/admin/universities'
+import { Route as AdminUsersRolesRouteImport } from './routes/admin/users-roles'
 import { Route as StaffIndexRouteImport } from './routes/staff/index'
 import { Route as StaffActivityRouteImport } from './routes/staff/activity'
 import { Route as StaffApplicationsRouteImport } from './routes/staff/applications'
@@ -205,6 +207,11 @@ const AdminAuditLogsRoute = AdminAuditLogsRouteImport.update({
   path: '/audit-logs',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const AdminBankingRoute = AdminBankingRouteImport.update({
+  id: '/banking',
+  path: '/banking',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const AdminConsultantsRoute = AdminConsultantsRouteImport.update({
   id: '/consultants',
   path: '/consultants',
@@ -288,6 +295,11 @@ const AdminStudentsRoute = AdminStudentsRouteImport.update({
 const AdminUniversitiesRoute = AdminUniversitiesRouteImport.update({
   id: '/universities',
   path: '/universities',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminUsersRolesRoute = AdminUsersRolesRouteImport.update({
+  id: '/users-roles',
+  path: '/users-roles',
   getParentRoute: () => AdminRouteRoute,
 } as any)
 const StaffIndexRoute = StaffIndexRouteImport.update({
@@ -427,6 +439,7 @@ export interface FileRoutesByFullPath {
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
+  '/admin/banking': typeof AdminBankingRoute
   '/admin/consultants': typeof AdminConsultantsRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/documents': typeof AdminDocumentsRoute
@@ -444,6 +457,7 @@ export interface FileRoutesByFullPath {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/students': typeof AdminStudentsRoute
   '/admin/universities': typeof AdminUniversitiesRoute
+  '/admin/users-roles': typeof AdminUsersRolesRoute
   '/staff/activity': typeof StaffActivityRoute
   '/staff/applications': typeof StaffApplicationsRoute
   '/staff/appointments': typeof StaffAppointmentsRoute
@@ -491,6 +505,7 @@ export interface FileRoutesByTo {
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
+  '/admin/banking': typeof AdminBankingRoute
   '/admin/consultants': typeof AdminConsultantsRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/documents': typeof AdminDocumentsRoute
@@ -508,6 +523,7 @@ export interface FileRoutesByTo {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/students': typeof AdminStudentsRoute
   '/admin/universities': typeof AdminUniversitiesRoute
+  '/admin/users-roles': typeof AdminUsersRolesRoute
   '/staff/activity': typeof StaffActivityRoute
   '/staff/applications': typeof StaffApplicationsRoute
   '/staff/appointments': typeof StaffAppointmentsRoute
@@ -559,6 +575,7 @@ export interface FileRoutesById {
   '/admin/applications': typeof AdminApplicationsRoute
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
+  '/admin/banking': typeof AdminBankingRoute
   '/admin/consultants': typeof AdminConsultantsRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/documents': typeof AdminDocumentsRoute
@@ -576,6 +593,7 @@ export interface FileRoutesById {
   '/admin/settings': typeof AdminSettingsRoute
   '/admin/students': typeof AdminStudentsRoute
   '/admin/universities': typeof AdminUniversitiesRoute
+  '/admin/users-roles': typeof AdminUsersRolesRoute
   '/staff/activity': typeof StaffActivityRoute
   '/staff/applications': typeof StaffApplicationsRoute
   '/staff/appointments': typeof StaffAppointmentsRoute
@@ -628,6 +646,7 @@ export interface FileRouteTypes {
     | '/admin/applications'
     | '/admin/appointments'
     | '/admin/audit-logs'
+    | '/admin/banking'
     | '/admin/consultants'
     | '/admin/dashboard'
     | '/admin/documents'
@@ -645,6 +664,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/students'
     | '/admin/universities'
+    | '/admin/users-roles'
     | '/staff/activity'
     | '/staff/applications'
     | '/staff/appointments'
@@ -692,6 +712,7 @@ export interface FileRouteTypes {
     | '/admin/applications'
     | '/admin/appointments'
     | '/admin/audit-logs'
+    | '/admin/banking'
     | '/admin/consultants'
     | '/admin/dashboard'
     | '/admin/documents'
@@ -709,6 +730,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/students'
     | '/admin/universities'
+    | '/admin/users-roles'
     | '/staff/activity'
     | '/staff/applications'
     | '/staff/appointments'
@@ -759,6 +781,7 @@ export interface FileRouteTypes {
     | '/admin/applications'
     | '/admin/appointments'
     | '/admin/audit-logs'
+    | '/admin/banking'
     | '/admin/consultants'
     | '/admin/dashboard'
     | '/admin/documents'
@@ -776,6 +799,7 @@ export interface FileRouteTypes {
     | '/admin/settings'
     | '/admin/students'
     | '/admin/universities'
+    | '/admin/users-roles'
     | '/staff/activity'
     | '/staff/applications'
     | '/staff/appointments'
@@ -1009,6 +1033,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminAuditLogsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/admin/banking': {
+      id: '/admin/banking'
+      path: '/banking'
+      fullPath: '/admin/banking'
+      preLoaderRoute: typeof AdminBankingRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/admin/consultants': {
       id: '/admin/consultants'
       path: '/consultants'
@@ -1126,6 +1157,13 @@ declare module '@tanstack/react-router' {
       path: '/universities'
       fullPath: '/admin/universities'
       preLoaderRoute: typeof AdminUniversitiesRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/users-roles': {
+      id: '/admin/users-roles'
+      path: '/users-roles'
+      fullPath: '/admin/users-roles'
+      preLoaderRoute: typeof AdminUsersRolesRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/staff/': {
@@ -1290,6 +1328,7 @@ interface AdminRouteRouteChildren {
   AdminApplicationsRoute: typeof AdminApplicationsRoute
   AdminAppointmentsRoute: typeof AdminAppointmentsRoute
   AdminAuditLogsRoute: typeof AdminAuditLogsRoute
+  AdminBankingRoute: typeof AdminBankingRoute
   AdminConsultantsRoute: typeof AdminConsultantsRoute
   AdminDashboardRoute: typeof AdminDashboardRoute
   AdminDocumentsRoute: typeof AdminDocumentsRoute
@@ -1307,6 +1346,7 @@ interface AdminRouteRouteChildren {
   AdminSettingsRoute: typeof AdminSettingsRoute
   AdminStudentsRoute: typeof AdminStudentsRoute
   AdminUniversitiesRoute: typeof AdminUniversitiesRoute
+  AdminUsersRolesRoute: typeof AdminUsersRolesRoute
   AdminIndexRoute: typeof AdminIndexRoute
 }
 
@@ -1315,6 +1355,7 @@ const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminApplicationsRoute: AdminApplicationsRoute,
   AdminAppointmentsRoute: AdminAppointmentsRoute,
   AdminAuditLogsRoute: AdminAuditLogsRoute,
+  AdminBankingRoute: AdminBankingRoute,
   AdminConsultantsRoute: AdminConsultantsRoute,
   AdminDashboardRoute: AdminDashboardRoute,
   AdminDocumentsRoute: AdminDocumentsRoute,
@@ -1332,6 +1373,7 @@ const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminSettingsRoute: AdminSettingsRoute,
   AdminStudentsRoute: AdminStudentsRoute,
   AdminUniversitiesRoute: AdminUniversitiesRoute,
+  AdminUsersRolesRoute: AdminUsersRolesRoute,
   AdminIndexRoute: AdminIndexRoute,
 }
 

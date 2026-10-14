@@ -118,7 +118,7 @@ export const portalGetApplicationsPipeline = createServerFn({ method: "GET" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "applications");
-      requireModulePermission(session, "admissions", 1, "applications");
+      await requireModulePermission(session, "admissions", 1, "applications");
 
       const {
         usesSupabaseDataPlane,
@@ -268,7 +268,7 @@ export const portalGetApplicationDetail = createServerFn({ method: "GET" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "applications");
-      requireModulePermission(session, "admissions", 1, "applications");
+      await requireModulePermission(session, "admissions", 1, "applications");
 
       const {
         usesSupabaseDataPlane,
@@ -326,7 +326,7 @@ export const portalChangeApplicationStage = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "applications");
-      requireModulePermission(session, "admissions", 2, "application stage changes");
+      await requireModulePermission(session, "admissions", 2, "application stage changes");
 
       const {
         usesSupabaseDataPlane,
@@ -455,7 +455,7 @@ export const portalCreatePipelineApplication = createServerFn({ method: "POST" }
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "applications");
-      requireModulePermission(session, "admissions", 2, "creating applications");
+      await requireModulePermission(session, "admissions", 2, "creating applications");
 
       const university = data.university.trim();
       const program = data.program.trim();

@@ -114,3 +114,41 @@ export function canCallFrontDeskAssignCounsellor(input: {
   if (!input.isAuthenticated) return false;
   return input.isAdmin || input.isFrontDesk;
 }
+
+/**
+ * Columns returned by front_desk_assign_counsellor after …14080000.
+ * Excludes DOB / activation / archive / notes / profile_id (R2 narrow).
+ */
+export const FRONT_DESK_ASSIGN_RETURN_COLUMNS = [
+  "id",
+  "case_id",
+  "full_name",
+  "email",
+  "phone",
+  "whatsapp",
+  "city",
+  "destination",
+  "program",
+  "study_level",
+  "journey_stage",
+  "assigned_consultant_id",
+  "registered_by",
+  "updated_at",
+] as const;
+
+export const FRONT_DESK_ASSIGN_EXCLUDED_COLUMNS = [
+  "dob",
+  "archived_at",
+  "portal_activated_at",
+  "last_activity_at",
+  "registration_notes",
+  "profile_id",
+] as const;
+
+export function frontDeskAssignReturnsColumn(column: string): boolean {
+  return (FRONT_DESK_ASSIGN_RETURN_COLUMNS as readonly string[]).includes(column);
+}
+
+export function frontDeskAssignExcludesSensitive(column: string): boolean {
+  return (FRONT_DESK_ASSIGN_EXCLUDED_COLUMNS as readonly string[]).includes(column);
+}

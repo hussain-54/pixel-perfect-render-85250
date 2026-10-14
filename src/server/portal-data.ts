@@ -140,7 +140,7 @@ export const portalGetStudents = createServerFn({ method: "GET" }).handler(async
     const session = await requireTrustedSession();
     requireRoles(session, ["consultant", "admin", "super_admin"]);
     denyFrontDeskConsultantWorkflows(session, "the consultant student directory");
-    requireModulePermission(session, "students", 1, "the consultant student directory");
+    await requireModulePermission(session, "students", 1, "the consultant student directory");
     // Supabase sessions must never receive mock CRM rows as a silent fallback.
     return crmListOrEmpty(session.source, filterStudentsForSession(session));
   } catch (error) {
@@ -156,7 +156,7 @@ export const portalGetStudent = createServerFn({ method: "GET" })
       requireRoles(session, ["student", "consultant", "admin", "super_admin"]);
       if (session.role !== "student") {
         denyFrontDeskConsultantWorkflows(session, "student records");
-        requireModulePermission(session, "students", 1, "student records");
+        await requireModulePermission(session, "students", 1, "student records");
       }
       if (!isMockCrmAllowed(session.source)) {
         return crmRecordOrNull(session.source, null);
@@ -325,7 +325,7 @@ export const portalGetAppointments = createServerFn({ method: "GET" })
       // Front Desk is not the appointments workspace; RLS remains authoritative.
       if (session.role !== "student") {
         denyFrontDeskConsultantWorkflows(session, "appointments");
-        requireModulePermission(session, "students", 1, "appointments");
+        await requireModulePermission(session, "students", 1, "appointments");
       }
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
@@ -529,7 +529,7 @@ export const portalUpdateAppointmentStatus = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "appointment status");
-      requireModulePermission(session, "students", 2, "appointment status updates");
+      await requireModulePermission(session, "students", 2, "appointment status updates");
 
       const appointmentId = data.appointmentId?.trim();
       if (!appointmentId) throw new AuthError("Appointment id is required.", 400);
@@ -632,7 +632,7 @@ export const portalGetDocuments = createServerFn({ method: "GET" })
           ownStudentId = own.id;
         } else {
           denyFrontDeskConsultantWorkflows(session, "document lists");
-          requireModulePermission(session, "documents", 1, "document lists");
+          await requireModulePermission(session, "documents", 1, "document lists");
           if (data.studentId?.trim()) {
             await assertStudentVisibleDb(client, session, data.studentId.trim());
             visibleStudentIds = [data.studentId.trim()];
@@ -693,7 +693,7 @@ export const portalGetApplications = createServerFn({ method: "GET" })
           ownStudentId = own.id;
         } else {
           denyFrontDeskConsultantWorkflows(session, "application lists");
-          requireModulePermission(session, "admissions", 1, "application lists");
+          await requireModulePermission(session, "admissions", 1, "application lists");
           if (data.studentId?.trim()) {
             await assertStudentVisibleDb(client, session, data.studentId.trim());
             visibleStudentIds = [data.studentId.trim()];
@@ -733,7 +733,7 @@ export const portalGetLeads = createServerFn({ method: "GET" }).handler(async ()
     const session = await requireTrustedSession();
     requireRoles(session, ["consultant", "admin", "super_admin"]);
     denyFrontDeskConsultantWorkflows(session, "leads");
-    requireModulePermission(session, "students", 1, "leads");
+    await requireModulePermission(session, "students", 1, "leads");
 
     const { usesSupabaseDataPlane } = await import("@/server/ao-data");
     if (usesSupabaseDataPlane(session)) {
@@ -777,7 +777,7 @@ export const portalListLeadAssigneeOptions = createServerFn({ method: "GET" }).h
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "lead assignment");
-      requireModulePermission(session, "students", 2, "lead assignment");
+      await requireModulePermission(session, "students", 2, "lead assignment");
       const { canAssignConsultationLead, isEligibleLeadAssigneeStatus } =
         await import("@/lib/lead-mappers");
       if (
@@ -820,7 +820,7 @@ export const portalAssignLead = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "lead assignment");
-      requireModulePermission(session, "students", 2, "lead assignment");
+      await requireModulePermission(session, "students", 2, "lead assignment");
       const {
         canAssignConsultationLead,
         isEligibleLeadAssigneeStatus,
@@ -875,7 +875,7 @@ export const portalUpdateLeadStatus = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "lead status");
-      requireModulePermission(session, "students", 2, "lead status updates");
+      await requireModulePermission(session, "students", 2, "lead status updates");
 
       const leadId = data.leadId?.trim();
       if (!leadId) throw new AuthError("Lead id is required.", 400);

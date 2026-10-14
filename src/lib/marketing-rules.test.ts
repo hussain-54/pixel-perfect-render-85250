@@ -12,7 +12,7 @@ import {
 } from "./marketing-rules";
 
 describe("digital marketing rules", () => {
-  it("allows digital manager to mutate; counsellor view only via students", () => {
+  it("allows digital manager to mutate; counsellor denied digital_marketing (matrix=0)", () => {
     expect(canMutateMarketing({ appRole: "consultant", businessRole: "digital_manager" })).toBe(
       true,
     );
@@ -20,8 +20,11 @@ describe("digital marketing rules", () => {
       canMutateMarketing({ appRole: "consultant", businessRole: "counsellor_consultant" }),
     ).toBe(false);
     expect(canViewMarketing({ appRole: "consultant", businessRole: "counsellor_consultant" })).toBe(
-      true,
+      false,
     );
+    expect(
+      canViewMarketing({ appRole: "consultant", businessRole: "front_desk_student_affairs" }),
+    ).toBe(true);
   });
 
   it("keeps Admin and Super Admin able to mutate; Super Admin alone reopens completed", () => {

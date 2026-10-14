@@ -240,7 +240,7 @@ export const portalGetStudentJourneyTimeline = createServerFn({ method: "GET" })
         }
       } else {
         denyFrontDeskConsultantWorkflows(session, "student journey timeline");
-        requireModulePermission(session, "students", 1, "student journey timeline");
+        await requireModulePermission(session, "students", 1, "student journey timeline");
         const requested = data.studentId?.trim();
         if (!requested) throw new AuthError("studentId is required for staff timeline views.", 400);
         await assertStudentVisibleDb(client, session, requested);

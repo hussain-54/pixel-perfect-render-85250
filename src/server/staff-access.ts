@@ -1,15 +1,17 @@
 /**
- * Server-side staff business-role gates (Front Desk Phase 2).
+ * Server-side staff business-role gates (Front Desk Phase 2 + Phase 3 matrix).
  * Always resolve business_role from TrustedSession / profiles — never from client body.
  */
 import { AuthError, type TrustedSession } from "@/server/portal-auth";
 import { rolesAtLeastAdmin } from "@/lib/roles";
 import {
   canEditModule,
-  hasMinPermission,
+  cloneDefaultPermissionMatrix,
+  getPermissionLevelFromMatrix,
   type BusinessModule,
   type BusinessRole,
   type PermissionLevel,
+  type PermissionMatrix,
 } from "@/lib/business-permissions";
 import {
   canPerformFrontDeskIntake,
@@ -18,6 +20,7 @@ import {
   isFrontDeskBusinessRole,
   normalizeTrustedBusinessRole,
 } from "@/lib/staff-business-access";
+import { loadAuthorizationMatrix } from "@/server/permission-matrix-store";
 
 /**
  * Prefer session.businessRole (resolved at auth from profiles).
@@ -107,16 +110,15 @@ export function assertFrontDeskOrAdmin(session: TrustedSession): void {
 }
 
 /**
- * Phase 3 — enforce approved business-role × module matrix on server actions.
- * Technical admin/super_admin bypass. Uses TrustedSession.businessRole only
- * (profiles), never client-supplied roles. Default matrix when DB matrix unavailable
- * at call site — callers that load DB matrix may pass resolved role on session.
+ * Synchronous matrix check (unit tests + callers with a resolved matrix).
+ * Technical admin/super_admin bypass. Never trusts client-supplied roles.
  */
-export function requireModulePermission(
+export function assertModulePermission(
   session: TrustedSession,
   module: BusinessModule,
   minimum: PermissionLevel,
   actionLabel?: string,
+  matrix: PermissionMatrix = cloneDefaultPermissionMatrix(),
 ): void {
   if (rolesAtLeastAdmin(session.role)) return;
   const businessRole = businessRoleFromSession(session);
@@ -126,8 +128,32 @@ export function requireModulePermission(
       403,
     );
   }
-  if (!hasMinPermission(businessRole, module, minimum)) {
+  const level = getPermissionLevelFromMatrix(matrix, businessRole, module);
+  if (level < minimum) {
     const label = actionLabel ?? module;
     throw new AuthError(`You do not have permission for ${label}.`, 403);
   }
+}
+
+/**
+ * Phase 3 — enforce approved business-role × module matrix on server actions.
+ * Loads the authorization matrix (DB authoritative on live plane when available).
+ */
+export async function requireModulePermission(
+  session: TrustedSession,
+  module: BusinessModule,
+  minimum: PermissionLevel,
+  actionLabel?: string,
+): Promise<void> {
+  if (rolesAtLeastAdmin(session.role)) return;
+
+  const loaded = await loadAuthorizationMatrix(session);
+  if (loaded.source === "unavailable") {
+    throw new AuthError(
+      "Permission matrix is temporarily unavailable. Try again or contact an administrator.",
+      503,
+    );
+  }
+
+  assertModulePermission(session, module, minimum, actionLabel, loaded.matrix);
 }

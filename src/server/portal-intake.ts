@@ -528,21 +528,41 @@ export const portalAssignCounsellor = createServerFn({ method: "POST" })
 
       // Front Desk assigns via security-definer RPC (registrar ownership + active counsellor).
       if (isFrontDeskBusinessRole(businessRole) || rolesAtLeastAdmin(session.role)) {
-        const { data: row, error } = await client.rpc("front_desk_assign_counsellor", {
+        const { data: rows, error } = await client.rpc("front_desk_assign_counsellor", {
           p_student_id: data.studentId,
           p_consultant_id: data.consultantId,
         });
         if (error) {
           if (/does not exist|function/i.test(error.message)) {
             throw new AuthError(
-              "Counsellor assignment RPC is unavailable. Apply migration 20261014020000_front_desk_intake_ownership.sql.",
+              "Counsellor assignment RPC is unavailable. Apply migrations through 20261014080000_front_desk_assign_counsellor_narrow_return.sql.",
               503,
             );
           }
           throw new AuthError(error.message || "Could not assign counsellor.", 400);
         }
+        const row = Array.isArray(rows) ? rows[0] : rows;
+        if (!row?.id) {
+          throw new AuthError("Student not found or not owned by registrar.", 404);
+        }
         const { mapStudentRow } = await import("@/lib/ao-mappers");
-        return { ok: true as const, student: mapStudentRow(row) };
+        // Narrow RPC omits DOB/activation/archive — map with safe empties for UI shape.
+        return {
+          ok: true as const,
+          student: mapStudentRow({
+            ...row,
+            dob: null,
+            archived_at: null,
+            last_activity_at: null,
+            portal_activated_at: null,
+            inquiry_source: null,
+            inquiry_channel: null,
+            intake_date: null,
+            registration_notes: null,
+            profile_id: null,
+            created_at: row.updated_at,
+          }),
+        };
       }
 
       await assertStudentVisibleDb(client, session, data.studentId);
@@ -574,7 +594,7 @@ export const portalRecordCounsellingAgreement = createServerFn({ method: "POST" 
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       session.businessRole = await resolveSessionBusinessRole(session);
       denyFrontDeskConsultantWorkflows(session, "counselling agreements");
-      requireModulePermission(session, "counselling", 2, "counselling agreements");
+      await requireModulePermission(session, "counselling", 2, "counselling agreements");
       const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb } =
         await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {
@@ -635,7 +655,7 @@ export const portalHandoverToAdmission = createServerFn({ method: "POST" })
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       session.businessRole = await resolveSessionBusinessRole(session);
       denyFrontDeskConsultantWorkflows(session, "admission handover");
-      requireModulePermission(session, "admissions", 2, "admission handover");
+      await requireModulePermission(session, "admissions", 2, "admission handover");
       const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb } =
         await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {

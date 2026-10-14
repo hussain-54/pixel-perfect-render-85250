@@ -715,7 +715,7 @@ export const portalGetReports = createServerFn({ method: "GET" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "reports");
-      requireModulePermission(session, "reports", 1, "officer reports");
+      await requireModulePermission(session, "reports", 1, "officer reports");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
@@ -735,7 +735,7 @@ export const portalExportReports = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "reports");
-      requireModulePermission(session, "reports", 1, "report exports");
+      await requireModulePermission(session, "reports", 1, "report exports");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       const payload = usesSupabaseDataPlane(session)

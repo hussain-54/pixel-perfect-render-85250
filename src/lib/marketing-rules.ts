@@ -16,14 +16,7 @@ export function canViewMarketing(input: {
   businessRole: BusinessRole | null;
 }): boolean {
   if (rolesAtLeastAdmin(input.appRole)) return true;
-  if (
-    input.businessRole === "digital_manager" ||
-    input.businessRole === "manager" ||
-    input.businessRole === "front_desk_student_affairs"
-  ) {
-    return true;
-  }
-  if (input.appRole === "consultant") return canViewModule(input.businessRole, "students");
+  // Matrix-only: Digital Marketing module (FD View=1, counsellor=0, etc.).
   return canViewModule(input.businessRole, "digital_marketing");
 }
 

@@ -45,6 +45,7 @@ export type PortalNavItem = {
     | "/admin/students"
     | "/admin/appointments"
     | "/admin/finance"
+    | "/admin/banking"
     | "/admin/hr"
     | "/admin/marketing"
     | "/admin/operations"
@@ -55,6 +56,7 @@ export type PortalNavItem = {
     | "/admin/scholarships"
     | "/admin/consultants"
     | "/admin/accounts"
+    | "/admin/users-roles"
     | "/admin/leaderboard"
     | "/admin/reports"
     | "/admin/import-export"
@@ -183,6 +185,7 @@ export function PortalShell({ role, nav, children, barTitle }: PortalShellProps)
     businessRole && businessRole in BUSINESS_ROLE_LABELS
       ? BUSINESS_ROLE_LABELS[businessRole]
       : meta.fallbackRoleLabel;
+  const identityEmail = sessionQ.data?.email?.trim() || null;
 
   const searchQTrim = searchQ.trim();
   const searchResults = useQuery({
@@ -211,9 +214,16 @@ export function PortalShell({ role, nav, children, barTitle }: PortalShellProps)
   const brandBlock = (
     <div className="border-b border-white/10 px-4 py-4">
       <Logo light to={meta.home} className="[&_img]:h-8 [&_img]:sm:h-9" />
-      <p className="mt-3 text-[0.68rem] leading-snug text-white/55">
-        Logged in as: <span className="font-medium text-white/85">{roleLabel}</span>
-      </p>
+      <div className="mt-3 space-y-0.5 text-[0.68rem] leading-snug text-white/55">
+        {identityEmail ? (
+          <p className="truncate font-medium text-white/90" title={identityEmail}>
+            {identityEmail}
+          </p>
+        ) : null}
+        <p>
+          Logged in as: <span className="font-medium text-white/85">{roleLabel}</span>
+        </p>
+      </div>
     </div>
   );
 

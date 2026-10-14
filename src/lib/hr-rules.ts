@@ -23,7 +23,6 @@ const EMPLOYMENT_TRANSITIONS: Record<HrEmploymentStatus, HrEmploymentStatus[]> =
 
 export function canViewHr(input: { appRole: AppRole; businessRole: BusinessRole | null }): boolean {
   if (rolesAtLeastAdmin(input.appRole)) return true;
-  if (input.businessRole === "hr_system" || input.businessRole === "manager") return true;
   return canViewModule(input.businessRole, "hr_attendance");
 }
 
@@ -32,7 +31,6 @@ export function canMutateHr(input: {
   businessRole: BusinessRole | null;
 }): boolean {
   if (rolesAtLeastAdmin(input.appRole)) return true;
-  if (input.businessRole === "hr_system" || input.businessRole === "manager") return true;
   return canEditModule(input.businessRole, "hr_attendance");
 }
 
@@ -41,7 +39,6 @@ export function canDecideLeave(input: {
   businessRole: BusinessRole | null;
 }): boolean {
   if (rolesAtLeastAdmin(input.appRole)) return true;
-  if (input.businessRole === "hr_system" || input.businessRole === "manager") return true;
   return canFullyApproveModule(input.businessRole, "hr_attendance");
 }
 
