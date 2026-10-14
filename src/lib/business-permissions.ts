@@ -101,7 +101,11 @@ type MatrixRow = readonly [
   PermissionLevel,
 ];
 
-/** Exact approved 10×12 matrix — do not alter values. */
+/**
+ * Default approved 10×12 matrix (seed / fail-closed fallback).
+ * Runtime Admin edits persist in `business_module_permissions` and are merged
+ * server-side; this constant remains the documented baseline.
+ */
 export const BUSINESS_PERMISSION_MATRIX: Record<BusinessRole, MatrixRow> = {
   front_desk_student_affairs: [2, 1, 1, 2, 2, 0, 1, 1, 0, 1, 0, 0],
   counsellor_consultant: [2, 3, 1, 2, 1, 0, 1, 0, 0, 1, 0, 0],
@@ -114,6 +118,141 @@ export const BUSINESS_PERMISSION_MATRIX: Record<BusinessRole, MatrixRow> = {
   manager: [3, 3, 3, 3, 3, 2, 3, 3, 3, 3, 1, 1],
   admin: [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3],
 };
+
+export type PermissionMatrix = Record<BusinessRole, MatrixRow>;
+
+export type PermissionMatrixCell = {
+  businessRole: BusinessRole;
+  module: BusinessModule;
+  level: PermissionLevel;
+};
+
+export function isPermissionLevel(value: unknown): value is PermissionLevel {
+  return value === 0 || value === 1 || value === 2 || value === 3;
+}
+
+/** Deep-clone the default matrix for safe mutation / merge. */
+export function cloneDefaultPermissionMatrix(): PermissionMatrix {
+  const out = {} as PermissionMatrix;
+  for (const role of BUSINESS_ROLES) {
+    out[role] = [...BUSINESS_PERMISSION_MATRIX[role]] as unknown as MatrixRow;
+  }
+  return out;
+}
+
+/** Apply DB (or API) cells onto the default matrix; unknown ids ignored. */
+export function mergePermissionMatrixCells(
+  cells: readonly PermissionMatrixCell[],
+  base: PermissionMatrix = cloneDefaultPermissionMatrix(),
+): PermissionMatrix {
+  const next = {} as PermissionMatrix;
+  for (const role of BUSINESS_ROLES) {
+    next[role] = [...base[role]] as unknown as MatrixRow;
+  }
+  for (const cell of cells) {
+    if (!isBusinessRole(cell.businessRole) || !isBusinessModule(cell.module)) continue;
+    if (!isPermissionLevel(cell.level)) continue;
+    const index = BUSINESS_MODULES.indexOf(cell.module);
+    if (index < 0) continue;
+    const row = [...next[cell.businessRole]] as PermissionLevel[];
+    row[index] = cell.level;
+    next[cell.businessRole] = row as unknown as MatrixRow;
+  }
+  // Admin business-role display row is always Full on every module.
+  next.admin = [3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3];
+  return next;
+}
+
+export function flattenPermissionMatrix(matrix: PermissionMatrix): PermissionMatrixCell[] {
+  const cells: PermissionMatrixCell[] = [];
+  for (const role of BUSINESS_ROLES) {
+    for (let i = 0; i < BUSINESS_MODULES.length; i++) {
+      const module = BUSINESS_MODULES[i];
+      if (!module) continue;
+      cells.push({
+        businessRole: role,
+        module,
+        level: matrix[role][i] ?? 0,
+      });
+    }
+  }
+  return cells;
+}
+
+export function getPermissionLevelFromMatrix(
+  matrix: PermissionMatrix,
+  businessRole: BusinessRole | null | undefined,
+  module: BusinessModule | null | undefined,
+): PermissionLevel {
+  if (!businessRole || !isBusinessRole(businessRole)) return 0;
+  if (!module || !isBusinessModule(module)) return 0;
+  const index = BUSINESS_MODULES.indexOf(module);
+  if (index < 0) return 0;
+  return matrix[businessRole][index] ?? 0;
+}
+
+/**
+ * Validate a persisted permission cell change.
+ * - Rejects unknown role/module/level.
+ * - Admin matrix row cannot be lowered (always Full) — protects Users & Roles / Settings.
+ * - Does not grant technical app_role=admin (that remains profiles.role / RPC only).
+ */
+export function validatePermissionMatrixChange(input: {
+  businessRole: unknown;
+  module: unknown;
+  level: unknown;
+}):
+  | { ok: true; businessRole: BusinessRole; module: BusinessModule; level: PermissionLevel }
+  | { ok: false; error: string } {
+  if (!isBusinessRole(input.businessRole)) {
+    return { ok: false, error: "Unknown business role." };
+  }
+  if (!isBusinessModule(input.module)) {
+    return { ok: false, error: "Unknown permission module." };
+  }
+  if (!isPermissionLevel(input.level)) {
+    return { ok: false, error: "Invalid permission level." };
+  }
+  if (input.businessRole === "admin" && input.level !== 3) {
+    return {
+      ok: false,
+      error:
+        "The Admin role must retain Full access on every module (including Users & Roles and Settings).",
+    };
+  }
+  return {
+    ok: true,
+    businessRole: input.businessRole,
+    module: input.module,
+    level: input.level,
+  };
+}
+
+/**
+ * Prevent accidental lockout of the last protected technical administrator.
+ * Counts profiles with app_role admin or super_admin (not business_role alone).
+ */
+export function wouldRemoveLastProtectedAdmin(input: {
+  protectedAdminCount: number;
+  targetIsProtectedAdmin: boolean;
+  nextIsProtectedAdmin: boolean;
+}): { ok: true } | { ok: false; error: string } {
+  const count = input.protectedAdminCount;
+  if (count < 0) {
+    return { ok: false, error: "Could not verify protected administrators." };
+  }
+  if (input.targetIsProtectedAdmin && !input.nextIsProtectedAdmin && count <= 1) {
+    return {
+      ok: false,
+      error: "Cannot demote or deactivate the last protected administrator.",
+    };
+  }
+  return { ok: true };
+}
+
+export function isProtectedTechnicalAdmin(appRole: AppRole | null | undefined): boolean {
+  return appRole === "admin" || appRole === "super_admin";
+}
 
 export function isBusinessRole(value: unknown): value is BusinessRole {
   return typeof value === "string" && (BUSINESS_ROLES as readonly string[]).includes(value);

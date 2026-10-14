@@ -4,6 +4,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { AuthError, requireRoles, requireTrustedSession } from "@/server/portal-auth";
+import { denyFrontDeskConsultantWorkflows, requireModulePermission } from "@/server/staff-access";
 import {
   assertTimelineOwner,
   buildStudentJourneyTimeline,
@@ -238,6 +239,8 @@ export const portalGetStudentJourneyTimeline = createServerFn({ method: "GET" })
           throw new AuthError("Students may only view their own journey timeline.", 403);
         }
       } else {
+        denyFrontDeskConsultantWorkflows(session, "student journey timeline");
+        requireModulePermission(session, "students", 1, "student journey timeline");
         const requested = data.studentId?.trim();
         if (!requested) throw new AuthError("studentId is required for staff timeline views.", 400);
         await assertStudentVisibleDb(client, session, requested);

@@ -10,13 +10,24 @@ import {
   type TrustedSession,
 } from "@/server/portal-auth";
 import { rolesAtLeastAdmin } from "@/lib/roles";
-import { canActivatePortalFromFeeStatus, isSignupFeeVerified } from "@/lib/signup-fee-gate";
+import { isSignupFeeVerified } from "@/lib/signup-fee-gate";
 import {
   canEditModule,
   canFullyApproveModule,
   resolveBusinessRoleFromTrustedAppRole,
   type BusinessRole,
 } from "@/lib/business-permissions";
+import {
+  assertNoClientOwnershipEscalation,
+  isFrontDeskBusinessRole,
+} from "@/lib/staff-business-access";
+import {
+  businessRoleFromSession,
+  denyFrontDeskConsultantWorkflows,
+  requireModulePermission,
+  requireSignupFeeRecordPermission,
+  requireSignupFeeVerifyPermission,
+} from "@/server/staff-access";
 import type {
   AdmissionHandoverInput,
   AssignCounsellorInput,
@@ -35,8 +46,12 @@ function toError(error: unknown): never {
 }
 
 async function resolveSessionBusinessRole(session: TrustedSession): Promise<BusinessRole | null> {
-  const mapped = resolveBusinessRoleFromTrustedAppRole(session.role);
-  if (!session.userId || session.source !== "supabase") return mapped;
+  const fromSession = businessRoleFromSession(session);
+  if (fromSession) return fromSession;
+  if (!session.userId || session.source !== "supabase") {
+    // Fail closed for live staff: do not invent Front Desk/Counsellor from app_role alone.
+    return session.source === "demo" ? resolveBusinessRoleFromTrustedAppRole(session.role) : null;
+  }
   try {
     const { requireAoSupabaseClient } = await import("@/server/ao-data");
     const client = requireAoSupabaseClient();
@@ -48,18 +63,24 @@ async function resolveSessionBusinessRole(session: TrustedSession): Promise<Busi
     const br = data?.business_role;
     if (br) return br as BusinessRole;
   } catch {
-    /* fall through to AppRole mapping */
+    /* fall through */
   }
-  return mapped;
+  return null;
 }
 
 function requireIntakeEdit(businessRole: BusinessRole | null, session: TrustedSession) {
   if (rolesAtLeastAdmin(session.role)) return;
-  if (canEditModule(businessRole, "students") || canEditModule(businessRole, "counselling")) {
+  if (!businessRole) {
+    throw new AuthError(
+      "Your business role is not configured. Contact an administrator before registering students.",
+      403,
+    );
+  }
+  if (canEditModule(businessRole, "students")) return;
+  // Counsellors may still register when counselling Edit/Full and students view+ — matrix has students Edit for counsellor.
+  if (canEditModule(businessRole, "counselling") && canEditModule(businessRole, "students")) {
     return;
   }
-  // Technical consultant path (desk) may register before business_role is set.
-  if (session.role === "consultant") return;
   throw new AuthError("You do not have permission to register students.", 403);
 }
 
@@ -70,7 +91,18 @@ export const portalIntakeRegisterStudent = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       const businessRole = await resolveSessionBusinessRole(session);
+      // Sync session for helpers that read session.businessRole
+      session.businessRole = businessRole;
       requireIntakeEdit(businessRole, session);
+
+      const clientOwned = (data as { registeredBy?: string }).registeredBy;
+      const ownership = assertNoClientOwnershipEscalation({
+        clientRegisteredBy: clientOwned ?? null,
+        sessionUserId: session.userId,
+      });
+      if (!ownership.ok && session.source === "supabase") {
+        throw new AuthError(ownership.error, 403);
+      }
 
       const name = data.fullName.trim();
       const email = data.email.trim().toLowerCase();
@@ -82,10 +114,10 @@ export const portalIntakeRegisterStudent = createServerFn({ method: "POST" })
         // Demo plane: persist into mock store (same shape as portalRegisterStudent).
         const db = await import("@/data/mock");
         const cid =
-          session.role === "consultant"
-            ? (session.consultantId ?? null)
-            : (db.consultants.find((c) => c.status === "Active")?.id ?? null);
-        if (!cid) throw new AuthError("No consultant assignment available.", 403);
+          data.assignedConsultantId?.trim() ||
+          (session.role === "consultant" ? (session.consultantId ?? null) : null) ||
+          db.consultants.find((c) => c.status === "Active")?.id ||
+          null;
         const nextNum = db.students.length + 1;
         const row = {
           id: `s${nextNum}-${Date.now().toString(36)}`,
@@ -100,12 +132,13 @@ export const portalIntakeRegisterStudent = createServerFn({ method: "POST" })
           program: data.program.trim() || "-",
           studyLevel: data.studyLevel?.trim() || "Master's",
           stage: "profile_submitted" as const,
-          consultantId: cid,
+          consultantId: cid ?? "pending",
           lastActivity: new Date().toISOString().slice(0, 10),
           qualification: "-",
           institution: "-",
           grade: "-",
           englishTest: "-",
+          registeredBy: session.userId ?? "demo-fd",
         };
         db.students.push(row);
         return {
@@ -115,43 +148,80 @@ export const portalIntakeRegisterStudent = createServerFn({ method: "POST" })
             caseId: row.caseId,
             name: row.name,
             email: row.email,
-            consultantId: row.consultantId,
+            consultantId: cid,
             stage: row.stage,
             portalActivated: true,
             signupFeeStatus: "waived" as const,
+            assignmentStatus: cid ? ("assigned" as const) : ("pending" as const),
+            registeredBy: row.registeredBy,
           },
         };
       }
 
-      const { createStudentRecord, listConsultants, writeAudit } = await import("@/services/db");
+      if (!session.userId) {
+        throw new AuthError("Authenticated user required for intake ownership.", 403);
+      }
+
+      const { listConsultants, writeAudit } = await import("@/services/db");
       const client = requireAoSupabaseClient();
 
-      const { data: dup, error: dupErr } = await client
-        .from("students")
-        .select("id")
-        .eq("email", email)
-        .maybeSingle();
-      if (dupErr) throw new Error(dupErr.message);
-      if (dup) throw new AuthError("A student with this email is already registered.", 409);
+      // Duplicate email is enforced inside intake_register_student (SECURITY DEFINER).
+      // App-side SELECT may miss peers under registrar RLS; do not rely on it for uniqueness.
 
-      let assignedConsultantId =
-        data.assignedConsultantId?.trim() ||
-        (await resolveConsultantDeskId(client, session)) ||
-        null;
+      let assignedConsultantId = data.assignedConsultantId?.trim() || null;
+
+      if (assignedConsultantId) {
+        // Validate counsellor desk when assigning at intake.
+        const { data: desk, error: deskErr } = await client
+          .from("consultants")
+          .select("id, status")
+          .eq("id", assignedConsultantId)
+          .maybeSingle();
+        if (deskErr) throw new Error(deskErr.message);
+        const { data: deskProfile } = await client
+          .from("profiles")
+          .select("business_role")
+          .eq("id", assignedConsultantId)
+          .maybeSingle();
+        if (
+          !desk ||
+          desk.status !== "active" ||
+          deskProfile?.business_role !== "counsellor_consultant"
+        ) {
+          if (
+            !isFrontDeskBusinessRole(businessRole) &&
+            assignedConsultantId === session.userId &&
+            desk?.status === "active"
+          ) {
+            // Counsellor self-assignment to own desk remains allowed.
+          } else if (isFrontDeskBusinessRole(businessRole) || rolesAtLeastAdmin(session.role)) {
+            throw new AuthError(
+              "Select an active Counsellor / Consultant. Front Desk and inactive desks are not valid assignees.",
+              400,
+            );
+          }
+        }
+      }
+
+      if (!assignedConsultantId && !isFrontDeskBusinessRole(businessRole)) {
+        assignedConsultantId = (await resolveConsultantDeskId(client, session)) || null;
+      }
       if (!assignedConsultantId && rolesAtLeastAdmin(session.role)) {
         const consultants = await listConsultants(client);
         assignedConsultantId = consultants.find((c) => c.status === "active")?.id ?? null;
       }
-      if (!assignedConsultantId) {
+      // Front Desk may save with pending assignment; other desks still need a desk id.
+      if (!assignedConsultantId && !isFrontDeskBusinessRole(businessRole)) {
         throw new AuthError("Assign a counsellor before completing registration.", 400);
       }
 
       if (
         session.role === "consultant" &&
         session.userId &&
+        assignedConsultantId &&
         assignedConsultantId !== session.userId
       ) {
-        if (!rolesAtLeastAdmin(session.role) && businessRole !== "front_desk_student_affairs") {
+        if (!rolesAtLeastAdmin(session.role) && !isFrontDeskBusinessRole(businessRole)) {
           throw new AuthError("Consultants may only assign registrations to their own desk.", 403);
         }
       }
@@ -168,41 +238,61 @@ export const portalIntakeRegisterStudent = createServerFn({ method: "POST" })
         existingProfileId: existingProfile?.id ?? null,
       });
 
-      const created = await createStudentRecord(client, {
-        case_id: `GR-${Date.now().toString(36).toUpperCase()}`,
-        full_name: name,
-        email,
-        phone: data.phone.trim() || null,
-        whatsapp: data.whatsapp?.trim() || data.phone.trim() || null,
-        city: data.city?.trim() || null,
-        destination: data.destination.trim() || null,
-        program: data.program.trim() || null,
-        study_level: data.studyLevel?.trim() || null,
-        journey_stage: "profile_submitted",
-        assigned_consultant_id: assignedConsultantId,
-        inquiry_source: data.inquirySource?.trim() || null,
-        inquiry_channel: data.inquiryChannel ?? null,
-        intake_date: data.intakeDate?.trim() || null,
-        registration_notes: data.registrationNotes?.trim() || null,
-        portal_activated_at: null,
-        profile_id: link.profileId,
+      const { mapIntakeRegisterRpcError } = await import("@/lib/intake-register-rules");
+      const caseId = `GR-${Date.now().toString(36).toUpperCase()}`;
+      // p_profile_id retained for RPC signature compatibility; …14070000 ignores it and
+      // resolves profile_id by matching profiles.email to p_email inside the DEFINER body.
+      const { data: rpcRows, error: rpcErr } = await client.rpc("intake_register_student", {
+        p_case_id: caseId,
+        p_full_name: name,
+        p_email: email,
+        p_phone: data.phone.trim() || null,
+        p_whatsapp: data.whatsapp?.trim() || data.phone.trim() || null,
+        p_city: data.city?.trim() || null,
+        p_destination: data.destination.trim() || null,
+        p_program: data.program.trim() || null,
+        p_study_level: data.studyLevel?.trim() || null,
+        p_assigned_consultant_id: assignedConsultantId,
+        p_inquiry_source: data.inquirySource?.trim() || null,
+        p_inquiry_channel: data.inquiryChannel ?? null,
+        p_intake_date: data.intakeDate?.trim() || null,
+        p_registration_notes: data.registrationNotes?.trim() || null,
+        p_profile_id: link.profileId,
       });
+      if (rpcErr) {
+        const mapped = mapIntakeRegisterRpcError(rpcErr.message);
+        throw new AuthError(mapped.message, mapped.status);
+      }
+      const created = Array.isArray(rpcRows) ? rpcRows[0] : rpcRows;
+      if (!created?.id) {
+        throw new AuthError("Registration returned no student record.", 500);
+      }
 
       let feeStatus: SignupFeeView["status"] = "unpaid";
+      let feeWarning: string | null = null;
       if (data.signupFee && data.signupFee.amount >= 0) {
-        const status = data.signupFee.markClaimed ? "claimed" : "unpaid";
-        const { error: feeErr } = await client.from("signup_fee_payments").insert({
-          student_id: created.id,
-          amount: data.signupFee.amount,
-          currency: data.signupFee.currency?.trim() || "PKR",
-          payment_method: data.signupFee.paymentMethod?.trim() || null,
-          reference_receipt: data.signupFee.referenceReceipt?.trim() || null,
-          notes: data.signupFee.notes?.trim() || null,
-          status,
-          recorded_by: session.userId ?? null,
-        });
-        if (feeErr) throw new Error(feeErr.message);
-        feeStatus = status;
+        try {
+          requireSignupFeeRecordPermission(session);
+          const status = data.signupFee.markClaimed ? "claimed" : "unpaid";
+          const { error: feeErr } = await client.from("signup_fee_payments").insert({
+            student_id: created.id,
+            amount: data.signupFee.amount,
+            currency: data.signupFee.currency?.trim() || "PKR",
+            payment_method: data.signupFee.paymentMethod?.trim() || null,
+            reference_receipt: data.signupFee.referenceReceipt?.trim() || null,
+            notes: data.signupFee.notes?.trim() || null,
+            status,
+            recorded_by: session.userId ?? null,
+          });
+          if (feeErr) throw new Error(feeErr.message);
+          feeStatus = status;
+        } catch (feeError) {
+          feeWarning =
+            feeError instanceof Error
+              ? feeError.message
+              : "Student registered but signup fee could not be saved.";
+          feeStatus = "unpaid";
+        }
       }
 
       await writeAudit(client, {
@@ -212,25 +302,32 @@ export const portalIntakeRegisterStudent = createServerFn({ method: "POST" })
         student_id: created.id,
         metadata: {
           assignedConsultantId,
+          registeredBy: created.registered_by ?? session.userId,
           feeStatus,
+          feeWarning,
           inquiryChannel: data.inquiryChannel ?? null,
+          via: "intake_register_student",
         },
       });
 
-      const { mapStudentRow } = await import("@/lib/ao-mappers");
-      const student = mapStudentRow(created);
+      // Narrow RPC payload — do not map through full StudentRow (avoids inventing dob etc.).
       return {
         ok: true as const,
         student: {
-          id: student.id,
-          caseId: student.caseId,
-          name: student.name,
-          email: student.email,
-          consultantId: student.consultantId,
-          stage: student.stage,
+          id: created.id,
+          caseId: created.case_id,
+          name: created.full_name,
+          email: created.email,
+          consultantId: created.assigned_consultant_id ?? "",
+          stage: created.journey_stage,
           portalActivated: false,
           signupFeeStatus: feeStatus,
+          assignmentStatus: created.assigned_consultant_id
+            ? ("assigned" as const)
+            : ("pending" as const),
+          registeredBy: created.registered_by ?? session.userId,
         },
+        ...(feeWarning ? { warning: feeWarning } : {}),
       };
     } catch (error) {
       toError(error);
@@ -243,13 +340,34 @@ export const portalRecordSignupFee = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      session.businessRole = await resolveSessionBusinessRole(session);
+      requireSignupFeeRecordPermission(session);
       const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb } =
         await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {
         throw new AuthError("Signup fee recording requires the live data plane.", 400);
       }
       const client = requireAoSupabaseClient();
-      await assertStudentVisibleDb(client, session, data.studentId);
+      // Front Desk ownership via is_intake_registrar RPC (boolean only — not full-row SELECT).
+      if (isFrontDeskBusinessRole(session.businessRole)) {
+        const { data: owned, error: ownedErr } = await client.rpc("is_intake_registrar", {
+          p_student_id: data.studentId,
+        });
+        if (ownedErr) {
+          if (/does not exist|function/i.test(ownedErr.message)) {
+            throw new AuthError(
+              "Intake registrar RPC unavailable. Apply migration 20261014030000_front_desk_fee_and_business_role_guard.sql.",
+              503,
+            );
+          }
+          throw new Error(ownedErr.message);
+        }
+        if (!owned) {
+          throw new AuthError("You can only record fees for students you registered.", 403);
+        }
+      } else {
+        await assertStudentVisibleDb(client, session, data.studentId);
+      }
       if (data.amount < 0) throw new AuthError("Fee amount is invalid.", 400);
 
       const status = data.markClaimed ? "claimed" : "unpaid";
@@ -300,6 +418,9 @@ export const portalVerifySignupFee = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["admin", "super_admin", "consultant"]);
       const businessRole = await resolveSessionBusinessRole(session);
+      session.businessRole = businessRole;
+      denyFrontDeskConsultantWorkflows(session, "signup fee verification");
+      requireSignupFeeVerifyPermission(session);
       const canVerify =
         rolesAtLeastAdmin(session.role) ||
         canFullyApproveModule(businessRole, "fees_payments") ||
@@ -309,20 +430,19 @@ export const portalVerifySignupFee = createServerFn({ method: "POST" })
         throw new AuthError("Only Accounts/Finance or Admin may verify signup fees.", 403);
       }
 
-      const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb } =
-        await import("@/server/ao-data");
+      const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {
         throw new AuthError("Fee verification requires the live data plane.", 400);
       }
       const client = requireAoSupabaseClient();
-      await assertStudentVisibleDb(client, session, data.studentId);
 
-      const nextStatus =
-        data.action === "verify" ? "verified" : data.action === "waive" ? "waived" : "rejected";
-      // Load then update by primary key — never reassign student_id; only status/verifier fields.
+      // Resolve fee id for the RPC. Verifier SELECT is org-wide (can_verify_signup_fee);
+      // do not require can_access_student — that would block unassigned Accounts.
       const { data: existingFee, error: loadFeeErr } = await client
         .from("signup_fee_payments")
-        .select("id, student_id, status")
+        .select(
+          "id, student_id, status, amount, currency, payment_method, reference_receipt, verified_at",
+        )
         .eq("student_id", data.studentId)
         .order("created_at", { ascending: false })
         .limit(1)
@@ -330,50 +450,47 @@ export const portalVerifySignupFee = createServerFn({ method: "POST" })
       if (loadFeeErr) throw new Error(loadFeeErr.message);
       if (!existingFee) throw new AuthError("Signup fee record not found.", 404);
 
-      const { data: fee, error } = await client
-        .from("signup_fee_payments")
-        .update({
-          status: nextStatus,
-          verified_by: session.userId ?? null,
-          verified_at: new Date().toISOString(),
-          notes: data.notes?.trim() || null,
-        })
-        .eq("id", existingFee.id)
-        .eq("student_id", data.studentId)
-        .select("*")
-        .single();
-      if (error) throw new Error(error.message);
-
-      let portalActivatedAt: string | null = null;
-      const shouldActivate =
-        data.activatePortal !== false && canActivatePortalFromFeeStatus(nextStatus);
-      if (shouldActivate) {
-        const activated = new Date().toISOString();
-        const { data: stu, error: actErr } = await client
-          .from("students")
-          .update({ portal_activated_at: activated })
-          .eq("id", data.studentId)
-          .select("portal_activated_at")
-          .single();
-        if (actErr) {
-          const { formatFeeActivationPartialFailure } = await import("@/lib/signup-fee-gate");
-          throw new Error(
-            formatFeeActivationPartialFailure({
-              feeStatus: nextStatus,
-              activationError: actErr.message,
-            }),
-          );
-        }
-        portalActivatedAt = stu.portal_activated_at;
+      const { mapVerifySignupFeeRpcError } = await import("@/lib/signup-fee-gate");
+      const { data: rpcRows, error: rpcErr } = await client.rpc("verify_signup_fee_and_activate", {
+        p_fee_id: existingFee.id,
+        p_student_id: data.studentId,
+        p_action: data.action,
+        p_notes: data.notes?.trim() || null,
+        p_activate_portal: data.activatePortal !== false,
+      });
+      if (rpcErr) {
+        const mapped = mapVerifySignupFeeRpcError(rpcErr.message);
+        throw new AuthError(mapped.message, mapped.status);
       }
+
+      const rpcRow = Array.isArray(rpcRows) ? rpcRows[0] : rpcRows;
+      if (!rpcRow?.fee_id) {
+        throw new AuthError("Fee verification returned no result.", 500);
+      }
+
+      // Display fields: prefer post-RPC row; fall back to pre-load (RPC returns a narrow set).
+      const { data: feeAfter, error: feeAfterErr } = await client
+        .from("signup_fee_payments")
+        .select(
+          "id, student_id, status, amount, currency, payment_method, reference_receipt, verified_at",
+        )
+        .eq("id", rpcRow.fee_id)
+        .maybeSingle();
+      if (feeAfterErr) throw new Error(feeAfterErr.message);
+      const fee = feeAfter ?? existingFee;
+      const portalActivatedAt = rpcRow.portal_activated_at ?? null;
 
       const { writeAudit } = await import("@/services/db");
       await writeAudit(client, {
         action: `signup_fee.${data.action}`,
         entity_type: "signup_fee_payments",
-        entity_id: fee.id,
+        entity_id: rpcRow.fee_id,
         student_id: data.studentId,
-        metadata: { status: nextStatus, portalActivated: Boolean(portalActivatedAt) },
+        metadata: {
+          status: rpcRow.status,
+          portalActivated: Boolean(portalActivatedAt),
+          via: "verify_signup_fee_and_activate",
+        },
       });
 
       return {
@@ -401,21 +518,40 @@ export const portalAssignCounsellor = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       const businessRole = await resolveSessionBusinessRole(session);
+      session.businessRole = businessRole;
       const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb } =
         await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {
         throw new AuthError("Counsellor assignment requires the live data plane.", 400);
       }
       const client = requireAoSupabaseClient();
+
+      // Front Desk assigns via security-definer RPC (registrar ownership + active counsellor).
+      if (isFrontDeskBusinessRole(businessRole) || rolesAtLeastAdmin(session.role)) {
+        const { data: row, error } = await client.rpc("front_desk_assign_counsellor", {
+          p_student_id: data.studentId,
+          p_consultant_id: data.consultantId,
+        });
+        if (error) {
+          if (/does not exist|function/i.test(error.message)) {
+            throw new AuthError(
+              "Counsellor assignment RPC is unavailable. Apply migration 20261014020000_front_desk_intake_ownership.sql.",
+              503,
+            );
+          }
+          throw new AuthError(error.message || "Could not assign counsellor.", 400);
+        }
+        const { mapStudentRow } = await import("@/lib/ao-mappers");
+        return { ok: true as const, student: mapStudentRow(row) };
+      }
+
       await assertStudentVisibleDb(client, session, data.studentId);
 
       if (
         session.role === "consultant" &&
         !rolesAtLeastAdmin(session.role) &&
-        businessRole !== "front_desk_student_affairs" &&
         businessRole !== "manager"
       ) {
-        // Assigned counsellor cannot reassign away from self unless front desk/manager/admin.
         if (session.userId && data.consultantId !== session.userId) {
           throw new AuthError("Only Front Desk, Manager, or Admin may reassign counsellors.", 403);
         }
@@ -436,6 +572,9 @@ export const portalRecordCounsellingAgreement = createServerFn({ method: "POST" 
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      session.businessRole = await resolveSessionBusinessRole(session);
+      denyFrontDeskConsultantWorkflows(session, "counselling agreements");
+      requireModulePermission(session, "counselling", 2, "counselling agreements");
       const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb } =
         await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {
@@ -494,6 +633,9 @@ export const portalHandoverToAdmission = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      session.businessRole = await resolveSessionBusinessRole(session);
+      denyFrontDeskConsultantWorkflows(session, "admission handover");
+      requireModulePermission(session, "admissions", 2, "admission handover");
       const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb } =
         await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {

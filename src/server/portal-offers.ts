@@ -24,6 +24,7 @@ import {
   requireTrustedSession,
   type TrustedSession,
 } from "@/server/portal-auth";
+import { denyFrontDeskConsultantWorkflows, requireModulePermission } from "@/server/staff-access";
 import type { Application, Student } from "@/types";
 import type { DepositStatus, OfferStatus, VisaDecision, VisaStage } from "@/types/database";
 import {
@@ -287,11 +288,7 @@ function toVisaRow(
     stageLabel: VISA_STAGE_LABELS[row.stage],
     decision: row.decision,
     decisionLabel:
-      row.decision === "pending"
-        ? "Pending"
-        : row.decision === "approved"
-          ? "Approved"
-          : "Refused",
+      row.decision === "pending" ? "Pending" : row.decision === "approved" ? "Approved" : "Refused",
     filedAt: row.filedAt,
     biometricsAt: row.biometricsAt,
     decisionAt: row.decisionAt,
@@ -316,8 +313,11 @@ function inMetric(offerId: string, metric: OffersMetricTab): boolean {
     return offer.status !== "declined" && offer.status !== "expired";
   }
   if (metric === "conditions_pending") {
-    return offer.status === "conditions_pending" || (
-      offer.offerType === "conditional" && !allConditionsMet(offer.id) && offer.status !== "declined"
+    return (
+      offer.status === "conditions_pending" ||
+      (offer.offerType === "conditional" &&
+        !allConditionsMet(offer.id) &&
+        offer.status !== "declined")
     );
   }
   if (metric === "deposits_due") {
@@ -477,7 +477,11 @@ function dbToCasRow(row: CasI20Record, students: Student[], apps: Application[])
   };
 }
 
-function dbToVisaRow(row: VisaMilestoneRecord, students: Student[], apps: Application[]): VisaRowView {
+function dbToVisaRow(
+  row: VisaMilestoneRecord,
+  students: Student[],
+  apps: Application[],
+): VisaRowView {
   const st = students.find((s) => s.id === row.studentId);
   const app = apps.find((a) => a.id === row.applicationId);
   return {
@@ -524,7 +528,9 @@ function dbInMetric(
   if (metric === "conditions_pending") {
     return (
       offer.status === "conditions_pending" ||
-      (offer.offerType === "conditional" && !dbAllConditionsMet(conditions) && offer.status !== "declined")
+      (offer.offerType === "conditional" &&
+        !dbAllConditionsMet(conditions) &&
+        offer.status !== "declined")
     );
   }
   if (metric === "deposits_due") {
@@ -541,6 +547,8 @@ export const portalGetOffersVisa = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "offers and visa");
+      requireModulePermission(session, "counselling", 1, "offers and visa");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
@@ -566,7 +574,10 @@ export const portalGetOffersVisa = createServerFn({ method: "GET" })
         ]);
         const deposits = dbMarkOverdue(depositsRaw);
         const conditionsByOffer = new Map<string, OfferConditionRecord[]>();
-        const allConditions = await listOfferConditionsForOffers(client, offersRaw.map((o) => o.id));
+        const allConditions = await listOfferConditionsForOffers(
+          client,
+          offersRaw.map((o) => o.id),
+        );
         for (const c of allConditions) {
           const list = conditionsByOffer.get(c.offerId) ?? [];
           list.push(c);
@@ -576,7 +587,13 @@ export const portalGetOffersVisa = createServerFn({ method: "GET" })
         const offersById = new Map(offersRaw.map((o) => [o.id, o] as const));
 
         const offers = offersRaw.map((o) =>
-          dbToOfferRow(o, students, apps, conditionsByOffer.get(o.id) ?? [], depositByOffer.get(o.id) ?? null),
+          dbToOfferRow(
+            o,
+            students,
+            apps,
+            conditionsByOffer.get(o.id) ?? [],
+            depositByOffer.get(o.id) ?? null,
+          ),
         );
         const depositRows = deposits.map((d) => dbToDepositRow(d, students, apps, offersById));
         const casRows = casI20.map((c) => dbToCasRow(c, students, apps));
@@ -584,12 +601,23 @@ export const portalGetOffersVisa = createServerFn({ method: "GET" })
 
         const metricCounts: OffersVisaPayload["metricCounts"] = {
           offers_received: offersRaw.filter((o) =>
-            dbInMetric(o, depositByOffer.get(o.id) ?? null, conditionsByOffer.get(o.id) ?? [], "offers_received"),
+            dbInMetric(
+              o,
+              depositByOffer.get(o.id) ?? null,
+              conditionsByOffer.get(o.id) ?? [],
+              "offers_received",
+            ),
           ).length,
           conditions_pending: offersRaw.filter((o) =>
-            dbInMetric(o, depositByOffer.get(o.id) ?? null, conditionsByOffer.get(o.id) ?? [], "conditions_pending"),
+            dbInMetric(
+              o,
+              depositByOffer.get(o.id) ?? null,
+              conditionsByOffer.get(o.id) ?? [],
+              "conditions_pending",
+            ),
           ).length,
-          deposits_due: depositRows.filter((d) => d.status === "due" || d.status === "overdue").length,
+          deposits_due: depositRows.filter((d) => d.status === "due" || d.status === "overdue")
+            .length,
           visa_in_progress: visaRows.filter((v) => v.decision === "pending").length,
         };
         const phaseCounts: OffersVisaPayload["phaseCounts"] = {
@@ -603,12 +631,23 @@ export const portalGetOffersVisa = createServerFn({ method: "GET" })
         const q = data.q?.trim().toLowerCase();
 
         let offerRows = offers;
-        if (metric === "offers_received" || metric === "conditions_pending" || metric === "deposits_due") {
+        if (
+          metric === "offers_received" ||
+          metric === "conditions_pending" ||
+          metric === "deposits_due"
+        ) {
           offerRows = offers.filter((o) =>
-            dbInMetric(offersById.get(o.id)!, depositByOffer.get(o.id) ?? null, conditionsByOffer.get(o.id) ?? [], metric),
+            dbInMetric(
+              offersById.get(o.id)!,
+              depositByOffer.get(o.id) ?? null,
+              conditionsByOffer.get(o.id) ?? [],
+              metric,
+            ),
           );
         } else if (metric === "visa_in_progress") {
-          const visaStudentIds = new Set(visaRows.filter((v) => v.decision === "pending").map((v) => v.studentId));
+          const visaStudentIds = new Set(
+            visaRows.filter((v) => v.decision === "pending").map((v) => v.studentId),
+          );
           offerRows = offers.filter((o) => visaStudentIds.has(o.studentId));
         }
 
@@ -620,7 +659,13 @@ export const portalGetOffersVisa = createServerFn({ method: "GET" })
           matchQ([d.studentName, d.university, d.studentCaseId, d.statusLabel, d.amountLabel]),
         );
         const filteredCas = casRows.filter((c) =>
-          matchQ([c.studentName, c.university, c.recordType, c.statusLabel, c.referenceNumber ?? ""]),
+          matchQ([
+            c.studentName,
+            c.university,
+            c.recordType,
+            c.statusLabel,
+            c.referenceNumber ?? "",
+          ]),
         );
         const filteredVisas = visaRows.filter((v) =>
           matchQ([v.studentName, v.university, v.stageLabel, v.decisionLabel]),
@@ -702,8 +747,7 @@ export const portalGetOffersVisa = createServerFn({ method: "GET" })
         offerRows = offerRows.filter((o) => visaStudentIds.has(o.studentId));
       }
 
-      const matchQ = (parts: string[]) =>
-        !q || parts.some((p) => p.toLowerCase().includes(q));
+      const matchQ = (parts: string[]) => !q || parts.some((p) => p.toLowerCase().includes(q));
 
       const filteredOffers = offerRows.filter((o) =>
         matchQ([o.studentName, o.university, o.program, o.studentCaseId, o.currentStatusLabel]),
@@ -755,13 +799,24 @@ export const portalGetOfferDetail = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "offers and visa");
+      requireModulePermission(session, "counselling", 1, "offers and visa");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
-        const { requireAoSupabaseClient, assertStudentVisibleDb, listAppsForStudents, mapOfferRow } =
-          await import("@/server/ao-data");
-        const { getOfferById, listOfferConditions, listDeposits, listCasI20Records, listVisaMilestones } =
-          await import("@/services/db");
+        const {
+          requireAoSupabaseClient,
+          assertStudentVisibleDb,
+          listAppsForStudents,
+          mapOfferRow,
+        } = await import("@/server/ao-data");
+        const {
+          getOfferById,
+          listOfferConditions,
+          listDeposits,
+          listCasI20Records,
+          listVisaMilestones,
+        } = await import("@/services/db");
         const client = requireAoSupabaseClient();
         const offerRow = await getOfferById(client, data.id);
         if (!offerRow) throw new AuthError("Offer not found.", 404);
@@ -774,13 +829,14 @@ export const portalGetOfferDetail = createServerFn({ method: "GET" })
           listCasI20Records(client, student.id),
           listVisaMilestones(client, student.id),
         ]);
-        const { mapOfferConditionRow, mapDepositRow, mapCasI20Row, mapVisaMilestoneRow } = await import(
-          "@/server/ao-data"
-        );
+        const { mapOfferConditionRow, mapDepositRow, mapCasI20Row, mapVisaMilestoneRow } =
+          await import("@/server/ao-data");
         const conditions = conditionRows.map(mapOfferConditionRow);
         const deposit = depositRows.map(mapDepositRow).find((d) => d.offerId === offer.id) ?? null;
         const casI20 = casRows.map(mapCasI20Row).find((c) => c.offerId === offer.id) ?? null;
-        const visa = visaRows.map(mapVisaMilestoneRow).find((v) => v.applicationId === offer.applicationId) ?? null;
+        const visa =
+          visaRows.map(mapVisaMilestoneRow).find((v) => v.applicationId === offer.applicationId) ??
+          null;
 
         const { data: auditRows, error: auditErr } = await client
           .from("audit_events")
@@ -842,16 +898,27 @@ export const portalCreateOfferRecord = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "offers and visa");
+      requireModulePermission(session, "counselling", 2, "offers and visa mutations");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
-        const { requireAoSupabaseClient, getScopedApplication, assertStudentVisibleDb, listAppsForStudents, mapOfferRow } =
-          await import("@/server/ao-data");
-        const { createOffer, createOfferCondition, listOfferConditions } = await import("@/services/db");
+        const {
+          requireAoSupabaseClient,
+          getScopedApplication,
+          assertStudentVisibleDb,
+          listAppsForStudents,
+          mapOfferRow,
+        } = await import("@/server/ao-data");
+        const { createOffer, createOfferCondition, listOfferConditions } =
+          await import("@/services/db");
         const client = requireAoSupabaseClient();
         const app = await getScopedApplication(client, session, data.applicationId);
         if (app.status !== "Offer Received") {
-          throw new AuthError("Offers can only be recorded for applications in Offer Received.", 400);
+          throw new AuthError(
+            "Offers can only be recorded for applications in Offer Received.",
+            400,
+          );
         }
         const { data: existingOfferRow, error: existingErr } = await client
           .from("offers")
@@ -870,7 +937,9 @@ export const portalCreateOfferRecord = createServerFn({ method: "POST" })
         const apps = await listAppsForStudents(client, [student.id]);
         const conditionsInput = (data.conditions ?? []).map((c) => c.trim()).filter(Boolean);
         const status: OfferStatus =
-          data.offerType === "conditional" && conditionsInput.length > 0 ? "conditions_pending" : "awaiting_student";
+          data.offerType === "conditional" && conditionsInput.length > 0
+            ? "conditions_pending"
+            : "awaiting_student";
 
         const createdRow = await createOffer(client, {
           application_id: app.id,
@@ -1010,6 +1079,8 @@ export const portalSetOfferConditionMet = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "offers and visa");
+      requireModulePermission(session, "counselling", 2, "offers and visa mutations");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
@@ -1038,7 +1109,11 @@ export const portalSetOfferConditionMet = createServerFn({ method: "POST" })
         if (offer.offerType !== "conditional") {
           throw new AuthError("Only conditional offers have conditions.", 400);
         }
-        if (offer.status === "accepted" || offer.status === "declined" || offer.status === "expired") {
+        if (
+          offer.status === "accepted" ||
+          offer.status === "declined" ||
+          offer.status === "expired"
+        ) {
           throw new AuthError("Conditions cannot be changed after acceptance or closure.", 400);
         }
 
@@ -1084,7 +1159,11 @@ export const portalSetOfferConditionMet = createServerFn({ method: "POST" })
       if (offer.offerType !== "conditional") {
         throw new AuthError("Only conditional offers have conditions.", 400);
       }
-      if (offer.status === "accepted" || offer.status === "declined" || offer.status === "expired") {
+      if (
+        offer.status === "accepted" ||
+        offer.status === "declined" ||
+        offer.status === "expired"
+      ) {
         throw new AuthError("Conditions cannot be changed after acceptance or closure.", 400);
       }
 
@@ -1126,14 +1205,20 @@ export const portalAcceptOffer = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "offers and visa");
+      requireModulePermission(session, "counselling", 2, "offers and visa mutations");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
-        const { requireAoSupabaseClient, assertStudentVisibleDb, listAppsForStudents, mapOfferRow, mapOfferConditionRow } =
-          await import("@/server/ao-data");
-        const { getOfferById, listOfferConditions, listDeposits, updateOfferStatus } = await import(
-          "@/services/db"
-        );
+        const {
+          requireAoSupabaseClient,
+          assertStudentVisibleDb,
+          listAppsForStudents,
+          mapOfferRow,
+          mapOfferConditionRow,
+        } = await import("@/server/ao-data");
+        const { getOfferById, listOfferConditions, listDeposits, updateOfferStatus } =
+          await import("@/services/db");
         const client = requireAoSupabaseClient();
         const offerRow = await getOfferById(client, data.offerId);
         if (!offerRow) throw new AuthError("Offer not found.", 404);
@@ -1154,7 +1239,10 @@ export const portalAcceptOffer = createServerFn({ method: "POST" })
           };
         }
         if (!dbCanAcceptOffer(offer, conditions)) {
-          throw new AuthError("Offer cannot be accepted until all configured conditions are met.", 400);
+          throw new AuthError(
+            "Offer cannot be accepted until all configured conditions are met.",
+            400,
+          );
         }
 
         const updatedRow = await updateOfferStatus(client, offer.id, "accepted");
@@ -1216,14 +1304,20 @@ export const portalDeclineOffer = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "offers and visa");
+      requireModulePermission(session, "counselling", 2, "offers and visa mutations");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
-        const { requireAoSupabaseClient, assertStudentVisibleDb, listAppsForStudents, mapOfferRow, mapOfferConditionRow } =
-          await import("@/server/ao-data");
-        const { getOfferById, listOfferConditions, listDeposits, updateOfferStatus } = await import(
-          "@/services/db"
-        );
+        const {
+          requireAoSupabaseClient,
+          assertStudentVisibleDb,
+          listAppsForStudents,
+          mapOfferRow,
+          mapOfferConditionRow,
+        } = await import("@/server/ao-data");
+        const { getOfferById, listOfferConditions, listDeposits, updateOfferStatus } =
+          await import("@/services/db");
         const client = requireAoSupabaseClient();
         const offerRow = await getOfferById(client, data.offerId);
         if (!offerRow) throw new AuthError("Offer not found.", 404);
@@ -1284,12 +1378,13 @@ export const portalRecordDepositPaid = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "offers and visa");
+      requireModulePermission(session, "counselling", 2, "offers and visa mutations");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
-        const { requireAoSupabaseClient, assertStudentVisibleDb, mapDepositRow } = await import(
-          "@/server/ao-data"
-        );
+        const { requireAoSupabaseClient, assertStudentVisibleDb, mapDepositRow } =
+          await import("@/server/ao-data");
         const { writeAudit } = await import("@/services/db");
         const client = requireAoSupabaseClient();
         const { data: depRow, error: depErr } = await client
@@ -1376,11 +1471,17 @@ export const portalAdvanceCasI20 = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "offers and visa");
+      requireModulePermission(session, "counselling", 2, "offers and visa mutations");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
-        const { requireAoSupabaseClient, assertStudentVisibleDb, getScopedApplication, mapCasI20Row } =
-          await import("@/server/ao-data");
+        const {
+          requireAoSupabaseClient,
+          assertStudentVisibleDb,
+          getScopedApplication,
+          mapCasI20Row,
+        } = await import("@/server/ao-data");
         const { updateCasI20Status, writeAudit } = await import("@/services/db");
         const client = requireAoSupabaseClient();
         const { data: row, error: rowErr } = await client
@@ -1392,7 +1493,9 @@ export const portalAdvanceCasI20 = createServerFn({ method: "POST" })
         if (!row) throw new AuthError("CAS/I-20 record not found.", 404);
         const student = await assertStudentVisibleDb(client, session, row.student_id);
 
-        const app = row.application_id ? await getScopedApplication(client, session, row.application_id) : null;
+        const app = row.application_id
+          ? await getScopedApplication(client, session, row.application_id)
+          : null;
         const expected = app ? casI20TypeForCountry(app.country) : null;
         if (!expected || expected !== row.record_type) {
           throw new AuthError("CAS/I-20 tracking is not applicable for this destination.", 400);
@@ -1401,11 +1504,15 @@ export const portalAdvanceCasI20 = createServerFn({ method: "POST" })
         const next = nextCasI20Status(row.status);
         if (!next) throw new AuthError("No further CAS/I-20 status transition is allowed.", 400);
 
-        const extra: { reference_number?: string; issued_at?: string; expires_at?: string | null } = {};
+        const extra: { reference_number?: string; issued_at?: string; expires_at?: string | null } =
+          {};
         if (next === "issued") {
           const ref = data.referenceNumber?.trim() ?? "";
           if (ref.length < 3) {
-            throw new AuthError("A release / reference number is required when issuing CAS/I-20.", 400);
+            throw new AuthError(
+              "A release / reference number is required when issuing CAS/I-20.",
+              400,
+            );
           }
           extra.reference_number = ref;
           extra.issued_at = data.issuedAt?.trim() || new Date().toISOString().slice(0, 10);
@@ -1442,7 +1549,10 @@ export const portalAdvanceCasI20 = createServerFn({ method: "POST" })
       if (next === "issued") {
         const ref = data.referenceNumber?.trim() ?? "";
         if (ref.length < 3) {
-          throw new AuthError("A release / reference number is required when issuing CAS/I-20.", 400);
+          throw new AuthError(
+            "A release / reference number is required when issuing CAS/I-20.",
+            400,
+          );
         }
         row.referenceNumber = ref;
         row.issuedAt = data.issuedAt?.trim() || new Date().toISOString().slice(0, 10);
@@ -1475,12 +1585,13 @@ export const portalAdvanceVisa = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "offers and visa");
+      requireModulePermission(session, "counselling", 2, "offers and visa mutations");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
-        const { requireAoSupabaseClient, assertStudentVisibleDb, mapVisaMilestoneRow } = await import(
-          "@/server/ao-data"
-        );
+        const { requireAoSupabaseClient, assertStudentVisibleDb, mapVisaMilestoneRow } =
+          await import("@/server/ao-data");
         const { updateVisaMilestone } = await import("@/services/db");
         const client = requireAoSupabaseClient();
         const { data: row, error: rowErr } = await client
@@ -1595,6 +1706,8 @@ export const portalExportOffersSummary = createServerFn({ method: "GET" }).handl
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "offers and visa");
+      requireModulePermission(session, "counselling", 1, "offers and visa");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       let rows: OfferRowView[];
@@ -1617,7 +1730,10 @@ export const portalExportOffersSummary = createServerFn({ method: "GET" }).handl
         ]);
         const deposits = dbMarkOverdue(depositsRaw);
         const depositByOffer = new Map(deposits.map((d) => [d.offerId, d] as const));
-        const allConditions = await listOfferConditionsForOffers(client, offersRaw.map((o) => o.id));
+        const allConditions = await listOfferConditionsForOffers(
+          client,
+          offersRaw.map((o) => o.id),
+        );
         const conditionsByOffer = new Map<string, OfferConditionRecord[]>();
         for (const c of allConditions) {
           const list = conditionsByOffer.get(c.offerId) ?? [];
@@ -1625,7 +1741,13 @@ export const portalExportOffersSummary = createServerFn({ method: "GET" }).handl
           conditionsByOffer.set(c.offerId, list);
         }
         rows = offersRaw.map((o) =>
-          dbToOfferRow(o, students, apps, conditionsByOffer.get(o.id) ?? [], depositByOffer.get(o.id) ?? null),
+          dbToOfferRow(
+            o,
+            students,
+            apps,
+            conditionsByOffer.get(o.id) ?? [],
+            depositByOffer.get(o.id) ?? null,
+          ),
         );
       } else {
         refreshDepositOverdue();
@@ -1684,4 +1806,3 @@ export const portalExportOffersSummary = createServerFn({ method: "GET" }).handl
     }
   },
 );
-

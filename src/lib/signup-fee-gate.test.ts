@@ -4,6 +4,7 @@ import {
   formatFeeActivationPartialFailure,
   isPortalActivated,
   isSignupFeeVerified,
+  mapVerifySignupFeeRpcError,
   studentPortalAccessAllowed,
 } from "./signup-fee-gate";
 
@@ -38,5 +39,33 @@ describe("signup fee gate", () => {
     expect(msg).toContain("permission denied");
     expect(msg.toLowerCase()).toContain("activation failed");
     expect(msg.toLowerCase()).not.toContain("completed successfully");
+  });
+});
+
+describe("mapVerifySignupFeeRpcError (pure — not a DB integration test)", () => {
+  it("maps authorization denial", () => {
+    const mapped = mapVerifySignupFeeRpcError("not authorized to verify signup fees");
+    expect(mapped.status).toBe(403);
+    expect(mapped.message.toLowerCase()).toContain("accounts");
+  });
+
+  it("maps missing fee / student and invalid action", () => {
+    expect(mapVerifySignupFeeRpcError("signup fee row not found for student").status).toBe(404);
+    expect(mapVerifySignupFeeRpcError("student row missing during activation").status).toBe(404);
+    expect(mapVerifySignupFeeRpcError("invalid action").status).toBe(400);
+  });
+
+  it("maps missing RPC and authentication", () => {
+    expect(mapVerifySignupFeeRpcError("Could not find the function").status).toBe(503);
+    expect(mapVerifySignupFeeRpcError("authentication required").status).toBe(401);
+  });
+
+  it("does not forward raw unexpected SQL details", () => {
+    const mapped = mapVerifySignupFeeRpcError(
+      'duplicate key value violates unique constraint "signup_fee_payments_pkey"',
+    );
+    expect(mapped.status).toBe(400);
+    expect(mapped.message.toLowerCase()).not.toContain("duplicate key");
+    expect(mapped.message.toLowerCase()).toContain("could not verify");
   });
 });

@@ -9,13 +9,20 @@ import {
   canEditModule,
   canFullyApproveModule,
   canViewModule,
+  cloneDefaultPermissionMatrix,
+  flattenPermissionMatrix,
   getPermissionLevel,
+  getPermissionLevelFromMatrix,
   hasMinPermission,
   isBusinessModule,
   isBusinessRole,
+  isProtectedTechnicalAdmin,
+  mergePermissionMatrixCells,
   modulePermissionBypassesWorkflowGate,
   resolveBusinessRoleFromDisplayLabel,
   resolveBusinessRoleFromTrustedAppRole,
+  validatePermissionMatrixChange,
+  wouldRemoveLastProtectedAdmin,
   type BusinessModule,
   type BusinessRole,
   type PermissionLevel,
@@ -211,5 +218,84 @@ describe("Phase 1 CRM / session helpers unchanged", () => {
     expect(activityForStudent({ s1: [{ id: "a" }] }, "s2")).toEqual([]);
     expect(shouldShowDemoSessionIndicator("demo")).toBe(true);
     expect(shouldShowDemoSessionIndicator("supabase")).toBe(false);
+  });
+});
+
+describe("Admin permission matrix persistence helpers", () => {
+  it("keeps Admin Full on every module after merge (including Users & Roles / Settings)", () => {
+    const merged = mergePermissionMatrixCells([
+      { businessRole: "admin", module: "users_roles", level: 0 },
+      { businessRole: "admin", module: "settings", level: 1 },
+      { businessRole: "front_desk_student_affairs", module: "reports", level: 2 },
+    ]);
+    for (const module of BUSINESS_MODULES) {
+      expect(getPermissionLevelFromMatrix(merged, "admin", module)).toBe(3);
+    }
+    expect(getPermissionLevelFromMatrix(merged, "front_desk_student_affairs", "reports")).toBe(2);
+  });
+
+  it("rejects lowering the Admin matrix row", () => {
+    const denied = validatePermissionMatrixChange({
+      businessRole: "admin",
+      module: "users_roles",
+      level: 1,
+    });
+    expect(denied.ok).toBe(false);
+    if (!denied.ok) expect(denied.error).toMatch(/Admin role must retain Full/i);
+
+    const allowed = validatePermissionMatrixChange({
+      businessRole: "counsellor_consultant",
+      module: "reports",
+      level: 2,
+    });
+    expect(allowed.ok).toBe(true);
+  });
+
+  it("rejects unknown role/module and client-style escalation labels", () => {
+    expect(
+      validatePermissionMatrixChange({
+        businessRole: "super_admin",
+        module: "users_roles",
+        level: 3,
+      }).ok,
+    ).toBe(false);
+    expect(
+      validatePermissionMatrixChange({
+        businessRole: "Admin",
+        module: "students",
+        level: 3,
+      }).ok,
+    ).toBe(false);
+    expect(resolveBusinessRoleFromDisplayLabel("Admin")).toBeNull();
+    expect(isProtectedTechnicalAdmin("admin")).toBe(true);
+    expect(isProtectedTechnicalAdmin("consultant")).toBe(false);
+  });
+
+  it("blocks demoting the last protected technical admin", () => {
+    expect(
+      wouldRemoveLastProtectedAdmin({
+        protectedAdminCount: 1,
+        targetIsProtectedAdmin: true,
+        nextIsProtectedAdmin: false,
+      }).ok,
+    ).toBe(false);
+    expect(
+      wouldRemoveLastProtectedAdmin({
+        protectedAdminCount: 2,
+        targetIsProtectedAdmin: true,
+        nextIsProtectedAdmin: false,
+      }).ok,
+    ).toBe(true);
+  });
+
+  it("flattens and reclones without dropping roles or modules", () => {
+    const clone = cloneDefaultPermissionMatrix();
+    const cells = flattenPermissionMatrix(clone);
+    expect(cells).toHaveLength(BUSINESS_ROLES.length * BUSINESS_MODULES.length);
+    expect(BUSINESS_ROLES).toHaveLength(10);
+    expect(BUSINESS_MODULES).toHaveLength(12);
+    for (const role of BUSINESS_ROLES) {
+      expect(clone[role]).toEqual(BUSINESS_PERMISSION_MATRIX[role]);
+    }
   });
 });

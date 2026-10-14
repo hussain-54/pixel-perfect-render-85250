@@ -25,6 +25,7 @@ import {
   requireTrustedSession,
   type TrustedSession,
 } from "@/server/portal-auth";
+import { denyFrontDeskConsultantWorkflows, requireModulePermission } from "@/server/staff-access";
 import {
   getTaskAutomationSchedulerError,
   isTaskAutomationSchedulerActive,
@@ -144,7 +145,11 @@ function visibleTasks(session: TrustedSession): PortalTaskRecord[] {
   const cid = consultantScopeId(session);
   return portalTasks.filter((t) => {
     if (rolesAtLeastAdmin(session.role)) {
-      return !t.studentId || studentIds.has(t.studentId) || !db.students.some((s) => s.id === t.studentId);
+      return (
+        !t.studentId ||
+        studentIds.has(t.studentId) ||
+        !db.students.some((s) => s.id === t.studentId)
+      );
     }
     if (session.role === "consultant") {
       if (!cid) return false;
@@ -192,8 +197,12 @@ function dbToRow(
   docs: { id: string; studentId: string; category: string; name: string }[],
 ): TaskOpsRow {
   const st = task.studentId ? students.find((s) => s.id === task.studentId) : undefined;
-  const app = task.relatedApplicationId ? apps.find((a) => a.id === task.relatedApplicationId) : undefined;
-  const doc = task.relatedDocumentId ? docs.find((d) => d.id === task.relatedDocumentId) : undefined;
+  const app = task.relatedApplicationId
+    ? apps.find((a) => a.id === task.relatedApplicationId)
+    : undefined;
+  const doc = task.relatedDocumentId
+    ? docs.find((d) => d.id === task.relatedDocumentId)
+    : undefined;
   const urgency = deriveUrgency(task);
   return {
     id: task.id,
@@ -228,6 +237,8 @@ export const portalGetTaskOps = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "tasks");
+      requireModulePermission(session, "students", 1, "task operations");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
@@ -263,15 +274,26 @@ export const portalGetTaskOps = createServerFn({ method: "GET" })
         const assigneeIds = rolesAtLeastAdmin(session.role)
           ? consultantRows.map((c) => c.id)
           : consultantRows.filter((c) => c.id === cid).map((c) => c.id);
-        const assigneeNames = await namesForIds(client, consultantRows.map((c) => c.id));
+        const assigneeNames = await namesForIds(
+          client,
+          consultantRows.map((c) => c.id),
+        );
 
-        let rows = all.filter((t) => inTab(t, tab)).map((t) => dbToRow(t, students, assigneeNames, apps, docs));
+        let rows = all
+          .filter((t) => inTab(t, tab))
+          .map((t) => dbToRow(t, students, assigneeNames, apps, docs));
         if (day) {
           rows = rows.filter((r) => dayKeyInPortalTz(r.dueAt) === day);
         }
         if (q) {
           rows = rows.filter((r) =>
-            [r.title, r.studentName, r.assigneeName, r.relatedApplicationLabel, r.relatedDocumentLabel]
+            [
+              r.title,
+              r.studentName,
+              r.assigneeName,
+              r.relatedApplicationLabel,
+              r.relatedDocumentLabel,
+            ]
               .filter(Boolean)
               .some((p) => String(p).toLowerCase().includes(q)),
           );
@@ -350,7 +372,13 @@ export const portalGetTaskOps = createServerFn({ method: "GET" })
       }
       if (q) {
         rows = rows.filter((r) =>
-          [r.title, r.studentName, r.assigneeName, r.relatedApplicationLabel, r.relatedDocumentLabel]
+          [
+            r.title,
+            r.studentName,
+            r.assigneeName,
+            r.relatedApplicationLabel,
+            r.relatedDocumentLabel,
+          ]
             .filter(Boolean)
             .some((p) => String(p).toLowerCase().includes(q)),
         );
@@ -427,6 +455,8 @@ export const portalUpsertTask = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "tasks");
+      requireModulePermission(session, "students", 2, "task mutations");
 
       const title0 = data.title.trim();
       if (!title0) throw new AuthError("Title is required.", 400);
@@ -468,8 +498,14 @@ export const portalUpsertTask = createServerFn({ method: "POST" })
         }
 
         const students = await listVisibleStudentsDb(client, session, { includeArchived: true });
-        const apps = await listAppsForStudents(client, students.map((s) => s.id));
-        const docs = await listDocsForStudents(client, students.map((s) => s.id));
+        const apps = await listAppsForStudents(
+          client,
+          students.map((s) => s.id),
+        );
+        const docs = await listDocsForStudents(
+          client,
+          students.map((s) => s.id),
+        );
 
         let savedRow;
         if (data.id) {
@@ -499,7 +535,10 @@ export const portalUpsertTask = createServerFn({ method: "POST" })
             related_application_id: data.relatedApplicationId ?? null,
             related_document_id: data.relatedDocumentId ?? null,
             ...(data.status && TASK_STATUSES.includes(data.status)
-              ? { status: data.status, completed_at: data.status === "completed" ? new Date().toISOString() : null }
+              ? {
+                  status: data.status,
+                  completed_at: data.status === "completed" ? new Date().toISOString() : null,
+                }
               : {}),
           });
           await writeAudit(client, {
@@ -531,7 +570,10 @@ export const portalUpsertTask = createServerFn({ method: "POST" })
           });
         }
 
-        const assigneeNames = await namesForIds(client, [savedRow.assignee_id].filter((x): x is string => Boolean(x)));
+        const assigneeNames = await namesForIds(
+          client,
+          [savedRow.assignee_id].filter((x): x is string => Boolean(x)),
+        );
         return {
           ok: true as const,
           task: dbToRow(mapTaskRow(savedRow), students, assigneeNames, apps, docs),
@@ -554,7 +596,12 @@ export const portalUpsertTask = createServerFn({ method: "POST" })
       }
 
       const cid = consultantScopeId(session);
-      if (session.role === "consultant" && cid && data.assigneeId !== cid && !rolesAtLeastAdmin(session.role)) {
+      if (
+        session.role === "consultant" &&
+        cid &&
+        data.assigneeId !== cid &&
+        !rolesAtLeastAdmin(session.role)
+      ) {
         throw new AuthError("Consultants may only assign tasks to themselves.", 403);
       }
 
@@ -581,8 +628,7 @@ export const portalUpsertTask = createServerFn({ method: "POST" })
         existing.priorityLevel = priorityLevel;
         if (data.status && TASK_STATUSES.includes(data.status)) {
           existing.status = data.status;
-          existing.completedAt =
-            data.status === "completed" ? new Date().toISOString() : null;
+          existing.completedAt = data.status === "completed" ? new Date().toISOString() : null;
         }
         existing.relatedApplicationId = data.relatedApplicationId ?? null;
         existing.relatedDocumentId = data.relatedDocumentId ?? null;
@@ -619,6 +665,8 @@ export const portalUpdateTaskStatus = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "tasks");
+      requireModulePermission(session, "students", 2, "task mutations");
       if (!TASK_STATUSES.includes(data.status)) throw new AuthError("Invalid status.", 400);
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
@@ -666,8 +714,14 @@ export const portalUpdateTaskStatus = createServerFn({ method: "POST" })
           metadata: { status: data.status },
         });
 
-        const apps = await listAppsForStudents(client, students.map((s) => s.id));
-        const docs = await listDocsForStudents(client, students.map((s) => s.id));
+        const apps = await listAppsForStudents(
+          client,
+          students.map((s) => s.id),
+        );
+        const docs = await listDocsForStudents(
+          client,
+          students.map((s) => s.id),
+        );
         const assigneeNames = await namesForIds(
           client,
           [updatedRow.assignee_id].filter((x): x is string => Boolean(x)),
@@ -712,6 +766,8 @@ export const portalRunTaskAutomation = createServerFn({ method: "POST" })
 
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "tasks");
+      requireModulePermission(session, "students", 2, "task mutations");
       const result = runTaskAutomationSweep();
       appendTaskAudit(actorMeta(session).name, "Ran task automation sweep", "automation");
       return {

@@ -1,8 +1,19 @@
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import { PageHeader, TableWrap, fmtDate, LoadingRows, EmptyState } from "@/components/common";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  PageHeader,
+  TableWrap,
+  fmtDate,
+  LoadingRows,
+  EmptyState,
+  ErrorState,
+  portalErrorMessage,
+} from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useData } from "@/lib/useData";
-import { getLeads } from "@/services";
+import { LEAD_STATUSES } from "@/lib/lead-mappers";
+import { getLeads, updateLeadStatus } from "@/services";
 
 export const Route = createFileRoute("/staff/leads")({
   component: StaffLeads,
@@ -10,14 +21,45 @@ export const Route = createFileRoute("/staff/leads")({
 
 function StaffLeads() {
   // Desk scoping is enforced server-side via the trusted session consultant id.
+  const queryClient = useQueryClient();
   const leadsQ = useData(["leads"], getLeads);
   const rows = leadsQ.data ?? [];
+  const [msg, setMsg] = useState<string | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+
+  const statusM = useMutation({
+    mutationFn: updateLeadStatus,
+    onSuccess: async () => {
+      setMsg("Lead status updated.");
+      setErr(null);
+      setBusyId(null);
+      await queryClient.invalidateQueries({ queryKey: ["leads"] });
+    },
+    onError: (e) => {
+      setMsg(null);
+      setBusyId(null);
+      setErr(portalErrorMessage(e, "Could not update lead status."));
+    },
+  });
 
   return (
     <div>
       <PageHeader title="Leads" subtitle="Prospects assigned to your desk." />
+      {msg ? (
+        <p className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+          {msg}
+        </p>
+      ) : null}
+      {err ? (
+        <p className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+          {err}
+        </p>
+      ) : null}
       {leadsQ.isLoading ? (
         <LoadingRows />
+      ) : leadsQ.isError ? (
+        <ErrorState body={portalErrorMessage(leadsQ.error)} />
       ) : !rows.length ? (
         <EmptyState title="No leads assigned" body="Try the admin leads view for all enquiries." />
       ) : (
@@ -40,7 +82,26 @@ function StaffLeads() {
                 <td>{l.program}</td>
                 <td>{l.source}</td>
                 <td>
-                  <StatusBadge status={l.status} />
+                  <div className="flex flex-col gap-1">
+                    <StatusBadge status={l.status} />
+                    <select
+                      className="rounded border border-border bg-background px-2 py-1 text-xs"
+                      disabled={statusM.isPending && busyId === l.id}
+                      value={l.status}
+                      aria-label={`Status for ${l.name}`}
+                      onChange={(e) => {
+                        setBusyId(l.id);
+                        setErr(null);
+                        statusM.mutate({ leadId: l.id, status: e.target.value });
+                      }}
+                    >
+                      {LEAD_STATUSES.map((s) => (
+                        <option key={s} value={s}>
+                          {s}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                 </td>
                 <td>{fmtDate(l.created)}</td>
               </tr>

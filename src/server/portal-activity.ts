@@ -3,11 +3,7 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import * as db from "@/data/mock";
-import {
-  appendAuditEvent,
-  listAuditEvents,
-  inferActionType,
-} from "@/data/immutable-audit";
+import { appendAuditEvent, listAuditEvents, inferActionType } from "@/data/immutable-audit";
 import { offerAuditHistory, offerRecords } from "@/data/offers-visa";
 import { encodeExport } from "@/lib/export-formats";
 import { rolesAtLeastAdmin } from "@/lib/roles";
@@ -17,6 +13,7 @@ import {
   requireTrustedSession,
   type TrustedSession,
 } from "@/server/portal-auth";
+import { denyFrontDeskConsultantWorkflows, requireModulePermission } from "@/server/staff-access";
 import type { Student } from "@/types";
 import {
   ACTIVITY_ACTION_TYPES,
@@ -114,10 +111,7 @@ function shiftDay(key: string, delta: number): string {
   return new Date(ms).toISOString().slice(0, 10);
 }
 
-function filterEvents(
-  session: TrustedSession,
-  data: ActivityFilters,
-): PortalAuditEvent[] {
+function filterEvents(session: TrustedSession, data: ActivityFilters): PortalAuditEvent[] {
   seedOfferAuditsOnce();
   const students = visibleStudents(session);
   const studentIds = new Set(students.map((s) => s.id));
@@ -217,6 +211,8 @@ export const portalGetActivityLog = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "activity logs");
+      requireModulePermission(session, "reports", 1, "activity logs");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
@@ -236,6 +232,8 @@ export const portalExportActivityLog = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "activity logs");
+      requireModulePermission(session, "reports", 1, "activity logs");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       let rows: PortalAuditEvent[];

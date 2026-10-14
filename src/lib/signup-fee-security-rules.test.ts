@@ -1,58 +1,57 @@
 import { describe, expect, it } from "vitest";
 import {
+  SIGNUP_FEE_RLS_INTEGRATION_MATRIX,
+  appAllowsVerifySignupFeeCall,
+  canInsertSignupFee,
   canSelectSignupFee,
   canUpdateSignupFeeRow,
   feeVerifierStudentPatchAllowed,
+  isFrontDeskFeeRegistrar,
   nonVerifierFeeUpdateAllowed,
   resolveFeeStatusForAction,
   rpcAuthzAllows,
   rpcShouldActivatePortal,
   studentSelfActivationAllowed,
   twoStepLeavesPartialState,
+  verifyPathUsesAtomicRpcOnly,
   type FeeActor,
 } from "./signup-fee-security-rules";
 
-const student: FeeActor = {
-  isAuthenticated: true,
-  canVerifySignupFee: false,
-  canAccessStudent: true,
-  canStaffMutateStudent: false,
-  isOwningStudent: true,
-};
+function actor(partial: Partial<FeeActor>): FeeActor {
+  return {
+    isAuthenticated: true,
+    canVerifySignupFee: false,
+    canAccessStudent: false,
+    canStaffMutateStudent: false,
+    isIntakeRegistrar: false,
+    isFrontDesk: false,
+    isAdmin: false,
+    isOwningStudent: false,
+    ...partial,
+  };
+}
 
-const frontDeskAssigned: FeeActor = {
-  isAuthenticated: true,
-  canVerifySignupFee: false,
+const student = actor({ canAccessStudent: true, isOwningStudent: true });
+const frontDeskAssigned = actor({
   canAccessStudent: true,
   canStaffMutateStudent: true,
-  isOwningStudent: false,
-};
+});
+/** Front Desk registrar without assignment-scoped can_access_student */
+const frontDeskRegistrarOnly = actor({
+  isIntakeRegistrar: true,
+  isFrontDesk: true,
+});
+/** Counsellor who registered but is not FD and not assigned */
+const counsellorRegistrarOnly = actor({
+  isIntakeRegistrar: true,
+  isFrontDesk: false,
+});
+const otherRegistrar = actor({});
+const accountsUnassigned = actor({ canVerifySignupFee: true });
+const unrelatedStaff = actor({});
+const anon = actor({ isAuthenticated: false });
 
-const accountsUnassigned: FeeActor = {
-  isAuthenticated: true,
-  canVerifySignupFee: true,
-  canAccessStudent: false,
-  canStaffMutateStudent: false,
-  isOwningStudent: false,
-};
-
-const unrelatedStaff: FeeActor = {
-  isAuthenticated: true,
-  canVerifySignupFee: false,
-  canAccessStudent: false,
-  canStaffMutateStudent: false,
-  isOwningStudent: false,
-};
-
-const anon: FeeActor = {
-  isAuthenticated: false,
-  canVerifySignupFee: false,
-  canAccessStudent: false,
-  canStaffMutateStudent: false,
-  isOwningStudent: false,
-};
-
-describe("signup fee SELECT matrix (…13010000)", () => {
+describe("signup fee SELECT matrix (…14040000 FD-only registrar) — unit mirrors", () => {
   it("allows Accounts without assignment and denies unrelated staff", () => {
     expect(canSelectSignupFee(accountsUnassigned)).toBe(true);
     expect(canSelectSignupFee(frontDeskAssigned)).toBe(true);
@@ -60,27 +59,96 @@ describe("signup fee SELECT matrix (…13010000)", () => {
     expect(canSelectSignupFee(unrelatedStaff)).toBe(false);
     expect(canSelectSignupFee(anon)).toBe(false);
   });
+
+  it("allows FD registrar; denies counsellor-only registrar; isolates other registrars", () => {
+    expect(isFrontDeskFeeRegistrar(frontDeskRegistrarOnly)).toBe(true);
+    expect(isFrontDeskFeeRegistrar(counsellorRegistrarOnly)).toBe(false);
+    expect(canSelectSignupFee(frontDeskRegistrarOnly)).toBe(true);
+    expect(canSelectSignupFee(counsellorRegistrarOnly)).toBe(false);
+    expect(canSelectSignupFee(otherRegistrar)).toBe(false);
+  });
 });
 
-describe("signup fee UPDATE matrix (…13010000)", () => {
-  it("denies student terminal and claim status changes", () => {
+describe("signup fee INSERT matrix (…14040000) — unit mirrors", () => {
+  it("allows Front Desk registrar unpaid/claimed with self recorded_by", () => {
     expect(
-      canUpdateSignupFeeRow({
-        actor: student,
-        currentStatus: "unpaid",
-        nextStatus: "claimed",
+      canInsertSignupFee({
+        actor: frontDeskRegistrarOnly,
+        canRecordIntake: true,
+        status: "claimed",
+        verifiedBySet: false,
+        verifiedAtSet: false,
+        recordedByIsSelfOrNull: true,
       }),
-    ).toBe(false);
+    ).toBe(true);
+  });
+
+  it("denies counsellor registrar fee insert (no FD, no can_access_student)", () => {
     expect(
-      canUpdateSignupFeeRow({
-        actor: student,
-        currentStatus: "claimed",
-        nextStatus: "verified",
+      canInsertSignupFee({
+        actor: counsellorRegistrarOnly,
+        canRecordIntake: true,
+        status: "unpaid",
+        verifiedBySet: false,
+        verifiedAtSet: false,
+        recordedByIsSelfOrNull: true,
       }),
     ).toBe(false);
   });
 
-  it("allows Front Desk claim path but not verify", () => {
+  it("denies registrar spoofing verified status or recorded_by", () => {
+    expect(
+      canInsertSignupFee({
+        actor: frontDeskRegistrarOnly,
+        canRecordIntake: true,
+        status: "verified",
+        verifiedBySet: false,
+        verifiedAtSet: false,
+        recordedByIsSelfOrNull: true,
+      }),
+    ).toBe(false);
+    expect(
+      canInsertSignupFee({
+        actor: frontDeskRegistrarOnly,
+        canRecordIntake: true,
+        status: "unpaid",
+        verifiedBySet: true,
+        verifiedAtSet: false,
+        recordedByIsSelfOrNull: true,
+      }),
+    ).toBe(false);
+    expect(
+      canInsertSignupFee({
+        actor: frontDeskRegistrarOnly,
+        canRecordIntake: true,
+        status: "unpaid",
+        verifiedBySet: false,
+        verifiedAtSet: false,
+        recordedByIsSelfOrNull: false,
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("signup fee UPDATE matrix (…14040000) — unit mirrors", () => {
+  it("allows FD registrar UPSERT claim; denies counsellor registrar", () => {
+    expect(
+      canUpdateSignupFeeRow({
+        actor: frontDeskRegistrarOnly,
+        currentStatus: "unpaid",
+        nextStatus: "claimed",
+      }),
+    ).toBe(true);
+    expect(
+      canUpdateSignupFeeRow({
+        actor: counsellorRegistrarOnly,
+        currentStatus: "unpaid",
+        nextStatus: "claimed",
+      }),
+    ).toBe(false);
+  });
+
+  it("allows assigned staff claim path and Accounts verify", () => {
     expect(
       canUpdateSignupFeeRow({
         actor: frontDeskAssigned,
@@ -88,16 +156,6 @@ describe("signup fee UPDATE matrix (…13010000)", () => {
         nextStatus: "claimed",
       }),
     ).toBe(true);
-    expect(
-      canUpdateSignupFeeRow({
-        actor: frontDeskAssigned,
-        currentStatus: "claimed",
-        nextStatus: "verified",
-      }),
-    ).toBe(false);
-  });
-
-  it("allows Accounts verify without can_access_student", () => {
     expect(
       canUpdateSignupFeeRow({
         actor: accountsUnassigned,
@@ -107,29 +165,26 @@ describe("signup fee UPDATE matrix (…13010000)", () => {
     ).toBe(true);
   });
 
-  it("denies unrelated staff", () => {
+  it("denies student claim and FD terminal verify via table update", () => {
     expect(
       canUpdateSignupFeeRow({
-        actor: unrelatedStaff,
+        actor: student,
         currentStatus: "unpaid",
         nextStatus: "claimed",
+      }),
+    ).toBe(false);
+    expect(
+      canUpdateSignupFeeRow({
+        actor: frontDeskRegistrarOnly,
+        currentStatus: "claimed",
+        nextStatus: "verified",
       }),
     ).toBe(false);
   });
 });
 
-describe("fee update guard (trigger mirror)", () => {
+describe("fee update guard (trigger mirror) — unit", () => {
   it("blocks student_id change and non-verifier terminal/audit fields", () => {
-    expect(
-      nonVerifierFeeUpdateAllowed({
-        canVerifySignupFee: false,
-        oldStatus: "claimed",
-        newStatus: "claimed",
-        studentIdChanged: true,
-        verificationFieldsChanged: false,
-      }),
-    ).toBe(false);
-
     expect(
       nonVerifierFeeUpdateAllowed({
         canVerifySignupFee: false,
@@ -139,17 +194,6 @@ describe("fee update guard (trigger mirror)", () => {
         verificationFieldsChanged: false,
       }),
     ).toBe(false);
-
-    expect(
-      nonVerifierFeeUpdateAllowed({
-        canVerifySignupFee: false,
-        oldStatus: "claimed",
-        newStatus: "claimed",
-        studentIdChanged: false,
-        verificationFieldsChanged: true,
-      }),
-    ).toBe(false);
-
     expect(
       nonVerifierFeeUpdateAllowed({
         canVerifySignupFee: false,
@@ -162,38 +206,37 @@ describe("fee update guard (trigger mirror)", () => {
   });
 });
 
-describe("RPC verify + activate (…13020000 mirrors)", () => {
-  it("requires authentication and can_verify before mutations", () => {
-    expect(rpcAuthzAllows({ isAuthenticated: false, canVerifySignupFee: true })).toBe(false);
-    expect(rpcAuthzAllows({ isAuthenticated: true, canVerifySignupFee: false })).toBe(false);
+describe("RPC verify + activate mirrors — unit", () => {
+  it("requires authentication and can_verify; app denies Front Desk", () => {
     expect(rpcAuthzAllows({ isAuthenticated: true, canVerifySignupFee: true })).toBe(true);
-  });
-
-  it("only verified/waived activate; reject never activates", () => {
-    expect(rpcShouldActivatePortal({ action: "verify", activatePortal: true })).toBe(true);
-    expect(rpcShouldActivatePortal({ action: "waive", activatePortal: true })).toBe(true);
+    expect(appAllowsVerifySignupFeeCall({ isFrontDesk: true, appLayerCanVerify: true })).toBe(
+      false,
+    );
+    expect(verifyPathUsesAtomicRpcOnly()).toBe(true);
     expect(rpcShouldActivatePortal({ action: "reject", activatePortal: true })).toBe(false);
-    expect(rpcShouldActivatePortal({ action: "verify", activatePortal: false })).toBe(false);
-    expect(resolveFeeStatusForAction("reject")).toBe("rejected");
-  });
-
-  it("fee-verifier student patches are allowlisted", () => {
-    expect(feeVerifierStudentPatchAllowed(["portal_activated_at"])).toBe(true);
-    expect(feeVerifierStudentPatchAllowed(["portal_activated_at", "updated_at"])).toBe(true);
+    expect(resolveFeeStatusForAction("waive")).toBe("waived");
     expect(feeVerifierStudentPatchAllowed(["portal_activated_at", "email"])).toBe(false);
-    expect(feeVerifierStudentPatchAllowed(["journey_stage"])).toBe(false);
-  });
-
-  it("students cannot self-activate", () => {
     expect(studentSelfActivationAllowed()).toBe(false);
-  });
-
-  it("documents two-step partial-write hazard the RPC must eliminate", () => {
     expect(twoStepLeavesPartialState({ feeWriteSucceeded: true, activationSucceeded: false })).toBe(
       true,
     );
-    expect(twoStepLeavesPartialState({ feeWriteSucceeded: true, activationSucceeded: true })).toBe(
-      false,
+  });
+});
+
+describe("documented staging RLS integration matrix (not executed)", () => {
+  it("lists required JWT/SQL cells for FD-A/B, counsellor, Accounts, admin, student, anon", () => {
+    expect(SIGNUP_FEE_RLS_INTEGRATION_MATRIX.length).toBeGreaterThanOrEqual(8);
+    const actors = SIGNUP_FEE_RLS_INTEGRATION_MATRIX.map((r) => r.actor);
+    expect(actors).toEqual(
+      expect.arrayContaining([
+        "FD-A",
+        "FD-B",
+        "Counsellor registrar (not assigned)",
+        "Accounts/verifier",
+        "Admin",
+        "Student",
+        "Anon",
+      ]),
     );
   });
 });

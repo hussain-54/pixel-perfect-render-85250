@@ -12,10 +12,16 @@ import {
   portalGetConsultant,
   portalGetConsultants,
   portalGetCurrentStudent,
+  portalUpdateOwnStudentContact,
+  portalRequestAppointment,
   portalGetDocuments,
   portalGetLeads,
+  portalListLeadAssigneeOptions,
+  portalAssignLead,
+  portalUpdateLeadStatus,
   portalGetMonthlyStats,
   portalGetNotifications,
+  portalMarkNotificationRead,
   portalGetStudent,
   portalGetStudents,
   portalSubmitConsultation,
@@ -136,6 +142,11 @@ import {
   type SetTemporaryPasswordInput,
 } from "@/server/portal-accounts";
 import {
+  portalGetPermissionMatrix,
+  portalUpdatePermissionMatrixCell,
+  type UpdatePermissionMatrixInput,
+} from "@/server/portal-permissions";
+import {
   portalVerifyCurrentPassword,
   type VerifyCurrentPasswordInput,
 } from "@/server/portal-password";
@@ -167,6 +178,11 @@ import type { ReportExportFormat, ReportsFilters } from "@/types/reports-ops";
 import type { ModuleReportsFilters } from "@/types/module-reports";
 import type { ActivityFilters } from "@/types/activity-ops";
 import { portalExportModuleReports, portalGetModuleReports } from "@/server/portal-module-reports";
+import {
+  portalGetFrontDeskDashboard,
+  portalListCounsellorDesks,
+  portalListFrontDeskIntake,
+} from "@/server/portal-front-desk";
 
 async function withAuth<T>(fn: (opts: { headers?: HeadersInit }) => Promise<T>): Promise<T> {
   const headers = await getAuthRequestHeaders();
@@ -182,6 +198,16 @@ export const getStudent = (id: string) =>
 
 export const getCurrentStudent = () => withAuth((opts) => portalGetCurrentStudent(opts));
 
+export const updateOwnStudentContact = (data: {
+  phone?: string;
+  whatsapp?: string;
+  city?: string;
+  dob?: string;
+  destination?: string;
+  program?: string;
+  studyLevel?: string;
+}) => withAuth((opts) => portalUpdateOwnStudentContact({ ...opts, data }));
+
 export const getConsultants = () => withAuth((opts) => portalGetConsultants(opts));
 
 export const getConsultant = (id: string) =>
@@ -194,6 +220,13 @@ export const getAppointments = (studentId?: string) =>
       data: studentId ? { studentId } : {},
     }),
   );
+
+export const requestAppointment = (data: {
+  date: string;
+  time: string;
+  notes?: string;
+  durationMinutes?: number;
+}) => withAuth((opts) => portalRequestAppointment({ ...opts, data }));
 
 export const getDocuments = (studentId?: string) =>
   withAuth((opts) =>
@@ -213,6 +246,15 @@ export const getApplications = (studentId?: string) =>
 
 export const getLeads = () => withAuth((opts) => portalGetLeads(opts));
 
+export const listLeadAssigneeOptions = () =>
+  withAuth((opts) => portalListLeadAssigneeOptions(opts));
+
+export const assignLead = (data: { leadId: string; consultantId: string | null }) =>
+  withAuth((opts) => portalAssignLead({ ...opts, data }));
+
+export const updateLeadStatus = (data: { leadId: string; status: string }) =>
+  withAuth((opts) => portalUpdateLeadStatus({ ...opts, data }));
+
 /** Public catalog — safe without portal auth. */
 export const getUniversities = () => Promise.resolve(db.universities);
 
@@ -221,6 +263,9 @@ export const getScholarships = () => Promise.resolve(db.scholarships);
 
 export const getNotifications = (audience: "student" | "staff" | "admin") =>
   withAuth((opts) => portalGetNotifications({ ...opts, data: { audience } }));
+
+export const markNotificationRead = (id: string) =>
+  withAuth((opts) => portalMarkNotificationRead({ ...opts, data: { id } }));
 
 export const getActivity = (studentId: string) =>
   withAuth((opts) => portalGetActivity({ ...opts, data: { studentId } }));
@@ -417,6 +462,12 @@ export const registerStudent = (data: {
 export const intakeRegisterStudent = (data: IntakeRegisterInput) =>
   withAuth((opts) => portalIntakeRegisterStudent({ ...opts, data }));
 
+export const getFrontDeskDashboard = () => withAuth((opts) => portalGetFrontDeskDashboard(opts));
+
+export const listFrontDeskIntake = () => withAuth((opts) => portalListFrontDeskIntake(opts));
+
+export const listCounsellorDesks = () => withAuth((opts) => portalListCounsellorDesks(opts));
+
 export const recordSignupFee = (data: SignupFeeRecordInput) =>
   withAuth((opts) => portalRecordSignupFee({ ...opts, data }));
 
@@ -510,6 +561,12 @@ export const setPortalConsultantDeskStatus = (data: {
 
 export const revokePortalAccountSessions = (data: { userId: string }) =>
   withAuth((opts) => portalRevokeAccountSessions({ ...opts, data }));
+
+/** Admin RBAC permission matrix (persisted business_module_permissions). */
+export const getPermissionMatrix = () => withAuth((opts) => portalGetPermissionMatrix(opts));
+
+export const updatePermissionMatrixCell = (data: UpdatePermissionMatrixInput) =>
+  withAuth((opts) => portalUpdatePermissionMatrixCell({ ...opts, data }));
 
 export const verifyPortalCurrentPassword = (data: VerifyCurrentPasswordInput) =>
   withAuth((opts) => portalVerifyCurrentPassword({ ...opts, data }));

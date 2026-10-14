@@ -13,6 +13,7 @@ import {
   requireTrustedSession,
   type TrustedSession,
 } from "@/server/portal-auth";
+import { denyFrontDeskConsultantWorkflows, requireModulePermission } from "@/server/staff-access";
 import type { Application, Student } from "@/types";
 import {
   REPORT_METRIC_DEFINITIONS,
@@ -184,8 +185,7 @@ function buildPayload(session: TrustedSession, raw: ReportsFilters | undefined):
       : null;
 
   const appsSubmitted = submittedInWindow.length;
-  const momDelta =
-    priorSubmitted == null ? null : appsSubmitted - priorSubmitted;
+  const momDelta = priorSubmitted == null ? null : appsSubmitted - priorSubmitted;
 
   const offerAppIds = new Set(allApps.map((a) => a.id));
   const offersInWindow = offerRecords.filter((o) => {
@@ -250,9 +250,7 @@ function buildPayload(session: TrustedSession, raw: ReportsFilters | undefined):
     visaMilestones
       .filter(
         (v): v is typeof v & { applicationId: string } =>
-          Boolean(v.applicationId) &&
-          startedIds.has(v.applicationId!) &&
-          v.decision === "approved",
+          Boolean(v.applicationId) && startedIds.has(v.applicationId!) && v.decision === "approved",
       )
       .map((v) => v.applicationId),
   );
@@ -382,7 +380,8 @@ function buildPayload(session: TrustedSession, raw: ReportsFilters | undefined):
       label: REPORT_METRIC_DEFINITIONS.offersReceived.label,
       value: offersReceived,
       display: String(offersReceived),
-      footnote: offerRate == null ? "Offer rate — (no submissions)" : `${pctDisplay(offerRate)} offer rate`,
+      footnote:
+        offerRate == null ? "Offer rate — (no submissions)" : `${pctDisplay(offerRate)} offer rate`,
     },
     {
       key: "docsVerified",
@@ -431,8 +430,15 @@ async function buildPayloadFromDb(
   session: TrustedSession,
   raw: ReportsFilters | undefined,
 ): Promise<ReportsPayload> {
-  const { requireAoSupabaseClient, listVisibleStudentsDb, listAppsForStudents, listDocsForStudents, listOffersForStudents, listVisaMilestonesForStudents, listDocumentReviewRowsForDocuments } =
-    await import("@/server/ao-data");
+  const {
+    requireAoSupabaseClient,
+    listVisibleStudentsDb,
+    listAppsForStudents,
+    listDocsForStudents,
+    listOffersForStudents,
+    listVisaMilestonesForStudents,
+    listDocumentReviewRowsForDocuments,
+  } = await import("@/server/ao-data");
   const client = requireAoSupabaseClient();
 
   const filters = normalizeFilters(raw);
@@ -492,7 +498,10 @@ async function buildPayloadFromDb(
     return key != null && inRange(key, range.start, range.end);
   }).length;
 
-  const reviewRows = await listDocumentReviewRowsForDocuments(client, docs.map((d) => d.id));
+  const reviewRows = await listDocumentReviewRowsForDocuments(
+    client,
+    docs.map((d) => d.id),
+  );
   const reviewsByDoc = new Map<string, { action: "approve" | "reject"; at: string }[]>();
   for (const r of reviewRows) {
     const list = reviewsByDoc.get(r.documentId) ?? [];
@@ -523,9 +532,13 @@ async function buildPayloadFromDb(
 
   const startedSubmitted = started.filter(isSubmittedApp);
   const startedIds = new Set(started.map((a) => a.id));
-  const offersIssuedApps = new Set(offers.filter((o) => startedIds.has(o.applicationId)).map((o) => o.applicationId));
+  const offersIssuedApps = new Set(
+    offers.filter((o) => startedIds.has(o.applicationId)).map((o) => o.applicationId),
+  );
   const offersAcceptedApps = new Set(
-    offers.filter((o) => startedIds.has(o.applicationId) && o.status === "accepted").map((o) => o.applicationId),
+    offers
+      .filter((o) => startedIds.has(o.applicationId) && o.status === "accepted")
+      .map((o) => o.applicationId),
   );
   const visas = await listVisaMilestonesForStudents(client, [...studentIds]);
   const visaGrantedApps = new Set(
@@ -539,7 +552,12 @@ async function buildPayloadFromDb(
 
   const funnelBase = started.length;
   const funnel = [
-    { key: "started", label: "Started Files", count: started.length, rateOfStarted: funnelBase ? 1 : null },
+    {
+      key: "started",
+      label: "Started Files",
+      count: started.length,
+      rateOfStarted: funnelBase ? 1 : null,
+    },
     {
       key: "submitted",
       label: "Submitted Apps",
@@ -592,7 +610,11 @@ async function buildPayloadFromDb(
       offerSuccessRate: null,
       offerSuccessDisplay: "—",
     };
-    if (filters.timeframe === "all" ? isSubmittedApp(app) : key != null && inRange(key, range.start, range.end)) {
+    if (
+      filters.timeframe === "all"
+        ? isSubmittedApp(app)
+        : key != null && inRange(key, range.start, range.end)
+    ) {
       row.submitted += 1;
       if (app.status === "Rejected") row.rejections += 1;
     }
@@ -641,7 +663,8 @@ async function buildPayloadFromDb(
       label: REPORT_METRIC_DEFINITIONS.offersReceived.label,
       value: offersReceived,
       display: String(offersReceived),
-      footnote: offerRate == null ? "Offer rate — (no submissions)" : `${pctDisplay(offerRate)} offer rate`,
+      footnote:
+        offerRate == null ? "Offer rate — (no submissions)" : `${pctDisplay(offerRate)} offer rate`,
     },
     {
       key: "docsVerified",
@@ -668,7 +691,12 @@ async function buildPayloadFromDb(
   return {
     filters,
     filterOptions,
-    range: { start: range.start, end: range.end, priorStart: range.priorStart, priorEnd: range.priorEnd },
+    range: {
+      start: range.start,
+      end: range.end,
+      priorStart: range.priorStart,
+      priorEnd: range.priorEnd,
+    },
     kpis,
     funnel,
     monthlyTrend,
@@ -686,6 +714,8 @@ export const portalGetReports = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "reports");
+      requireModulePermission(session, "reports", 1, "officer reports");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
@@ -704,6 +734,8 @@ export const portalExportReports = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "reports");
+      requireModulePermission(session, "reports", 1, "report exports");
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       const payload = usesSupabaseDataPlane(session)

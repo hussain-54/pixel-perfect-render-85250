@@ -42,3 +42,45 @@ export function formatFeeActivationPartialFailure(input: {
   const detail = input.activationError.trim() || "unknown error";
   return `Signup fee was updated to ${input.feeStatus}, but portal activation failed: ${detail}. Resolve student access and re-run activation; do not treat the fee change as a completed activation.`;
 }
+
+export type MappedSignupFeeRpcError = {
+  status: number;
+  message: string;
+};
+
+/**
+ * Maps verify_signup_fee_and_activate Postgres errors to safe client messages.
+ * Pure — does not call the database. Never forwards raw SQL/connection details.
+ */
+export function mapVerifySignupFeeRpcError(rawMessage: string): MappedSignupFeeRpcError {
+  const message = rawMessage.trim();
+  if (/does not exist|Could not find the function|PGRST202/i.test(message)) {
+    return {
+      status: 503,
+      message:
+        "Fee verification RPC unavailable. Apply migration 20261013020000_signup_fee_verify_activate_rpc.sql.",
+    };
+  }
+  if (/authentication required/i.test(message)) {
+    return { status: 401, message: "Sign in required to verify signup fees." };
+  }
+  if (/not authorized to verify signup fees/i.test(message)) {
+    return {
+      status: 403,
+      message: "Only Accounts/Finance or Admin may verify signup fees.",
+    };
+  }
+  if (/signup fee row not found/i.test(message)) {
+    return { status: 404, message: "Signup fee record not found." };
+  }
+  if (/invalid action/i.test(message)) {
+    return { status: 400, message: "Invalid verification action." };
+  }
+  if (/student row missing/i.test(message)) {
+    return { status: 404, message: "Student record not found for activation." };
+  }
+  return {
+    status: 400,
+    message: "Could not verify the signup fee. Try again or contact an administrator.",
+  };
+}

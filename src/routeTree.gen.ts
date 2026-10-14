@@ -58,8 +58,11 @@ import { Route as StaffApplicationsRouteImport } from './routes/staff/applicatio
 import { Route as StaffAppointmentsRouteImport } from './routes/staff/appointments'
 import { Route as StaffDashboardRouteImport } from './routes/staff/dashboard'
 import { Route as StaffDocumentsRouteImport } from './routes/staff/documents'
+import { Route as StaffFrontDeskRouteImport } from './routes/staff/front-desk'
+import { Route as StaffIntakeRouteImport } from './routes/staff/intake'
 import { Route as StaffLeadsRouteImport } from './routes/staff/leads'
 import { Route as StaffOffersRouteImport } from './routes/staff/offers'
+import { Route as StaffRegisterRouteImport } from './routes/staff/register'
 import { Route as StaffReportsRouteImport } from './routes/staff/reports'
 import { Route as StaffStudentsRouteImport } from './routes/staff/students'
 import { Route as StaffTasksRouteImport } from './routes/staff/tasks'
@@ -317,6 +320,16 @@ const StaffDocumentsRoute = StaffDocumentsRouteImport.update({
   path: '/documents',
   getParentRoute: () => StaffRouteRoute,
 } as any)
+const StaffFrontDeskRoute = StaffFrontDeskRouteImport.update({
+  id: '/front-desk',
+  path: '/front-desk',
+  getParentRoute: () => StaffRouteRoute,
+} as any)
+const StaffIntakeRoute = StaffIntakeRouteImport.update({
+  id: '/intake',
+  path: '/intake',
+  getParentRoute: () => StaffRouteRoute,
+} as any)
 const StaffLeadsRoute = StaffLeadsRouteImport.update({
   id: '/leads',
   path: '/leads',
@@ -325,6 +338,11 @@ const StaffLeadsRoute = StaffLeadsRouteImport.update({
 const StaffOffersRoute = StaffOffersRouteImport.update({
   id: '/offers',
   path: '/offers',
+  getParentRoute: () => StaffRouteRoute,
+} as any)
+const StaffRegisterRoute = StaffRegisterRouteImport.update({
+  id: '/register',
+  path: '/register',
   getParentRoute: () => StaffRouteRoute,
 } as any)
 const StaffReportsRoute = StaffReportsRouteImport.update({
@@ -431,8 +449,11 @@ export interface FileRoutesByFullPath {
   '/staff/appointments': typeof StaffAppointmentsRoute
   '/staff/dashboard': typeof StaffDashboardRoute
   '/staff/documents': typeof StaffDocumentsRoute
+  '/staff/front-desk': typeof StaffFrontDeskRoute
+  '/staff/intake': typeof StaffIntakeRoute
   '/staff/leads': typeof StaffLeadsRoute
   '/staff/offers': typeof StaffOffersRoute
+  '/staff/register': typeof StaffRegisterRoute
   '/staff/reports': typeof StaffReportsRoute
   '/staff/students': typeof StaffStudentsRouteWithChildren
   '/staff/tasks': typeof StaffTasksRoute
@@ -492,8 +513,11 @@ export interface FileRoutesByTo {
   '/staff/appointments': typeof StaffAppointmentsRoute
   '/staff/dashboard': typeof StaffDashboardRoute
   '/staff/documents': typeof StaffDocumentsRoute
+  '/staff/front-desk': typeof StaffFrontDeskRoute
+  '/staff/intake': typeof StaffIntakeRoute
   '/staff/leads': typeof StaffLeadsRoute
   '/staff/offers': typeof StaffOffersRoute
+  '/staff/register': typeof StaffRegisterRoute
   '/staff/reports': typeof StaffReportsRoute
   '/staff/students': typeof StaffStudentsRouteWithChildren
   '/staff/tasks': typeof StaffTasksRoute
@@ -557,8 +581,11 @@ export interface FileRoutesById {
   '/staff/appointments': typeof StaffAppointmentsRoute
   '/staff/dashboard': typeof StaffDashboardRoute
   '/staff/documents': typeof StaffDocumentsRoute
+  '/staff/front-desk': typeof StaffFrontDeskRoute
+  '/staff/intake': typeof StaffIntakeRoute
   '/staff/leads': typeof StaffLeadsRoute
   '/staff/offers': typeof StaffOffersRoute
+  '/staff/register': typeof StaffRegisterRoute
   '/staff/reports': typeof StaffReportsRoute
   '/staff/students': typeof StaffStudentsRouteWithChildren
   '/staff/tasks': typeof StaffTasksRoute
@@ -623,8 +650,11 @@ export interface FileRouteTypes {
     | '/staff/appointments'
     | '/staff/dashboard'
     | '/staff/documents'
+    | '/staff/front-desk'
+    | '/staff/intake'
     | '/staff/leads'
     | '/staff/offers'
+    | '/staff/register'
     | '/staff/reports'
     | '/staff/students'
     | '/staff/tasks'
@@ -684,8 +714,11 @@ export interface FileRouteTypes {
     | '/staff/appointments'
     | '/staff/dashboard'
     | '/staff/documents'
+    | '/staff/front-desk'
+    | '/staff/intake'
     | '/staff/leads'
     | '/staff/offers'
+    | '/staff/register'
     | '/staff/reports'
     | '/staff/students'
     | '/staff/tasks'
@@ -748,8 +781,11 @@ export interface FileRouteTypes {
     | '/staff/appointments'
     | '/staff/dashboard'
     | '/staff/documents'
+    | '/staff/front-desk'
+    | '/staff/intake'
     | '/staff/leads'
     | '/staff/offers'
+    | '/staff/register'
     | '/staff/reports'
     | '/staff/students'
     | '/staff/tasks'
@@ -1134,6 +1170,20 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StaffDocumentsRouteImport
       parentRoute: typeof StaffRouteRoute
     }
+    '/staff/front-desk': {
+      id: '/staff/front-desk'
+      path: '/front-desk'
+      fullPath: '/staff/front-desk'
+      preLoaderRoute: typeof StaffFrontDeskRouteImport
+      parentRoute: typeof StaffRouteRoute
+    }
+    '/staff/intake': {
+      id: '/staff/intake'
+      path: '/intake'
+      fullPath: '/staff/intake'
+      preLoaderRoute: typeof StaffIntakeRouteImport
+      parentRoute: typeof StaffRouteRoute
+    }
     '/staff/leads': {
       id: '/staff/leads'
       path: '/leads'
@@ -1146,6 +1196,13 @@ declare module '@tanstack/react-router' {
       path: '/offers'
       fullPath: '/staff/offers'
       preLoaderRoute: typeof StaffOffersRouteImport
+      parentRoute: typeof StaffRouteRoute
+    }
+    '/staff/register': {
+      id: '/staff/register'
+      path: '/register'
+      fullPath: '/staff/register'
+      preLoaderRoute: typeof StaffRegisterRouteImport
       parentRoute: typeof StaffRouteRoute
     }
     '/staff/reports': {
@@ -1300,8 +1357,11 @@ interface StaffRouteRouteChildren {
   StaffAppointmentsRoute: typeof StaffAppointmentsRoute
   StaffDashboardRoute: typeof StaffDashboardRoute
   StaffDocumentsRoute: typeof StaffDocumentsRoute
+  StaffFrontDeskRoute: typeof StaffFrontDeskRoute
+  StaffIntakeRoute: typeof StaffIntakeRoute
   StaffLeadsRoute: typeof StaffLeadsRoute
   StaffOffersRoute: typeof StaffOffersRoute
+  StaffRegisterRoute: typeof StaffRegisterRoute
   StaffReportsRoute: typeof StaffReportsRoute
   StaffStudentsRoute: typeof StaffStudentsRouteWithChildren
   StaffTasksRoute: typeof StaffTasksRoute
@@ -1314,8 +1374,11 @@ const StaffRouteRouteChildren: StaffRouteRouteChildren = {
   StaffAppointmentsRoute: StaffAppointmentsRoute,
   StaffDashboardRoute: StaffDashboardRoute,
   StaffDocumentsRoute: StaffDocumentsRoute,
+  StaffFrontDeskRoute: StaffFrontDeskRoute,
+  StaffIntakeRoute: StaffIntakeRoute,
   StaffLeadsRoute: StaffLeadsRoute,
   StaffOffersRoute: StaffOffersRoute,
+  StaffRegisterRoute: StaffRegisterRoute,
   StaffReportsRoute: StaffReportsRoute,
   StaffStudentsRoute: StaffStudentsRouteWithChildren,
   StaffTasksRoute: StaffTasksRoute,

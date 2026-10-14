@@ -1,6 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { PageHeader, Panel } from "@/components/common";
 import { AdminAccountManagement } from "@/components/portal/AdminAccountManagement";
+import { AdminPermissionMatrix } from "@/components/portal/AdminPermissionMatrix";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -16,7 +17,7 @@ function AdminSettings() {
     <div className="space-y-10">
       <PageHeader
         title="Settings"
-        subtitle="Organization and notification fields below are a configuration preview only. User & Account Management uses live Supabase Auth."
+        subtitle="Role permissions persist to Supabase. User & Account Management uses live Auth. Organization and notification fields below are a configuration preview only."
       />
 
       <form
@@ -79,6 +80,10 @@ function AdminSettings() {
           Save organization settings (coming soon)
         </Button>
       </form>
+
+      <div className="border-t border-border pt-8">
+        <AdminPermissionMatrix />
+      </div>
 
       <div className="border-t border-border pt-8">
         <AdminAccountManagement />

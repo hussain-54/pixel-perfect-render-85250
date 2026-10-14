@@ -6,6 +6,7 @@
  */
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type {
+  AppointmentRow,
   ApplicationRow,
   ApplicationStage,
   AppRoleDb,
@@ -36,7 +37,10 @@ function throwOnError<T>(error: { message: string } | null, data: T | null): T {
 }
 
 /** Profiles */
-export async function getProfileById(client: TypedSupabase, id: string): Promise<ProfileRow | null> {
+export async function getProfileById(
+  client: TypedSupabase,
+  id: string,
+): Promise<ProfileRow | null> {
   const { data, error } = await client.from("profiles").select("*").eq("id", id).maybeSingle();
   if (error) throw new Error(error.message);
   return data;
@@ -87,12 +91,18 @@ export async function getConsultantById(
 
 /** Students */
 export async function listStudents(client: TypedSupabase): Promise<StudentRow[]> {
-  const { data, error } = await client.from("students").select("*").order("updated_at", { ascending: false });
+  const { data, error } = await client
+    .from("students")
+    .select("*")
+    .order("updated_at", { ascending: false });
   if (error) throw new Error(error.message);
   return data ?? [];
 }
 
-export async function getStudentById(client: TypedSupabase, id: string): Promise<StudentRow | null> {
+export async function getStudentById(
+  client: TypedSupabase,
+  id: string,
+): Promise<StudentRow | null> {
   const { data, error } = await client.from("students").select("*").eq("id", id).maybeSingle();
   if (error) throw new Error(error.message);
   return data;
@@ -106,6 +116,30 @@ export async function getStudentByProfileId(
     .from("students")
     .select("*")
     .eq("profile_id", profileId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/**
+ * Own-student contact patch. Caller must resolve studentId from profile_id = auth user.
+ * Relies on students_update_self_contact + enforce_student_staff_fields (JWT, no service role).
+ */
+export async function updateOwnStudentContact(
+  client: TypedSupabase,
+  studentId: string,
+  profileId: string,
+  patch: Pick<
+    TablesUpdate<"students">,
+    "phone" | "whatsapp" | "city" | "dob" | "destination" | "program" | "study_level"
+  >,
+): Promise<StudentRow | null> {
+  const { data, error } = await client
+    .from("students")
+    .update(patch)
+    .eq("id", studentId)
+    .eq("profile_id", profileId)
+    .select("*")
     .maybeSingle();
   if (error) throw new Error(error.message);
   return data;
@@ -170,11 +204,7 @@ export async function createAssessment(
   client: TypedSupabase,
   row: TablesInsert<"student_assessments">,
 ) {
-  const { data, error } = await client
-    .from("student_assessments")
-    .insert(row)
-    .select("*")
-    .single();
+  const { data, error } = await client.from("student_assessments").insert(row).select("*").single();
   return throwOnError(error, data);
 }
 
@@ -203,11 +233,7 @@ export async function createApplication(
   client: TypedSupabase,
   row: TablesInsert<"applications">,
 ): Promise<ApplicationRow> {
-  const { data, error } = await client
-    .from("applications")
-    .insert(row)
-    .select("*")
-    .single();
+  const { data, error } = await client.from("applications").insert(row).select("*").single();
   return throwOnError(error, data);
 }
 
@@ -253,7 +279,11 @@ export async function getStudentDocumentById(
   client: TypedSupabase,
   id: string,
 ): Promise<StudentDocumentRow | null> {
-  const { data, error } = await client.from("student_documents").select("*").eq("id", id).maybeSingle();
+  const { data, error } = await client
+    .from("student_documents")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
   if (error) throw new Error(error.message);
   return data;
 }
@@ -377,7 +407,10 @@ export async function getOfferById(client: TypedSupabase, id: string): Promise<O
   return data;
 }
 
-export async function createOffer(client: TypedSupabase, row: TablesInsert<"offers">): Promise<OfferRow> {
+export async function createOffer(
+  client: TypedSupabase,
+  row: TablesInsert<"offers">,
+): Promise<OfferRow> {
   const { data, error } = await client.from("offers").insert(row).select("*").single();
   return throwOnError(error, data);
 }
@@ -396,7 +429,11 @@ export async function getOfferConditionById(
   client: TypedSupabase,
   id: string,
 ): Promise<OfferConditionRow | null> {
-  const { data, error } = await client.from("offer_conditions").select("*").eq("id", id).maybeSingle();
+  const { data, error } = await client
+    .from("offer_conditions")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
   if (error) throw new Error(error.message);
   return data;
 }
@@ -467,7 +504,10 @@ export async function listTasks(
   return data ?? [];
 }
 
-export async function createTask(client: TypedSupabase, row: TablesInsert<"tasks">): Promise<TaskRow> {
+export async function createTask(
+  client: TypedSupabase,
+  row: TablesInsert<"tasks">,
+): Promise<TaskRow> {
   const { data, error } = await client.from("tasks").insert(row).select("*").single();
   return throwOnError(error, data);
 }
@@ -501,33 +541,85 @@ export async function createInternalNote(
   client: TypedSupabase,
   row: TablesInsert<"internal_notes">,
 ) {
-  const { data, error } = await client
-    .from("internal_notes")
-    .insert(row)
-    .select("*")
-    .single();
+  const { data, error } = await client.from("internal_notes").insert(row).select("*").single();
   return throwOnError(error, data);
 }
 
-/** Notifications */
-export async function listNotifications(client: TypedSupabase, userId: string) {
+/** Consultation / leads — JWT user client; RLS consultation_select_staff / consultation_update_staff. */
+export async function listConsultationRequests(client: TypedSupabase, limit = 100) {
   const { data, error } = await client
-    .from("notifications")
+    .from("consultation_requests")
     .select("*")
-    .eq("user_id", userId)
-    .order("created_at", { ascending: false });
+    .order("created_at", { ascending: false })
+    .limit(limit);
   if (error) throw new Error(error.message);
   return data ?? [];
 }
 
-export async function markNotificationRead(client: TypedSupabase, id: string) {
+export async function getConsultationRequestById(client: TypedSupabase, id: string) {
+  const { data, error } = await client
+    .from("consultation_requests")
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+export async function updateConsultationRequest(
+  client: TypedSupabase,
+  id: string,
+  patch: {
+    status?: string;
+    assigned_consultant_id?: string | null;
+  },
+) {
+  const { data, error } = await client
+    .from("consultation_requests")
+    .update(patch)
+    .eq("id", id)
+    .select("*")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/** Notifications — JWT user client only; RLS notifications_own / notifications_update_own. */
+export async function listNotifications(client: TypedSupabase, userId: string, limit = 100) {
+  const { data, error } = await client
+    .from("notifications")
+    .select("*")
+    .eq("user_id", userId)
+    .order("created_at", { ascending: false })
+    .limit(limit);
+  if (error) throw new Error(error.message);
+  return data ?? [];
+}
+
+/**
+ * Mark own notification read. Always scopes by trusted userId (never client body).
+ * Idempotent when already read. Missing/unauthorized → null (caller maps to 404).
+ */
+export async function markNotificationRead(client: TypedSupabase, id: string, userId: string) {
+  const { data: existing, error: loadErr } = await client
+    .from("notifications")
+    .select("*")
+    .eq("id", id)
+    .eq("user_id", userId)
+    .maybeSingle();
+  if (loadErr) throw new Error(loadErr.message);
+  if (!existing) return null;
+  if (existing.read_at) return existing;
+
   const { data, error } = await client
     .from("notifications")
     .update({ read_at: new Date().toISOString() })
     .eq("id", id)
+    .eq("user_id", userId)
     .select("*")
-    .single();
-  return throwOnError(error, data);
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
 }
 
 /** Appointments */
@@ -537,6 +629,28 @@ export async function listAppointments(client: TypedSupabase, studentId?: string
   const { data, error } = await q;
   if (error) throw new Error(error.message);
   return data ?? [];
+}
+
+/**
+ * Student-originated appointment request.
+ * Caller must set student_id / created_by from session ownership — never client IDs.
+ * Relies on appointments_access + can_access_student (JWT, no service role).
+ */
+export async function createAppointmentRequest(
+  client: TypedSupabase,
+  row: Pick<
+    TablesInsert<"appointments">,
+    | "student_id"
+    | "consultant_id"
+    | "status"
+    | "scheduled_at"
+    | "duration_minutes"
+    | "notes"
+    | "created_by"
+  >,
+): Promise<AppointmentRow> {
+  const { data, error } = await client.from("appointments").insert(row).select("*").single();
+  return throwOnError(error, data);
 }
 
 /** Directory helpers for Admission Officer cutover (no silent mock fallback). */
@@ -552,7 +666,8 @@ export async function listStudentsDirectory(
   let q = client.from("students").select("*").order("updated_at", { ascending: false });
   if (!filters?.includeArchived) q = q.is("archived_at", null);
   if (filters?.consultantId) q = q.eq("assigned_consultant_id", filters.consultantId);
-  if (filters?.journeyStage) q = q.eq("journey_stage", filters.journeyStage as StudentRow["journey_stage"]);
+  if (filters?.journeyStage)
+    q = q.eq("journey_stage", filters.journeyStage as StudentRow["journey_stage"]);
   if (filters?.search?.trim()) {
     const term = `%${filters.search.trim()}%`;
     q = q.or(`full_name.ilike.${term},email.ilike.${term},case_id.ilike.${term}`);
@@ -562,6 +677,7 @@ export async function listStudentsDirectory(
   return data ?? [];
 }
 
+/** Officer / non-intake inserts. Front Desk intake uses RPC `intake_register_student` instead. */
 export async function createStudentRecord(
   client: TypedSupabase,
   row: TablesInsert<"students">,
@@ -598,10 +714,7 @@ export async function updateOfferStatus(
   return throwOnError(error, data);
 }
 
-export async function createDeposit(
-  client: TypedSupabase,
-  row: TablesInsert<"deposits">,
-) {
+export async function createDeposit(client: TypedSupabase, row: TablesInsert<"deposits">) {
   const { data, error } = await client.from("deposits").insert(row).select("*").single();
   return throwOnError(error, data);
 }
@@ -695,10 +808,7 @@ export async function upsertShortlistItem(
 }
 
 export async function officerDashboardCounts(client: TypedSupabase, consultantId?: string | null) {
-  const students = await listStudentsDirectory(
-    client,
-    consultantId ? { consultantId } : {},
-  );
+  const students = await listStudentsDirectory(client, consultantId ? { consultantId } : {});
   const studentIds = students.map((s) => s.id);
   if (!studentIds.length) {
     return {
@@ -758,8 +868,15 @@ export async function writeAudit(
   return throwOnError(error, data);
 }
 
-export async function listAuditEvents(client: TypedSupabase, studentId?: string): Promise<AuditEventRow[]> {
-  let q = client.from("audit_events").select("*").order("created_at", { ascending: false }).limit(200);
+export async function listAuditEvents(
+  client: TypedSupabase,
+  studentId?: string,
+): Promise<AuditEventRow[]> {
+  let q = client
+    .from("audit_events")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(200);
   if (studentId) q = q.eq("student_id", studentId);
   const { data, error } = await q;
   if (error) throw new Error(error.message);
@@ -767,4 +884,3 @@ export async function listAuditEvents(client: TypedSupabase, studentId?: string)
 }
 
 export { STUDENT_DOCUMENTS_BUCKET, studentDocumentStoragePath };
-

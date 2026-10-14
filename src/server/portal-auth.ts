@@ -10,6 +10,8 @@ import {
 } from "@/lib/portal-session";
 import { normalizeAppRole, resolveAppRoleFromTrustedSources, type AppRole } from "@/lib/roles";
 import { sessionValidationFailureMessage } from "@/lib/session-auth";
+import type { BusinessRole } from "@/lib/business-permissions";
+import { normalizeTrustedBusinessRole } from "@/lib/staff-business-access";
 
 export class AuthError extends Error {
   status: number;
@@ -26,6 +28,8 @@ export type TrustedSession = {
   source: "supabase" | "demo";
   userId?: string;
   consultantId?: string;
+  /** From profiles.business_role only — never client-supplied. */
+  businessRole?: BusinessRole | null;
 };
 
 const SESSION_MAX_AGE_SEC = 60 * 60 * 24 * 7;
@@ -45,17 +49,21 @@ function supabaseEnv() {
   return { url, key };
 }
 
+export type TrustedProfileRoles = {
+  appRole: AppRole;
+  businessRole: BusinessRole | null;
+};
+
 /**
- * Role from trusted sources only — never user_metadata.
- * Prefer profiles.role (JWT-authorized read) over app_metadata so owner SQL /
- * admin_set_user_role take effect without a stale app_metadata.student claim.
- * Fail closed: missing/failed sources never invent staff/admin.
+ * App role + business role from trusted profiles row only for business_role.
+ * Prefer profiles.role over app_metadata. Never trust user_metadata or client body.
  */
-export async function resolveTrustedRole(
+export async function resolveTrustedProfileRoles(
   user: User,
   accessToken?: string | null,
-): Promise<AppRole> {
+): Promise<TrustedProfileRoles> {
   let profileRole: unknown;
+  let profileBusinessRole: unknown;
 
   const { url, key } = supabaseEnv();
   if (url && key && accessToken) {
@@ -66,20 +74,34 @@ export async function resolveTrustedRole(
       });
       const { data, error } = await supabase
         .from("profiles")
-        .select("role")
+        .select("role, business_role")
         .eq("id", user.id)
         .maybeSingle();
-      if (!error) profileRole = data?.role;
-      // RLS denial / missing row: fall through to app_metadata, then student.
+      if (!error && data) {
+        profileRole = data.role;
+        profileBusinessRole = data.business_role;
+      }
     } catch {
       /* profiles may be unavailable; fail closed via resolveAppRoleFromTrustedSources */
     }
   }
 
-  return resolveAppRoleFromTrustedSources({
-    profileRole,
-    appMetadataRole: user.app_metadata?.["role"],
-  });
+  return {
+    appRole: resolveAppRoleFromTrustedSources({
+      profileRole,
+      appMetadataRole: user.app_metadata?.["role"],
+    }),
+    businessRole: normalizeTrustedBusinessRole(profileBusinessRole),
+  };
+}
+
+/** @deprecated Prefer resolveTrustedProfileRoles — kept for call-site compatibility. */
+export async function resolveTrustedRole(
+  user: User,
+  accessToken?: string | null,
+): Promise<AppRole> {
+  const resolved = await resolveTrustedProfileRoles(user, accessToken);
+  return resolved.appRole;
 }
 
 export function readPortalSessionCookie(): PortalSessionPayload | null {
@@ -127,13 +149,14 @@ async function sessionFromAccessToken(accessToken: string): Promise<TrustedSessi
     throw new AuthError(sessionValidationFailureMessage(error?.message), 401);
   }
 
-  const role = await resolveTrustedRole(data.user, token);
+  const { appRole: role, businessRole } = await resolveTrustedProfileRoles(data.user, token);
   const email = (data.user.email ?? "").toLowerCase();
   const session: TrustedSession = {
     role,
     email,
     source: "supabase",
     userId: data.user.id,
+    businessRole,
   };
 
   // Consultant / Admission Officer desk id is the consultants row (= auth.uid()).

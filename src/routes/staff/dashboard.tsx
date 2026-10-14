@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { CalendarClock, FileSearch, FolderKanban, Users } from "lucide-react";
 import {
@@ -18,8 +18,16 @@ import { Button } from "@/components/ui/button";
 import { useData } from "@/lib/useData";
 import { getOfficerDashboard, reviewStudentDocument } from "@/services";
 import { cn } from "@/lib/utils";
+import { isFrontDeskBusinessRole } from "@/lib/staff-business-access";
+import type { BusinessRole } from "@/lib/business-permissions";
 
 export const Route = createFileRoute("/staff/dashboard")({
+  beforeLoad: ({ context }) => {
+    const auth = (context as { auth?: { businessRole?: BusinessRole | null } }).auth;
+    if (isFrontDeskBusinessRole(auth?.businessRole)) {
+      throw redirect({ to: "/staff/front-desk" });
+    }
+  },
   component: StaffDashboard,
 });
 

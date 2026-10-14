@@ -13,6 +13,18 @@ import {
   requireTrustedSession,
   type TrustedSession,
 } from "@/server/portal-auth";
+import { denyFrontDeskConsultantWorkflows, requireModulePermission } from "@/server/staff-access";
+import type { PermissionLevel } from "@/lib/business-permissions";
+
+function requireConsultantDesk(
+  session: TrustedSession,
+  label = "consultant desk workflows",
+  studentsMinimum: PermissionLevel = 1,
+) {
+  requireRoles(session, ["consultant", "admin", "super_admin"]);
+  denyFrontDeskConsultantWorkflows(session, label);
+  requireModulePermission(session, "students", studentsMinimum, label);
+}
 import type {
   OfficerDashboardPayload,
   StudentDirectoryFilters,
@@ -79,12 +91,7 @@ function studentIntake(studentId: string): string {
   return apps[0]?.intake ?? "-";
 }
 
-const SUBMITTED_APP_STATUSES = new Set([
-  "Submitted",
-  "Offer Received",
-  "Rejected",
-  "Withdrawn",
-]);
+const SUBMITTED_APP_STATUSES = new Set(["Submitted", "Offer Received", "Rejected", "Withdrawn"]);
 
 const IN_PROGRESS_APP_STATUSES = new Set([
   "Docs Pending",
@@ -137,7 +144,7 @@ function buildDirectoryRow(s: Student): StudentDirectoryRow {
 export const portalGetOfficerDashboard = createServerFn({ method: "GET" }).handler(async () => {
   try {
     const session = await requireTrustedSession();
-    requireRoles(session, ["consultant", "admin", "super_admin"]);
+    requireConsultantDesk(session);
 
     const { usesSupabaseDataPlane, buildOfficerDashboardFromDb } = await import("@/server/ao-data");
     if (usesSupabaseDataPlane(session)) {
@@ -210,8 +217,7 @@ export const portalGetOfficerDashboard = createServerFn({ method: "GET" }).handl
       });
 
     const consultant = assigneeId != null ? db.consultants.find((c) => c.id === assigneeId) : null;
-    const greetingName =
-      consultant?.name.split(" ")[0] ?? session.email.split("@")[0] ?? "Officer";
+    const greetingName = consultant?.name.split(" ")[0] ?? session.email.split("@")[0] ?? "Officer";
     const deskLabel = consultant
       ? `${consultant.department} Desk`
       : rolesAtLeastAdmin(session.role)
@@ -262,11 +268,10 @@ export const portalGetStudentsDirectory = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<StudentDirectoryResult> => {
     try {
       const session = await requireTrustedSession();
-      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      requireConsultantDesk(session);
 
-      const { usesSupabaseDataPlane, buildStudentsDirectoryFromDb } = await import(
-        "@/server/ao-data"
-      );
+      const { usesSupabaseDataPlane, buildStudentsDirectoryFromDb } =
+        await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
         const directoryFilters: {
           q?: string;
@@ -379,13 +384,12 @@ export const portalSearchStudents = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<StudentSearchHit[]> => {
     try {
       const session = await requireTrustedSession();
-      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      requireConsultantDesk(session);
       const q = data.q.trim().toLowerCase();
       if (q.length < 2) return [];
 
-      const { usesSupabaseDataPlane, requireAoSupabaseClient, listVisibleStudentsDb } = await import(
-        "@/server/ao-data"
-      );
+      const { usesSupabaseDataPlane, requireAoSupabaseClient, listVisibleStudentsDb } =
+        await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
         const client = requireAoSupabaseClient();
         const students = await listVisibleStudentsDb(client, session);
@@ -456,7 +460,10 @@ export const portalReviewDocument = createServerFn({ method: "POST" })
     }
   });
 
-function buildStudentWorkspace(session: TrustedSession, studentId: string): StudentProfileWorkspace {
+function buildStudentWorkspace(
+  session: TrustedSession,
+  studentId: string,
+): StudentProfileWorkspace {
   const student = db.students.find((s) => s.id === studentId);
   if (!student) throw new AuthError("Student not found.", 404);
   const consultant = db.consultants.find((c) => c.id === student.consultantId);
@@ -519,9 +526,10 @@ export const portalGetStudentProfile = createServerFn({ method: "GET" })
   .handler(async ({ data }): Promise<StudentProfileWorkspace> => {
     try {
       const session = await requireTrustedSession();
-      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      requireConsultantDesk(session);
 
-      const { usesSupabaseDataPlane, buildStudentWorkspaceFromDb } = await import("@/server/ao-data");
+      const { usesSupabaseDataPlane, buildStudentWorkspaceFromDb } =
+        await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
         return await buildStudentWorkspaceFromDb(session, data.id);
       }
@@ -538,7 +546,7 @@ export const portalSaveStudentAssessment = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       const session = await requireTrustedSession();
-      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      requireConsultantDesk(session, "student assessment", 2);
 
       const a = data.assessment;
       if (!a.eligibility?.trim()) throw new AuthError("Eligibility assessment is required.", 400);
@@ -611,12 +619,16 @@ export const portalAddStudentNote = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       const session = await requireTrustedSession();
-      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      requireConsultantDesk(session, "student notes", 2);
       const body = data.body.trim();
       if (body.length < 2) throw new AuthError("Note body is required.", 400);
 
-      const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb, buildStudentWorkspaceFromDb } =
-        await import("@/server/ao-data");
+      const {
+        usesSupabaseDataPlane,
+        requireAoSupabaseClient,
+        assertStudentVisibleDb,
+        buildStudentWorkspaceFromDb,
+      } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
         const { createInternalNote } = await import("@/services/db");
         const client = requireAoSupabaseClient();
@@ -672,7 +684,14 @@ export const portalCreateStudentApplication = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       const session = await requireTrustedSession();
-      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      // Admission Team is students View-only in the matrix; admissions Edit/Full authorizes create.
+      requireConsultantDesk(session, "creating applications from student workspace", 1);
+      requireModulePermission(
+        session,
+        "admissions",
+        2,
+        "creating applications from student workspace",
+      );
 
       const university = data.university.trim();
       const program = data.program.trim();
@@ -798,15 +817,19 @@ export const portalSaveShortlistItem = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       const session = await requireTrustedSession();
-      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      requireConsultantDesk(session, "student shortlist", 2);
       const universityName = data.universityName.trim();
       const programName = data.programName.trim();
       if (!universityName || !programName) {
         throw new AuthError("University and program are required.", 400);
       }
 
-      const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb, buildStudentWorkspaceFromDb } =
-        await import("@/server/ao-data");
+      const {
+        usesSupabaseDataPlane,
+        requireAoSupabaseClient,
+        assertStudentVisibleDb,
+        buildStudentWorkspaceFromDb,
+      } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
         const { listShortlistItems, upsertShortlistItem } = await import("@/services/db");
         const client = requireAoSupabaseClient();
@@ -857,14 +880,13 @@ export const portalRegisterStudent = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       const session = await requireTrustedSession();
-      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      requireConsultantDesk(session, "student registration", 2);
       const name = data.fullName.trim();
       const email = data.email.trim().toLowerCase();
       if (!name || !email) throw new AuthError("Name and email are required.", 400);
 
-      const { usesSupabaseDataPlane, requireAoSupabaseClient, resolveConsultantDeskId } = await import(
-        "@/server/ao-data"
-      );
+      const { usesSupabaseDataPlane, requireAoSupabaseClient, resolveConsultantDeskId } =
+        await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
         const { createStudentRecord, listConsultants } = await import("@/services/db");
         const client = requireAoSupabaseClient();

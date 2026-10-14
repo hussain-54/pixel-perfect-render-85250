@@ -142,6 +142,7 @@ export type Database = {
           intake_date: string | null;
           registration_notes: string | null;
           portal_activated_at: string | null;
+          registered_by: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -167,6 +168,7 @@ export type Database = {
           intake_date?: string | null;
           registration_notes?: string | null;
           portal_activated_at?: string | null;
+          registered_by?: string | null;
           created_at?: string;
           updated_at?: string;
         };
@@ -1025,6 +1027,30 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      business_module_permissions: {
+        Row: {
+          business_role: BusinessRoleDb;
+          module: string;
+          permission_level: number;
+          updated_by: string | null;
+          updated_at: string;
+        };
+        Insert: {
+          business_role: BusinessRoleDb;
+          module: string;
+          permission_level: number;
+          updated_by?: string | null;
+          updated_at?: string;
+        };
+        Update: {
+          business_role?: BusinessRoleDb;
+          module?: string;
+          permission_level?: number;
+          updated_by?: string | null;
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
       consultation_requests: {
         Row: {
           id: string;
@@ -1337,6 +1363,113 @@ export type Database = {
       claim_own_student_record: {
         Args: Record<string, never>;
         Returns: Database["public"]["Tables"]["students"]["Row"];
+      };
+      is_front_desk: {
+        Args: Record<string, never>;
+        Returns: boolean;
+      };
+      is_intake_registrar: {
+        Args: { p_student_id: string };
+        Returns: boolean;
+      };
+      is_front_desk_fee_registrar: {
+        Args: { p_student_id: string };
+        Returns: boolean;
+      };
+      intake_register_student: {
+        Args: {
+          p_case_id: string;
+          p_full_name: string;
+          p_email: string;
+          p_phone?: string | null;
+          p_whatsapp?: string | null;
+          p_city?: string | null;
+          p_destination?: string | null;
+          p_program?: string | null;
+          p_study_level?: string | null;
+          p_assigned_consultant_id?: string | null;
+          p_inquiry_source?: string | null;
+          p_inquiry_channel?: InquiryChannelDb | null;
+          p_intake_date?: string | null;
+          p_registration_notes?: string | null;
+          p_profile_id?: string | null;
+        };
+        Returns: {
+          id: string;
+          case_id: string;
+          full_name: string;
+          email: string;
+          phone: string | null;
+          whatsapp: string | null;
+          city: string | null;
+          destination: string | null;
+          program: string | null;
+          study_level: string | null;
+          journey_stage: JourneyStage;
+          assigned_consultant_id: string | null;
+          registered_by: string | null;
+          inquiry_source: string | null;
+          inquiry_channel: InquiryChannelDb | null;
+          intake_date: string | null;
+          created_at: string;
+          updated_at: string;
+        }[];
+      };
+      verify_signup_fee_and_activate: {
+        Args: {
+          p_fee_id: string;
+          p_student_id: string;
+          p_action: string;
+          p_notes?: string | null;
+          p_activate_portal?: boolean;
+        };
+        Returns: {
+          fee_id: string;
+          student_id: string;
+          status: SignupFeeStatusDb;
+          portal_activated_at: string | null;
+        }[];
+      };
+      list_front_desk_intake_summaries: {
+        Args: Record<string, never>;
+        Returns: {
+          id: string;
+          case_id: string;
+          full_name: string;
+          email: string;
+          phone: string | null;
+          whatsapp: string | null;
+          city: string | null;
+          destination: string | null;
+          program: string | null;
+          study_level: string | null;
+          inquiry_source: string | null;
+          inquiry_channel: InquiryChannelDb | null;
+          intake_date: string | null;
+          registration_notes: string | null;
+          assigned_consultant_id: string | null;
+          registered_by: string | null;
+          journey_stage: JourneyStage;
+          portal_activated_at: string | null;
+          created_at: string;
+          updated_at: string;
+          signup_fee_status: SignupFeeStatusDb | null;
+          counsellor_name: string | null;
+        }[];
+      };
+      front_desk_assign_counsellor: {
+        Args: { p_student_id: string; p_consultant_id: string };
+        Returns: Database["public"]["Tables"]["students"]["Row"];
+      };
+      list_active_counsellor_desks: {
+        Args: Record<string, never>;
+        Returns: {
+          id: string;
+          full_name: string;
+          email: string;
+          department: string | null;
+          job_title: string | null;
+        }[];
       };
       can_access_hr: {
         Args: Record<string, never>;

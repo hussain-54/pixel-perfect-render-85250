@@ -16,6 +16,11 @@ import {
 import { canVerifyUniversityFeePayment } from "@/lib/university-fee-auth";
 import { nextJourneyStageIfAdvanced } from "@/lib/journey-stage";
 import type { JourneyStage, UniversityFeeKindDb, UniversityFeeStatusDb } from "@/types/database";
+import {
+  businessRoleFromSession,
+  denyFrontDeskConsultantWorkflows,
+  requireModulePermission,
+} from "@/server/staff-access";
 
 function toError(error: unknown): never {
   if (error instanceof AuthError) {
@@ -25,6 +30,9 @@ function toError(error: unknown): never {
 }
 
 async function resolveSessionBusinessRole(session: TrustedSession): Promise<BusinessRole | null> {
+  // Prefer session.businessRole from trusted profiles lookup at auth time.
+  const fromSession = businessRoleFromSession(session);
+  if (fromSession) return fromSession;
   const mapped = resolveBusinessRoleFromTrustedAppRole(session.role);
   if (!session.userId || session.source !== "supabase") return mapped;
   try {
@@ -130,6 +138,7 @@ export const portalCreateUniversityFeeObligation = createServerFn({ method: "POS
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      requireModulePermission(session, "fees_payments", 2, "creating university fee obligations");
       const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb } =
         await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {
@@ -185,6 +194,7 @@ export const portalClaimUniversityFeePayment = createServerFn({ method: "POST" }
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      requireModulePermission(session, "fees_payments", 2, "claiming university fee payments");
       const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb } =
         await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {
@@ -241,6 +251,7 @@ export const portalVerifyUniversityFeePayment = createServerFn({ method: "POST" 
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "university fee verification");
       const businessRole = await resolveSessionBusinessRole(session);
       if (!canVerifyUniversityFeePayment({ appRole: session.role, businessRole })) {
         throw new AuthError("Only Accounts/Finance or Admin may verify university fees.", 403);
@@ -311,6 +322,7 @@ export const portalListUniversityFeeQueue = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      requireModulePermission(session, "fees_payments", 1, "university fee queue");
       const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb } =
         await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {

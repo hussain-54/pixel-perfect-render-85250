@@ -10,6 +10,7 @@ import {
   type TrustedSession,
 } from "@/server/portal-auth";
 import { normalizeAppRole, rolesAtLeastAdmin, type AppRole } from "@/lib/roles";
+import type { BusinessRole } from "@/lib/business-permissions";
 import {
   activityForStudent,
   crmListOrEmpty,
@@ -17,6 +18,11 @@ import {
   isMockCrmAllowed,
 } from "@/lib/portal-data-plane";
 import * as db from "@/data/mock";
+import {
+  businessRoleFromSession,
+  denyFrontDeskConsultantWorkflows,
+  requireModulePermission,
+} from "@/server/staff-access";
 
 function toError(error: unknown): never {
   if (error instanceof AuthError) {
@@ -30,6 +36,7 @@ export type PublicSession = {
   email: string;
   source: "supabase" | "demo";
   consultantId?: string;
+  businessRole?: BusinessRole | null;
 };
 
 function toPublic(session: TrustedSession): PublicSession {
@@ -38,6 +45,7 @@ function toPublic(session: TrustedSession): PublicSession {
     email: session.email,
     source: session.source,
     ...(session.consultantId ? { consultantId: session.consultantId } : {}),
+    businessRole: session.businessRole ?? null,
   };
 }
 
@@ -131,6 +139,8 @@ export const portalGetStudents = createServerFn({ method: "GET" }).handler(async
   try {
     const session = await requireTrustedSession();
     requireRoles(session, ["consultant", "admin", "super_admin"]);
+    denyFrontDeskConsultantWorkflows(session, "the consultant student directory");
+    requireModulePermission(session, "students", 1, "the consultant student directory");
     // Supabase sessions must never receive mock CRM rows as a silent fallback.
     return crmListOrEmpty(session.source, filterStudentsForSession(session));
   } catch (error) {
@@ -144,6 +154,10 @@ export const portalGetStudent = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["student", "consultant", "admin", "super_admin"]);
+      if (session.role !== "student") {
+        denyFrontDeskConsultantWorkflows(session, "student records");
+        requireModulePermission(session, "students", 1, "student records");
+      }
       if (!isMockCrmAllowed(session.source)) {
         return crmRecordOrNull(session.source, null);
       }
@@ -199,6 +213,77 @@ export const portalGetCurrentStudent = createServerFn({ method: "GET" }).handler
   }
 });
 
+/**
+ * Student self-service contact update.
+ * Ownership from resolveOwnStudentDb (profile_id = session.userId) — never client student id.
+ * Allow-list only; staff-locked columns rejected by buildStudentSelfEditPatch + DB trigger.
+ */
+export const portalUpdateOwnStudentContact = createServerFn({ method: "POST" })
+  .validator(
+    (data: {
+      phone?: string;
+      whatsapp?: string;
+      city?: string;
+      dob?: string;
+      destination?: string;
+      program?: string;
+      studyLevel?: string;
+    }) => data,
+  )
+  .handler(async ({ data }) => {
+    try {
+      const session = await requireTrustedSession();
+      requireRoles(session, ["student"]);
+
+      const { buildStudentSelfEditPatch, studentSelfEditPatchIsSafe } =
+        await import("@/lib/student-profile-self-edit-rules");
+      const built = buildStudentSelfEditPatch(data);
+      if (!built.ok) throw new AuthError(built.error, 400);
+      if (!studentSelfEditPatchIsSafe(built.patch)) {
+        throw new AuthError("Invalid profile fields.", 400);
+      }
+
+      const { usesSupabaseDataPlane, requireAoSupabaseClient, resolveOwnStudentDb } =
+        await import("@/server/ao-data");
+      if (!usesSupabaseDataPlane(session)) {
+        throw new AuthError("Saving profile contact requires the live data plane.", 400);
+      }
+      if (!session.userId) {
+        throw new AuthError("Authenticated user id is required.", 403);
+      }
+
+      const { studentPortalAccessAllowed } = await import("@/lib/signup-fee-gate");
+      const { updateOwnStudentContact } = await import("@/services/db");
+      const { mapStudentRow } = await import("@/lib/ao-mappers");
+      const client = requireAoSupabaseClient();
+
+      const own = await resolveOwnStudentDb(client, session);
+      const { data: liveRow, error: liveErr } = await client
+        .from("students")
+        .select("portal_activated_at")
+        .eq("id", own.id)
+        .maybeSingle();
+      if (liveErr) throw new Error(liveErr.message);
+      if (
+        !studentPortalAccessAllowed({
+          source: "supabase",
+          portalActivatedAt: liveRow?.portal_activated_at ?? null,
+        })
+      ) {
+        throw new AuthError(
+          "Your student portal is not activated yet. Signup fee must be verified by Accounts/Admin.",
+          403,
+        );
+      }
+
+      const row = await updateOwnStudentContact(client, own.id, session.userId, built.patch);
+      if (!row) throw new AuthError("Student record not found.", 404);
+      return { ok: true as const, student: mapStudentRow(row) };
+    } catch (error) {
+      toError(error);
+    }
+  });
+
 export const portalGetConsultants = createServerFn({ method: "GET" }).handler(async () => {
   try {
     const session = await requireTrustedSession();
@@ -237,6 +322,11 @@ export const portalGetAppointments = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["student", "consultant", "admin", "super_admin"]);
+      // Front Desk is not the appointments workspace; RLS remains authoritative.
+      if (session.role !== "student") {
+        denyFrontDeskConsultantWorkflows(session, "appointments");
+        requireModulePermission(session, "students", 1, "appointments");
+      }
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
@@ -334,14 +424,148 @@ export const portalGetAppointments = createServerFn({ method: "GET" })
     }
   });
 
+/**
+ * Student self-service appointment request.
+ * Ownership from resolveOwnStudentDb — never client studentId / consultantId / status.
+ * Insert via JWT client; RLS appointments_access + can_access_student.
+ */
+export const portalRequestAppointment = createServerFn({ method: "POST" })
+  .validator(
+    (data: { date: string; time: string; notes?: string; durationMinutes?: number }) => data,
+  )
+  .handler(async ({ data }) => {
+    try {
+      const session = await requireTrustedSession();
+      requireRoles(session, ["student"]);
+
+      const {
+        buildStudentAppointmentBooking,
+        appointmentBookingConflicts,
+        studentBookingPayloadIsSafe,
+      } = await import("@/lib/appointment-booking-rules");
+      const built = buildStudentAppointmentBooking(data);
+      if (!built.ok) throw new AuthError(built.error, 400);
+      if (!studentBookingPayloadIsSafe(built.insert)) {
+        throw new AuthError("Invalid appointment fields.", 400);
+      }
+
+      const { usesSupabaseDataPlane, requireAoSupabaseClient, resolveOwnStudentDb } =
+        await import("@/server/ao-data");
+      if (!usesSupabaseDataPlane(session)) {
+        throw new AuthError("Booking an appointment requires the live data plane.", 400);
+      }
+      if (!session.userId) {
+        throw new AuthError("Authenticated user id is required.", 403);
+      }
+
+      const { studentPortalAccessAllowed } = await import("@/lib/signup-fee-gate");
+      const { listAppointments, createAppointmentRequest } = await import("@/services/db");
+      const { mapAppointmentRow } = await import("@/lib/appointment-mappers");
+      const client = requireAoSupabaseClient();
+
+      const own = await resolveOwnStudentDb(client, session);
+      const { data: liveRow, error: liveErr } = await client
+        .from("students")
+        .select("portal_activated_at, assigned_consultant_id, destination, study_level, full_name")
+        .eq("id", own.id)
+        .maybeSingle();
+      if (liveErr) throw new Error(liveErr.message);
+      if (
+        !studentPortalAccessAllowed({
+          source: "supabase",
+          portalActivatedAt: liveRow?.portal_activated_at ?? null,
+        })
+      ) {
+        throw new AuthError(
+          "Your student portal is not activated yet. Signup fee must be verified by Accounts/Admin.",
+          403,
+        );
+      }
+
+      const existing = await listAppointments(client, own.id);
+      if (
+        appointmentBookingConflicts(
+          built.insert.scheduled_at,
+          built.insert.duration_minutes,
+          existing,
+        )
+      ) {
+        throw new AuthError(
+          "You already have an open appointment that overlaps this time. Choose another slot or contact your consultant.",
+          409,
+        );
+      }
+
+      // consultant_id from assigned desk only — never from client payload.
+      const consultantId = liveRow?.assigned_consultant_id?.trim() || null;
+      const row = await createAppointmentRequest(client, {
+        student_id: own.id,
+        consultant_id: consultantId,
+        created_by: session.userId,
+        ...built.insert,
+      });
+
+      return {
+        ok: true as const,
+        appointment: mapAppointmentRow(row, {
+          destination: liveRow?.destination ?? own.destination,
+          studyLevel: liveRow?.study_level ?? own.studyLevel,
+          studentName: liveRow?.full_name ?? own.name,
+        }),
+      };
+    } catch (error) {
+      toError(error);
+    }
+  });
+
 export const portalGetDocuments = createServerFn({ method: "GET" })
   .validator((data: { studentId?: string } | undefined) => data ?? {})
   .handler(async ({ data }) => {
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["student", "consultant", "admin", "super_admin"]);
+
+      const { usesSupabaseDataPlane } = await import("@/server/ao-data");
+      if (usesSupabaseDataPlane(session)) {
+        const {
+          requireAoSupabaseClient,
+          resolveOwnStudentDb,
+          assertStudentVisibleDb,
+          listVisibleStudentsDb,
+          listDocsForStudents,
+        } = await import("@/server/ao-data");
+        const { resolveCrmListStudentIds } = await import("@/lib/student-crm-scope");
+        const client = requireAoSupabaseClient();
+
+        let ownStudentId: string | null = null;
+        let visibleStudentIds: string[] = [];
+        if (session.role === "student") {
+          const own = await resolveOwnStudentDb(client, session);
+          ownStudentId = own.id;
+        } else {
+          denyFrontDeskConsultantWorkflows(session, "document lists");
+          requireModulePermission(session, "documents", 1, "document lists");
+          if (data.studentId?.trim()) {
+            await assertStudentVisibleDb(client, session, data.studentId.trim());
+            visibleStudentIds = [data.studentId.trim()];
+          } else {
+            visibleStudentIds = (await listVisibleStudentsDb(client, session)).map((s) => s.id);
+          }
+        }
+
+        const scope = resolveCrmListStudentIds({
+          role: session.role,
+          ownStudentId,
+          requestedStudentId: data.studentId,
+          visibleStudentIds,
+        });
+        if (!scope.ok) throw new AuthError(scope.error, scope.status);
+        // JWT + RLS can_access_student on student_documents — never service role / fixtures.
+        return await listDocsForStudents(client, scope.studentIds);
+      }
+
       if (!isMockCrmAllowed(session.source)) {
-        return crmListOrEmpty(session.source, []);
+        return [];
       }
       const visibleIds = new Set(filterStudentsForSession(session).map((s) => s.id));
       let rows = db.documents.filter((d) => visibleIds.has(d.studentId));
@@ -361,8 +585,48 @@ export const portalGetApplications = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["student", "consultant", "admin", "super_admin"]);
+
+      const { usesSupabaseDataPlane } = await import("@/server/ao-data");
+      if (usesSupabaseDataPlane(session)) {
+        const {
+          requireAoSupabaseClient,
+          resolveOwnStudentDb,
+          assertStudentVisibleDb,
+          listVisibleStudentsDb,
+          listAppsForStudents,
+        } = await import("@/server/ao-data");
+        const { resolveCrmListStudentIds } = await import("@/lib/student-crm-scope");
+        const client = requireAoSupabaseClient();
+
+        let ownStudentId: string | null = null;
+        let visibleStudentIds: string[] = [];
+        if (session.role === "student") {
+          const own = await resolveOwnStudentDb(client, session);
+          ownStudentId = own.id;
+        } else {
+          denyFrontDeskConsultantWorkflows(session, "application lists");
+          requireModulePermission(session, "admissions", 1, "application lists");
+          if (data.studentId?.trim()) {
+            await assertStudentVisibleDb(client, session, data.studentId.trim());
+            visibleStudentIds = [data.studentId.trim()];
+          } else {
+            visibleStudentIds = (await listVisibleStudentsDb(client, session)).map((s) => s.id);
+          }
+        }
+
+        const scope = resolveCrmListStudentIds({
+          role: session.role,
+          ownStudentId,
+          requestedStudentId: data.studentId,
+          visibleStudentIds,
+        });
+        if (!scope.ok) throw new AuthError(scope.error, scope.status);
+        // JWT + RLS can_access_student on applications — never service role / fixtures.
+        return await listAppsForStudents(client, scope.studentIds);
+      }
+
       if (!isMockCrmAllowed(session.source)) {
-        return crmListOrEmpty(session.source, []);
+        return [];
       }
       const visibleIds = new Set(filterStudentsForSession(session).map((s) => s.id));
       let rows = db.applications.filter((a) => visibleIds.has(a.studentId));
@@ -380,8 +644,29 @@ export const portalGetLeads = createServerFn({ method: "GET" }).handler(async ()
   try {
     const session = await requireTrustedSession();
     requireRoles(session, ["consultant", "admin", "super_admin"]);
+    denyFrontDeskConsultantWorkflows(session, "leads");
+    requireModulePermission(session, "students", 1, "leads");
+
+    const { usesSupabaseDataPlane } = await import("@/server/ao-data");
+    if (usesSupabaseDataPlane(session)) {
+      const { requireAoSupabaseClient, resolveConsultantDeskId } = await import("@/server/ao-data");
+      const { listConsultationRequests } = await import("@/services/db");
+      const { filterLeadsForDeskScope, mapConsultationRequestToLead } =
+        await import("@/lib/lead-mappers");
+      const client = requireAoSupabaseClient();
+      // JWT client + RLS consultation_select_staff; never service role.
+      const rows = await listConsultationRequests(client, 100);
+      const isAdmin = rolesAtLeastAdmin(session.role);
+      const businessRole = businessRoleFromSession(session);
+      const isManager = businessRole === "manager";
+      const deskId = isAdmin || isManager ? null : await resolveConsultantDeskId(client, session);
+      const scoped = filterLeadsForDeskScope(rows, { isAdmin, isManager, deskId });
+      return scoped.map(mapConsultationRequestToLead);
+    }
+
+    // Demo plane only — live/supabase never reaches fixtures.
     if (!isMockCrmAllowed(session.source)) {
-      return crmListOrEmpty(session.source, []);
+      return [];
     }
     if (session.role === "consultant") {
       const cid = consultantScopeId(session);
@@ -396,6 +681,164 @@ export const portalGetLeads = createServerFn({ method: "GET" }).handler(async ()
   }
 });
 
+export type LeadAssigneeOption = { id: string; label: string };
+
+export const portalListLeadAssigneeOptions = createServerFn({ method: "GET" }).handler(
+  async (): Promise<LeadAssigneeOption[]> => {
+    try {
+      const session = await requireTrustedSession();
+      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "lead assignment");
+      requireModulePermission(session, "students", 2, "lead assignment");
+      const { canAssignConsultationLead, isEligibleLeadAssigneeStatus } =
+        await import("@/lib/lead-mappers");
+      if (
+        !canAssignConsultationLead({
+          appRole: session.role,
+          businessRole: businessRoleFromSession(session),
+        })
+      ) {
+        throw new AuthError("You do not have permission to assign leads.", 403);
+      }
+
+      const { usesSupabaseDataPlane, requireAoSupabaseClient, namesForIds } =
+        await import("@/server/ao-data");
+      if (!usesSupabaseDataPlane(session)) {
+        throw new AuthError("Lead assignees require the live data plane.", 400);
+      }
+      const { listConsultants } = await import("@/services/db");
+      const client = requireAoSupabaseClient();
+      const desks = (await listConsultants(client)).filter((c) =>
+        isEligibleLeadAssigneeStatus(c.status),
+      );
+      const names = await namesForIds(
+        client,
+        desks.map((d) => d.id),
+      );
+      return desks.map((d) => ({
+        id: d.id,
+        label: names.get(d.id)?.trim() || d.desk?.trim() || d.department?.trim() || d.id,
+      }));
+    } catch (error) {
+      toError(error);
+    }
+  },
+);
+
+export const portalAssignLead = createServerFn({ method: "POST" })
+  .validator((data: { leadId: string; consultantId: string | null }) => data)
+  .handler(async ({ data }) => {
+    try {
+      const session = await requireTrustedSession();
+      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "lead assignment");
+      requireModulePermission(session, "students", 2, "lead assignment");
+      const {
+        canAssignConsultationLead,
+        isEligibleLeadAssigneeStatus,
+        mapConsultationRequestToLead,
+      } = await import("@/lib/lead-mappers");
+      if (
+        !canAssignConsultationLead({
+          appRole: session.role,
+          businessRole: businessRoleFromSession(session),
+        })
+      ) {
+        throw new AuthError("You do not have permission to assign leads.", 403);
+      }
+
+      const leadId = data.leadId?.trim();
+      if (!leadId) throw new AuthError("Lead id is required.", 400);
+      const consultantId =
+        data.consultantId === null || data.consultantId === "" ? null : data.consultantId.trim();
+
+      const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
+      if (!usesSupabaseDataPlane(session)) {
+        throw new AuthError("Lead assignment requires the live data plane.", 400);
+      }
+      const { getConsultationRequestById, getConsultantById, updateConsultationRequest } =
+        await import("@/services/db");
+      const client = requireAoSupabaseClient();
+
+      const existing = await getConsultationRequestById(client, leadId);
+      if (!existing) throw new AuthError("Lead not found.", 404);
+
+      if (consultantId) {
+        const desk = await getConsultantById(client, consultantId);
+        if (!desk || !isEligibleLeadAssigneeStatus(desk.status)) {
+          throw new AuthError("Selected consultant desk is not eligible.", 400);
+        }
+      }
+
+      const row = await updateConsultationRequest(client, leadId, {
+        assigned_consultant_id: consultantId,
+      });
+      if (!row) throw new AuthError("Lead not found.", 404);
+      return { ok: true as const, lead: mapConsultationRequestToLead(row) };
+    } catch (error) {
+      toError(error);
+    }
+  });
+
+export const portalUpdateLeadStatus = createServerFn({ method: "POST" })
+  .validator((data: { leadId: string; status: string }) => data)
+  .handler(async ({ data }) => {
+    try {
+      const session = await requireTrustedSession();
+      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "lead status");
+      requireModulePermission(session, "students", 2, "lead status updates");
+
+      const leadId = data.leadId?.trim();
+      if (!leadId) throw new AuthError("Lead id is required.", 400);
+      const {
+        parseLeadStatusInput,
+        leadStatusToDbValue,
+        canUpdateConsultationLeadStatus,
+        mapConsultationRequestToLead,
+      } = await import("@/lib/lead-mappers");
+      const nextStatus = parseLeadStatusInput(data.status);
+      if (!nextStatus) throw new AuthError("Invalid lead status.", 400);
+
+      const { usesSupabaseDataPlane, requireAoSupabaseClient, resolveConsultantDeskId } =
+        await import("@/server/ao-data");
+      if (!usesSupabaseDataPlane(session)) {
+        throw new AuthError("Lead status updates require the live data plane.", 400);
+      }
+      const { getConsultationRequestById, updateConsultationRequest } =
+        await import("@/services/db");
+      const client = requireAoSupabaseClient();
+
+      const existing = await getConsultationRequestById(client, leadId);
+      if (!existing) throw new AuthError("Lead not found.", 404);
+
+      const businessRole = businessRoleFromSession(session);
+      const isAdmin = rolesAtLeastAdmin(session.role);
+      const deskId =
+        isAdmin || businessRole === "manager"
+          ? null
+          : await resolveConsultantDeskId(client, session);
+      if (
+        !canUpdateConsultationLeadStatus({
+          appRole: session.role,
+          businessRole,
+          deskId,
+          assignedConsultantId: existing.assigned_consultant_id,
+        })
+      ) {
+        throw new AuthError("You may only update status for leads assigned to your desk.", 403);
+      }
+
+      const row = await updateConsultationRequest(client, leadId, {
+        status: leadStatusToDbValue(nextStatus),
+      });
+      if (!row) throw new AuthError("Lead not found.", 404);
+      return { ok: true as const, lead: mapConsultationRequestToLead(row) };
+    } catch (error) {
+      toError(error);
+    }
+  });
+
 export const portalGetNotifications = createServerFn({ method: "GET" })
   .validator((data: { audience: "student" | "staff" | "admin" }) => data)
   .handler(async ({ data }) => {
@@ -404,10 +847,73 @@ export const portalGetNotifications = createServerFn({ method: "GET" })
       if (data.audience === "student") requireRoles(session, ["student"]);
       else if (data.audience === "staff") requireRoles(session, ["consultant"]);
       else requireRoles(session, ["admin", "super_admin"]);
+
+      const { mapNotificationRow } = await import("@/lib/notification-mappers");
+      const { assertNotificationAudience, NOTIFICATION_LIST_LIMIT, shouldServeMockNotifications } =
+        await import("@/lib/notification-rules");
+      const audienceGate = assertNotificationAudience(session.role, data.audience);
+      if (!audienceGate.ok) throw new AuthError(audienceGate.error, 403);
+
+      const { usesSupabaseDataPlane } = await import("@/server/ao-data");
+      if (usesSupabaseDataPlane(session)) {
+        if (!session.userId) {
+          throw new AuthError("Authenticated user id is required for notifications.", 403);
+        }
+        // JWT user client only — never service role (see requireAoSupabaseClient).
+        const { requireAoSupabaseClient } = await import("@/server/ao-data");
+        const { listNotifications } = await import("@/services/db");
+        const client = requireAoSupabaseClient();
+        // RLS notifications_own + explicit user_id filter; ordered newest first.
+        const rows = await listNotifications(client, session.userId, NOTIFICATION_LIST_LIMIT);
+        return rows.map((row) => mapNotificationRow(row, audienceGate.audience));
+      }
+
+      // Live/supabase sessions never reach fixtures (shouldServeMockNotifications === false).
+      if (!shouldServeMockNotifications(session.source)) {
+        return [];
+      }
       return crmListOrEmpty(
         session.source,
         db.notifications.filter((n) => n.audience === data.audience),
       );
+    } catch (error) {
+      toError(error);
+    }
+  });
+
+export const portalMarkNotificationRead = createServerFn({ method: "POST" })
+  .validator((data: { id: string }) => data)
+  .handler(async ({ data }) => {
+    try {
+      const session = await requireTrustedSession();
+      requireRoles(session, ["student", "consultant", "admin", "super_admin"]);
+      const id = data.id?.trim();
+      if (!id) throw new AuthError("Notification id is required.", 400);
+
+      const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
+      if (!usesSupabaseDataPlane(session)) {
+        throw new AuthError("Marking notifications read requires the live data plane.", 400);
+      }
+      if (!session.userId) {
+        throw new AuthError("Authenticated user id is required.", 403);
+      }
+
+      const { markNotificationRead } = await import("@/services/db");
+      const { audienceForAppRole, mapNotificationRow } = await import("@/lib/notification-mappers");
+      const { canMarkOwnNotification } = await import("@/lib/notification-rules");
+      const client = requireAoSupabaseClient();
+      // Scoped by session.userId + RLS notifications_update_own — no client user id.
+      // Missing / other-user rows return null (fail closed as 404; no existence leak).
+      const row = await markNotificationRead(client, id, session.userId);
+      if (
+        !row ||
+        !canMarkOwnNotification({ sessionUserId: session.userId, rowUserId: row.user_id })
+      ) {
+        throw new AuthError("Notification not found.", 404);
+      }
+      const audience = audienceForAppRole(session.role);
+      if (!audience) throw new AuthError("Unsupported role for notifications.", 403);
+      return { ok: true as const, notification: mapNotificationRow(row, audience) };
     } catch (error) {
       toError(error);
     }

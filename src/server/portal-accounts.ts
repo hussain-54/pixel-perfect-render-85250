@@ -479,6 +479,25 @@ export const portalSetConsultantDeskStatus = createServerFn({ method: "POST" })
         );
       }
 
+      // Last protected technical admin cannot be deactivated (ban path).
+      if (
+        data.status === "inactive" &&
+        (profile.role === "admin" || profile.role === "super_admin")
+      ) {
+        const { wouldRemoveLastProtectedAdmin } = await import("@/lib/business-permissions");
+        const { count, error: countErr } = await admin
+          .from("profiles")
+          .select("id", { count: "exact", head: true })
+          .in("role", ["admin", "super_admin"]);
+        if (countErr) throw new Error(countErr.message);
+        const guard = wouldRemoveLastProtectedAdmin({
+          protectedAdminCount: count ?? 0,
+          targetIsProtectedAdmin: true,
+          nextIsProtectedAdmin: false,
+        });
+        if (!guard.ok) throw new AuthError(guard.error, 403);
+      }
+
       const { error: deskErr } = await admin.from("consultants").upsert(
         {
           id: profile.id,
