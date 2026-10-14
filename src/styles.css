@@ -111,11 +111,11 @@
   --chart-4: oklch(0.78 0.09 245);
   --chart-5: oklch(0.88 0.04 250);
 
-  --sidebar: var(--navy);
-  --sidebar-foreground: oklch(0.88 0.02 255);
+  --sidebar: oklch(0.22 0.07 258);
+  --sidebar-foreground: oklch(0.93 0.01 255);
   --sidebar-primary: var(--bright);
   --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: var(--navy-soft);
+  --sidebar-accent: oklch(0.28 0.07 258);
   --sidebar-accent-foreground: oklch(0.99 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: var(--bright);

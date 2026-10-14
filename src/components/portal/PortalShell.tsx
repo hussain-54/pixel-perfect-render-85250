@@ -9,6 +9,7 @@ import { RoleSwitcher } from "@/components/site/RoleSwitcher";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { BUSINESS_ROLE_LABELS, type BusinessRole } from "@/lib/business-permissions";
 import { isDemoAuthEnabled } from "@/lib/demo-auth";
 import { getAuthSession, signOut } from "@/lib/auth";
 import { shouldShowDemoSessionIndicator } from "@/lib/portal-data-plane";
@@ -62,6 +63,10 @@ export type PortalNavItem = {
     | "/admin/settings";
   label: string;
   icon: LucideIcon;
+  /** Optional access hint shown like the RBAC preview (View / Edit / Full). */
+  badge?: string;
+  /** Soft-divider group label rendered above this item. */
+  section?: string;
 };
 
 const roleMeta: Record<
@@ -70,36 +75,77 @@ const roleMeta: Record<
     title: string;
     switcherLabel: string;
     home: "/student/dashboard" | "/staff/dashboard" | "/admin/dashboard";
+    fallbackRoleLabel: string;
   }
 > = {
-  student: { title: "Student Portal", switcherLabel: "Student", home: "/student/dashboard" },
-  staff: { title: "Consultant Portal", switcherLabel: "Consultant", home: "/staff/dashboard" },
-  admin: { title: "Admin Panel", switcherLabel: "Admin", home: "/admin/dashboard" },
+  student: {
+    title: "Student Portal",
+    switcherLabel: "Student",
+    home: "/student/dashboard",
+    fallbackRoleLabel: "Student",
+  },
+  staff: {
+    title: "Consultant Portal",
+    switcherLabel: "Consultant",
+    home: "/staff/dashboard",
+    fallbackRoleLabel: "Staff",
+  },
+  admin: {
+    title: "Admin Panel",
+    switcherLabel: "Admin",
+    home: "/admin/dashboard",
+    fallbackRoleLabel: "Admin",
+  },
 };
 
 function SidebarNav({ items, onNavigate }: { items: PortalNavItem[]; onNavigate?: () => void }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   return (
-    <nav className="flex flex-col gap-0.5 p-3">
+    <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-3">
       {items.map((item) => {
-        const active = pathname === item.to || pathname.startsWith(item.to + "/");
+        const active = pathname === item.to || pathname.startsWith(`${item.to}/`);
         const Icon = item.icon;
         return (
-          <Link
-            key={item.to}
-            to={item.to}
-            onClick={onNavigate}
-            className={cn(
-              "flex items-center gap-3 rounded-md px-3 py-2.5 text-sm font-medium transition-colors",
-              active
-                ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                : "text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-accent-foreground",
-            )}
-          >
-            <Icon className="h-4 w-4 shrink-0 opacity-90" />
-            {item.label}
-          </Link>
+          <div key={item.to}>
+            {item.section ? (
+              <p className="mb-1.5 mt-3 px-2.5 text-[0.62rem] font-semibold uppercase tracking-[0.14em] text-white/35 first:mt-0">
+                {item.section}
+              </p>
+            ) : null}
+            <Link
+              to={item.to}
+              onClick={onNavigate}
+              className={cn(
+                "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[0.8125rem] font-medium transition-colors duration-150",
+                active
+                  ? "bg-bright text-white shadow-sm shadow-black/15"
+                  : "text-white/70 hover:bg-white/10 hover:text-white",
+              )}
+            >
+              <span
+                className={cn(
+                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
+                  active
+                    ? "bg-white/15 text-white"
+                    : "bg-white/5 text-white/75 group-hover:bg-white/10",
+                )}
+              >
+                <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+              </span>
+              <span className="min-w-0 flex-1 truncate">{item.label}</span>
+              {item.badge ? (
+                <span
+                  className={cn(
+                    "shrink-0 rounded px-1.5 py-0.5 text-[0.62rem] font-semibold tracking-wide",
+                    active ? "bg-white/20 text-white" : "bg-white/10 text-white/50",
+                  )}
+                >
+                  {item.badge}
+                </span>
+              ) : null}
+            </Link>
+          </div>
         );
       })}
     </nav>
@@ -132,6 +178,12 @@ export function PortalShell({ role, nav, children, barTitle }: PortalShellProps)
   });
   const showDemoSessionBadge = shouldShowDemoSessionIndicator(sessionQ.data?.source);
 
+  const businessRole = sessionQ.data?.businessRole as BusinessRole | null | undefined;
+  const roleLabel =
+    businessRole && businessRole in BUSINESS_ROLE_LABELS
+      ? BUSINESS_ROLE_LABELS[businessRole]
+      : meta.fallbackRoleLabel;
+
   const searchQTrim = searchQ.trim();
   const searchResults = useQuery({
     queryKey: ["officer", "global-search", searchQTrim],
@@ -156,81 +208,59 @@ export function PortalShell({ role, nav, children, barTitle }: PortalShellProps)
     }
   }
 
+  const brandBlock = (
+    <div className="border-b border-white/10 px-4 py-4">
+      <Logo light to={meta.home} className="[&_img]:h-8 [&_img]:sm:h-9" />
+      <p className="mt-3 text-[0.68rem] leading-snug text-white/55">
+        Logged in as: <span className="font-medium text-white/85">{roleLabel}</span>
+      </p>
+    </div>
+  );
+
+  const footerBlock = (compact = false) => (
+    <div className={cn("mt-auto space-y-1.5 border-t border-white/10 p-3", compact && "p-3")}>
+      <button
+        type="button"
+        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[0.8125rem] font-medium text-white/65 transition-colors hover:bg-white/10 hover:text-white"
+        onClick={() => {
+          setMobileOpen(false);
+          void navigate({ to: "/change-password" });
+        }}
+      >
+        <KeyRound className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
+        Change password
+      </button>
+      <button
+        type="button"
+        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[0.8125rem] font-medium text-white/65 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
+        onClick={onSignOut}
+        disabled={signingOut}
+      >
+        <LogOut className="h-3.5 w-3.5 shrink-0 opacity-80" aria-hidden />
+        {signingOut ? "Signing out…" : "Sign out"}
+      </button>
+    </div>
+  );
+
   return (
     <div className="flex min-h-svh bg-surface">
-      <aside className="hidden w-60 shrink-0 flex-col border-r border-sidebar-border bg-sidebar text-sidebar-foreground md:flex">
-        <div className="border-b border-sidebar-border px-4 py-5">
-          <Logo light to={meta.home} />
-          <p className="mt-3 text-[0.65rem] font-bold uppercase tracking-[0.2em] text-bright">
-            {showDemoSwitcher ? "Demo portal" : "Secure portal"}
-          </p>
-        </div>
+      <aside className="hidden w-[15.5rem] shrink-0 flex-col bg-sidebar text-sidebar-foreground md:flex">
+        {brandBlock}
         <SidebarNav items={nav} />
-        <div className="mt-auto space-y-3 border-t border-sidebar-border p-4">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="w-full justify-start gap-2 border-sidebar-border bg-transparent text-sidebar-foreground hover:bg-sidebar-accent"
-            onClick={() => void navigate({ to: "/change-password" })}
-          >
-            <KeyRound className="h-4 w-4" aria-hidden />
-            Change password
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="w-full justify-start gap-2 border-sidebar-border bg-transparent text-sidebar-foreground hover:bg-sidebar-accent"
-            onClick={onSignOut}
-            disabled={signingOut}
-          >
-            <LogOut className="h-4 w-4" aria-hidden />
-            {signingOut ? "Signing out..." : "Sign out"}
-          </Button>
-          <p className="text-xs text-sidebar-foreground/60">
-            {showDemoSwitcher ? "Mock data — demo auth enabled." : "Authorized access only."}
-          </p>
-        </div>
+        {footerBlock()}
       </aside>
 
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent
           side="left"
-          className="w-72 border-sidebar-border bg-sidebar p-0 text-sidebar-foreground"
+          className="w-[17rem] border-0 bg-sidebar p-0 text-sidebar-foreground"
         >
-          <SheetHeader className="border-b border-sidebar-border px-4 py-5 text-left">
-            <SheetTitle className="text-sidebar-foreground">
-              <Logo light to={meta.home} />
-            </SheetTitle>
+          <SheetHeader className="sr-only">
+            <SheetTitle>Portal menu</SheetTitle>
           </SheetHeader>
+          {brandBlock}
           <SidebarNav items={nav} onNavigate={() => setMobileOpen(false)} />
-          <div className="space-y-2 border-t border-sidebar-border p-4">
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="w-full justify-start gap-2"
-              onClick={() => {
-                setMobileOpen(false);
-                void navigate({ to: "/change-password" });
-              }}
-            >
-              <KeyRound className="h-4 w-4" aria-hidden />
-              Change password
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="w-full justify-start gap-2"
-              onClick={onSignOut}
-              disabled={signingOut}
-            >
-              <LogOut className="h-4 w-4" aria-hidden />
-              Sign out
-            </Button>
-          </div>
+          {footerBlock(true)}
         </SheetContent>
       </Sheet>
 
