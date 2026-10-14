@@ -498,4 +498,13 @@ App-layer Phase 3A–3D is **integrated locally**: shared `requireModulePermissi
 | Relies on existing `appointments_access` + `can_access_student` | No new migration |
 | Remote RLS/JWT proof | **Not claimed** — unit tests only |
 
+### Application reject / withdraw (local)
+
+| Item | Status |
+| --- | --- |
+| `portalChangeApplicationStage` accepts terminal `Rejected` / `Withdrawn` | Present locally |
+| Aligns with `validate_application_stage_transition` (DB allow for terminal closes) | No new migration |
+| Applications pipeline detail “Close application” actions | Present locally |
+| Remote RLS/JWT proof | **Not claimed** — unit tests only |
+
 M1 / R1–R3 and pending migrations above remain unresolved database findings. Phase 3 is **not** fully secure.

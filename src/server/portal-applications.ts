@@ -14,14 +14,17 @@ import {
 import { denyFrontDeskConsultantWorkflows, requireModulePermission } from "@/server/staff-access";
 import type { Application, ApplicationStatus, Student } from "@/types";
 import {
-  ALLOWED_STAGE_TRANSITIONS,
   APPLICATION_PIPELINE_STAGES,
+  canTransitionApplicationStage,
+  isApplicationStageTarget,
   isPipelineStage,
+  isTerminalOutcome,
   type ApplicationDetailPayload,
   type ApplicationPipelineFilters,
   type ApplicationPipelinePayload,
   type ApplicationPipelineRow,
   type ApplicationPipelineStage,
+  type ApplicationStageTarget,
   type NewPipelineApplicationInput,
 } from "@/types/applications-pipeline";
 
@@ -316,7 +319,7 @@ export const portalGetApplicationDetail = createServerFn({ method: "GET" })
 
 export const portalChangeApplicationStage = createServerFn({ method: "POST" })
   .validator(
-    (data: { applicationId: string; toStage: ApplicationPipelineStage; note?: string }) => data,
+    (data: { applicationId: string; toStage: ApplicationStageTarget; note?: string }) => data,
   )
   .handler(async ({ data }) => {
     try {
@@ -338,7 +341,7 @@ export const portalChangeApplicationStage = createServerFn({ method: "POST" })
         const client = requireAoSupabaseClient();
         const app = await getScopedApplication(client, session, data.applicationId);
 
-        if (!isPipelineStage(data.toStage)) {
+        if (!isApplicationStageTarget(data.toStage)) {
           throw new AuthError("Invalid application stage.", 400);
         }
         if (!isPipelineStage(app.status)) {
@@ -355,23 +358,33 @@ export const portalChangeApplicationStage = createServerFn({ method: "POST" })
             unchanged: true as const,
           };
         }
-        const allowed = ALLOWED_STAGE_TRANSITIONS[app.status];
-        if (!allowed.includes(data.toStage)) {
+        if (!canTransitionApplicationStage(app.status, data.toStage)) {
           throw new AuthError(
             `Transition from "${app.status}" to "${data.toStage}" is not allowed.`,
             400,
           );
         }
 
-        await updateApplicationStage(client, app.id, uiStatusToAppStage(data.toStage));
+        const dbStage = uiStatusToAppStage(data.toStage);
         const note = data.note?.trim();
-        if (note) {
-          const { error } = await client
-            .from("applications")
-            .update({ notes: note })
-            .eq("id", app.id);
-          if (error) throw new Error(error.message);
+        const extra: {
+          decision_at?: string;
+          submitted_at?: string;
+          notes?: string;
+        } = {};
+        if (isTerminalOutcome(data.toStage)) {
+          extra.decision_at = new Date().toISOString();
         }
+        if (data.toStage === "Submitted") {
+          extra.submitted_at = new Date().toISOString();
+        }
+        if (note) extra.notes = note;
+        await updateApplicationStage(
+          client,
+          app.id,
+          dbStage,
+          Object.keys(extra).length ? extra : undefined,
+        );
 
         const refreshed = await getScopedApplication(client, session, data.applicationId);
         return {
@@ -385,7 +398,7 @@ export const portalChangeApplicationStage = createServerFn({ method: "POST" })
       const app = visibleApplications(session).find((a) => a.id === data.applicationId);
       if (!app) throw new AuthError("Application not found.", 404);
 
-      if (!isPipelineStage(data.toStage)) {
+      if (!isApplicationStageTarget(data.toStage)) {
         throw new AuthError("Invalid application stage.", 400);
       }
       if (!isPipelineStage(app.status)) {
@@ -398,8 +411,7 @@ export const portalChangeApplicationStage = createServerFn({ method: "POST" })
         return { ok: true as const, application: app, unchanged: true as const };
       }
 
-      const allowed = ALLOWED_STAGE_TRANSITIONS[app.status];
-      if (!allowed.includes(data.toStage)) {
+      if (!canTransitionApplicationStage(app.status, data.toStage)) {
         throw new AuthError(
           `Transition from "${app.status}" to "${data.toStage}" is not allowed.`,
           400,

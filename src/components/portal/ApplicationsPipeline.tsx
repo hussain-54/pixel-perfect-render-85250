@@ -33,9 +33,11 @@ import {
 import {
   ALLOWED_STAGE_TRANSITIONS,
   APPLICATION_PIPELINE_STAGES,
+  applicationTerminalActions,
   isPipelineStage,
   type ApplicationPipelineStage,
   type ApplicationPipelineRow,
+  type ApplicationStageTarget,
 } from "@/types/applications-pipeline";
 import { cn } from "@/lib/utils";
 
@@ -93,7 +95,9 @@ export function ApplicationsPipeline() {
     await queryClient.invalidateQueries({ queryKey: ["officer", "student-profile"] });
     await queryClient.invalidateQueries({ queryKey: ["applications"] });
     if (detailId) {
-      await queryClient.invalidateQueries({ queryKey: ["officer", "application-detail", detailId] });
+      await queryClient.invalidateQueries({
+        queryKey: ["officer", "application-detail", detailId],
+      });
     }
   };
 
@@ -108,7 +112,7 @@ export function ApplicationsPipeline() {
   });
 
   const stageM = useMutation({
-    mutationFn: ({ id, to }: { id: string; to: ApplicationPipelineStage }) =>
+    mutationFn: ({ id, to }: { id: string; to: ApplicationStageTarget }) =>
       changeApplicationStage(id, to),
     onSuccess: async () => {
       setStageError(null);
@@ -470,28 +474,52 @@ export function ApplicationsPipeline() {
                         size="sm"
                         variant="outline"
                         disabled={stageM.isPending}
-                        onClick={() =>
-                          stageM.mutate({ id: detailQ.data!.application.id, to: key })
-                        }
+                        onClick={() => stageM.mutate({ id: detailQ.data!.application.id, to: key })}
                       >
                         {key}
                       </Button>
                     ));
                   })()}
                   {!isPipelineStage(detailQ.data!.application.stage) ? (
-                    <p className="text-sm text-muted-foreground">
-                      Outside submission pipeline.
-                    </p>
+                    <p className="text-sm text-muted-foreground">Outside submission pipeline.</p>
                   ) : null}
                 </div>
               </div>
+              {isPipelineStage(detailQ.data.application.stage) ? (
+                <div>
+                  <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                    Close application
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {applicationTerminalActions(detailQ.data.application.stage).map((outcome) => (
+                      <Button
+                        key={outcome}
+                        size="sm"
+                        variant="outline"
+                        disabled={stageM.isPending}
+                        onClick={() =>
+                          stageM.mutate({
+                            id: detailQ.data!.application.id,
+                            to: outcome,
+                          })
+                        }
+                      >
+                        Mark {outcome.toLowerCase()}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
               <Panel title="Stage history">
                 {!detailQ.data.history.length ? (
                   <p className="text-sm text-muted-foreground">No history recorded yet.</p>
                 ) : (
                   <ol className="space-y-3">
                     {detailQ.data.history.map((h) => (
-                      <li key={h.id} className="border-t border-border/70 pt-2 first:border-0 first:pt-0">
+                      <li
+                        key={h.id}
+                        className="border-t border-border/70 pt-2 first:border-0 first:pt-0"
+                      >
                         <p className="text-sm font-medium text-navy">
                           {h.fromStage ?? "—"} → {h.toStage}
                         </p>
@@ -609,7 +637,8 @@ function BoardColumn({
           >
             <button type="button" className="w-full text-left" onClick={() => onOpen(row.id)}>
               <p className="text-sm font-semibold text-navy">
-                {row.studentName} · {row.university.replace("University of ", "").replace("Univ. of ", "")}
+                {row.studentName} ·{" "}
+                {row.university.replace("University of ", "").replace("Univ. of ", "")}
               </p>
               <p className="text-xs text-muted-foreground">{row.intake}</p>
               {row.deadlineWarning ? (

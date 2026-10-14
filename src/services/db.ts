@@ -241,10 +241,11 @@ export async function updateApplicationStage(
   client: TypedSupabase,
   applicationId: string,
   stage: ApplicationStage,
+  extra?: Pick<TablesUpdate<"applications">, "decision_at" | "submitted_at" | "notes">,
 ): Promise<ApplicationRow> {
   const { data, error } = await client
     .from("applications")
-    .update({ stage })
+    .update({ stage, ...extra })
     .eq("id", applicationId)
     .select("*")
     .single();

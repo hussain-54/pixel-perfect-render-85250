@@ -11,18 +11,52 @@ export const APPLICATION_PIPELINE_STAGES = [
 
 export type ApplicationPipelineStage = (typeof APPLICATION_PIPELINE_STAGES)[number]["key"];
 
+/** Terminal outcomes allowed by validate_application_stage_transition (DB). */
+export const APPLICATION_TERMINAL_OUTCOMES = ["Rejected", "Withdrawn"] as const;
+export type ApplicationTerminalOutcome = (typeof APPLICATION_TERMINAL_OUTCOMES)[number];
+
+export type ApplicationStageTarget = ApplicationPipelineStage | ApplicationTerminalOutcome;
+
 export function isPipelineStage(value: string): value is ApplicationPipelineStage {
   return APPLICATION_PIPELINE_STAGES.some((s) => s.key === value);
 }
 
+export function isTerminalOutcome(value: string): value is ApplicationTerminalOutcome {
+  return (APPLICATION_TERMINAL_OUTCOMES as readonly string[]).includes(value);
+}
+
+export function isApplicationStageTarget(value: string): value is ApplicationStageTarget {
+  return isPipelineStage(value) || isTerminalOutcome(value);
+}
+
 /** Adjacent + forward/back correction transitions only. */
-export const ALLOWED_STAGE_TRANSITIONS: Record<ApplicationPipelineStage, ApplicationPipelineStage[]> = {
+export const ALLOWED_STAGE_TRANSITIONS: Record<
+  ApplicationPipelineStage,
+  ApplicationPipelineStage[]
+> = {
   "Docs Pending": ["Under Review"],
   "Under Review": ["Docs Pending", "Ready to Submit"],
   "Ready to Submit": ["Under Review", "Submitted"],
   Submitted: ["Ready to Submit", "Offer Received"],
   "Offer Received": ["Submitted"],
 };
+
+/**
+ * Mirrors public.validate_application_stage_transition for pipeline + terminal closes.
+ * Does not prove remote RLS/JWT.
+ */
+export function canTransitionApplicationStage(from: string, to: string): boolean {
+  if (!isApplicationStageTarget(to)) return false;
+  if (!isPipelineStage(from)) return false;
+  if (isTerminalOutcome(to)) return true;
+  return ALLOWED_STAGE_TRANSITIONS[from].includes(to);
+}
+
+/** Reject / withdraw actions available while still on the submission pipeline. */
+export function applicationTerminalActions(from: string): ApplicationTerminalOutcome[] {
+  if (!isPipelineStage(from)) return [];
+  return [...APPLICATION_TERMINAL_OUTCOMES];
+}
 
 export type ApplicationStageHistoryRecord = {
   id: string;

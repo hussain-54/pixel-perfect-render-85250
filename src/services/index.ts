@@ -160,6 +160,7 @@ import type { AssessmentSaveInput, NewApplicationInput } from "@/types/student-p
 import type {
   ApplicationPipelineFilters,
   ApplicationPipelineStage,
+  ApplicationStageTarget,
   NewPipelineApplicationInput,
 } from "@/types/applications-pipeline";
 import type {
@@ -328,7 +329,7 @@ export const getApplicationDetail = (id: string) =>
 
 export const changeApplicationStage = (
   applicationId: string,
-  toStage: ApplicationPipelineStage,
+  toStage: ApplicationStageTarget,
   note?: string,
 ) =>
   withAuth((opts) =>
