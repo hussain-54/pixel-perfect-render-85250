@@ -518,6 +518,94 @@ export const portalRequestAppointment = createServerFn({ method: "POST" })
     }
   });
 
+/**
+ * Staff appointment status update (confirm / cancel / complete / etc.).
+ * Loads appointment by id, then assertStudentVisibleDb — never trusts client studentId.
+ */
+export const portalUpdateAppointmentStatus = createServerFn({ method: "POST" })
+  .validator((data: { appointmentId: string; status: string }) => data)
+  .handler(async ({ data }) => {
+    try {
+      const session = await requireTrustedSession();
+      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "appointment status");
+      requireModulePermission(session, "students", 2, "appointment status updates");
+
+      const appointmentId = data.appointmentId?.trim();
+      if (!appointmentId) throw new AuthError("Appointment id is required.", 400);
+
+      const { parseAppointmentStatusInput, appointmentStatusUpdateDenied } =
+        await import("@/lib/appointment-status-rules");
+      const nextStatus = parseAppointmentStatusInput(data.status);
+      if (!nextStatus) throw new AuthError("Invalid appointment status.", 400);
+
+      const {
+        usesSupabaseDataPlane,
+        requireAoSupabaseClient,
+        assertStudentVisibleDb,
+        resolveConsultantDeskId,
+        namesForIds,
+      } = await import("@/server/ao-data");
+      if (!usesSupabaseDataPlane(session)) {
+        throw new AuthError("Updating appointment status requires the live data plane.", 400);
+      }
+
+      const { getAppointmentById, updateAppointmentStatus } = await import("@/services/db");
+      const { mapAppointmentRow } = await import("@/lib/appointment-mappers");
+      const client = requireAoSupabaseClient();
+
+      const existing = await getAppointmentById(client, appointmentId);
+      if (!existing) throw new AuthError("Appointment not found.", 404);
+
+      // Visibility from student ownership / assignment — not client-supplied student id.
+      await assertStudentVisibleDb(client, session, existing.student_id);
+
+      const denied = appointmentStatusUpdateDenied({
+        fromStatus: existing.status,
+        toStatus: nextStatus,
+        actorIsStaff: true,
+      });
+      if (denied) throw new AuthError(denied, 400);
+
+      const patch: { status: typeof nextStatus; consultant_id?: string } = {
+        status: nextStatus,
+      };
+      // Claim desk when confirming an unassigned request.
+      if (!existing.consultant_id && (nextStatus === "confirmed" || nextStatus === "rescheduled")) {
+        const deskId = await resolveConsultantDeskId(client, session);
+        if (deskId) patch.consultant_id = deskId;
+      }
+
+      const row = await updateAppointmentStatus(client, appointmentId, patch);
+      if (!row) throw new AuthError("Appointment not found.", 404);
+
+      const { data: studentRow, error: studentErr } = await client
+        .from("students")
+        .select("full_name, destination, study_level")
+        .eq("id", row.student_id)
+        .maybeSingle();
+      if (studentErr) throw new Error(studentErr.message);
+
+      const consultantNames = row.consultant_id
+        ? await namesForIds(client, [row.consultant_id])
+        : new Map<string, string>();
+
+      return {
+        ok: true as const,
+        appointment: mapAppointmentRow(row, {
+          destination: studentRow?.destination ?? null,
+          studyLevel: studentRow?.study_level ?? null,
+          studentName: studentRow?.full_name ?? null,
+          consultantName: row.consultant_id
+            ? (consultantNames.get(row.consultant_id) ?? null)
+            : null,
+        }),
+      };
+    } catch (error) {
+      toError(error);
+    }
+  });
+
 export const portalGetDocuments = createServerFn({ method: "GET" })
   .validator((data: { studentId?: string } | undefined) => data ?? {})
   .handler(async ({ data }) => {

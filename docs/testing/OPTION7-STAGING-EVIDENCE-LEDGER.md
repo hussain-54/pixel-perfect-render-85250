@@ -489,4 +489,13 @@ App-layer Phase 3A–3D is **integrated locally**: shared `requireModulePermissi
 | Student `/student/appointments` request form | Present locally |
 | Remote RLS/JWT proof | **Not claimed** — unit tests only |
 
+### Staff appointment status update (local)
+
+| Item | Status |
+| --- | --- |
+| `portalUpdateAppointmentStatus` (JWT + `assertStudentVisibleDb`; transition allow-list) | Present locally |
+| Staff `/staff/appointments` confirm/cancel/complete actions | Present locally |
+| Relies on existing `appointments_access` + `can_access_student` | No new migration |
+| Remote RLS/JWT proof | **Not claimed** — unit tests only |
+
 M1 / R1–R3 and pending migrations above remain unresolved database findings. Phase 3 is **not** fully secure.

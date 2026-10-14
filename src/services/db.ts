@@ -631,6 +631,34 @@ export async function listAppointments(client: TypedSupabase, studentId?: string
   return data ?? [];
 }
 
+export async function getAppointmentById(
+  client: TypedSupabase,
+  id: string,
+): Promise<AppointmentRow | null> {
+  const { data, error } = await client.from("appointments").select("*").eq("id", id).maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+/**
+ * Staff appointment status update. Caller must authorize via assertStudentVisibleDb.
+ * Relies on appointments_access + can_access_student (JWT, no service role).
+ */
+export async function updateAppointmentStatus(
+  client: TypedSupabase,
+  id: string,
+  patch: Pick<TablesUpdate<"appointments">, "status" | "consultant_id">,
+): Promise<AppointmentRow | null> {
+  const { data, error } = await client
+    .from("appointments")
+    .update(patch)
+    .eq("id", id)
+    .select("*")
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data;
+}
+
 /**
  * Student-originated appointment request.
  * Caller must set student_id / created_by from session ownership — never client IDs.

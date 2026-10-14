@@ -14,6 +14,7 @@ import {
   portalGetCurrentStudent,
   portalUpdateOwnStudentContact,
   portalRequestAppointment,
+  portalUpdateAppointmentStatus,
   portalGetDocuments,
   portalGetLeads,
   portalListLeadAssigneeOptions,
@@ -227,6 +228,9 @@ export const requestAppointment = (data: {
   notes?: string;
   durationMinutes?: number;
 }) => withAuth((opts) => portalRequestAppointment({ ...opts, data }));
+
+export const updateAppointmentStatus = (data: { appointmentId: string; status: string }) =>
+  withAuth((opts) => portalUpdateAppointmentStatus({ ...opts, data }));
 
 export const getDocuments = (studentId?: string) =>
   withAuth((opts) =>
