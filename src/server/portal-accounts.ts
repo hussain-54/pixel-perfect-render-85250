@@ -26,6 +26,11 @@ import {
   validateAccountRoleUpdate,
   type AccountListItem,
 } from "@/lib/account-provisioning";
+import {
+  authBanDurationForRemoveAccess,
+  validateAccountAccessAction,
+  type AccountLinkCounts,
+} from "@/lib/account-access-rules";
 import { passwordRecoveryRedirectUrl, resolveAuthAppOrigin } from "@/lib/auth-redirects";
 import { validatePasswordConfirmation } from "@/lib/password-policy";
 import type { BusinessRole } from "@/lib/business-permissions";
@@ -193,6 +198,7 @@ export const portalListAccounts = createServerFn({ method: "GET" }).handler(asyn
       accounts,
       configured: true,
       viewerEmail: session.email,
+      viewerUserId: session.userId,
     };
   } catch (error) {
     toError(error);
@@ -715,6 +721,322 @@ export const portalRevokeAccountSessions = createServerFn({ method: "POST" })
       }
 
       return { ok: true as const, message: "Active sessions revoked for this account." };
+    } catch (error) {
+      toError(error);
+    }
+  });
+
+async function countProtectedAdmins(
+  admin: ReturnType<typeof requireAdminSupabase>,
+): Promise<number> {
+  const { count, error } = await admin
+    .from("profiles")
+    .select("id", { count: "exact", head: true })
+    .in("role", ["admin", "super_admin"]);
+  if (error) throw new Error(error.message);
+  return count ?? 0;
+}
+
+async function loadAccountLinkCounts(
+  admin: ReturnType<typeof requireAdminSupabase>,
+  userId: string,
+): Promise<AccountLinkCounts> {
+  // Use only columns present in Database typings (avoid untyped migration-only fields).
+  const [linkedStudent, assigned, apps, docs, audits] = await Promise.all([
+    admin
+      .from("students")
+      .select("id", { count: "exact", head: true })
+      .eq("profile_id", userId),
+    admin
+      .from("students")
+      .select("id", { count: "exact", head: true })
+      .eq("assigned_consultant_id", userId),
+    admin
+      .from("applications")
+      .select("id", { count: "exact", head: true })
+      .eq("owned_by_consultant_id", userId),
+    admin
+      .from("document_versions")
+      .select("id", { count: "exact", head: true })
+      .eq("uploaded_by", userId),
+    admin
+      .from("audit_events")
+      .select("id", { count: "exact", head: true })
+      .eq("actor_id", userId),
+  ]);
+  for (const r of [linkedStudent, assigned, apps, docs, audits]) {
+    if (r.error) {
+      // Table may be absent in partial envs — fail closed for delete decisions.
+      throw new Error(r.error.message);
+    }
+  }
+  return {
+    linkedStudentProfiles: linkedStudent.count ?? 0,
+    assignedStudents: assigned.count ?? 0,
+    applicationsOwned: apps.count ?? 0,
+    documentVersionsUploaded: docs.count ?? 0,
+    auditEventsAsActor: audits.count ?? 0,
+  };
+}
+
+function requireActorUserId(session: TrustedSession): string {
+  const id = session.userId?.trim();
+  if (!id) throw new AuthError("Administrator session is required.", 403);
+  return id;
+}
+
+/**
+ * Remove Access — ban Auth identity, revoke sessions, deactivate consultant desk.
+ * Preserves profiles and all business/audit rows. Distinct from desk-only Deactivate.
+ */
+export const portalRemoveAccountAccess = createServerFn({ method: "POST" })
+  .validator((data: { userId: string }) => data)
+  .handler(async ({ data }) => {
+    try {
+      const session = await requireAdminAccountManager();
+      const targetId = data.userId?.trim() ?? "";
+      const admin = requireAdminSupabase();
+
+      const { data: profile, error: profileErr } = await admin
+        .from("profiles")
+        .select("id, role, email, full_name")
+        .eq("id", targetId)
+        .maybeSingle();
+      if (profileErr) throw new Error(profileErr.message);
+      if (!profile) throw new AuthError("Account not found.", 404);
+
+      const actorUserId = requireActorUserId(session);
+      const protectedAdminCount = await countProtectedAdmins(admin);
+      const guard = validateAccountAccessAction({
+        action: "remove_access",
+        actorUserId,
+        targetUserId: profile.id,
+        targetAppRole: profile.role ?? "student",
+        protectedAdminCount,
+      });
+      if (!guard.ok) throw new AuthError(guard.error, guard.status);
+
+      // Desk inactive when a consultants row exists or target is staff/admin (upsert).
+      if (profile.role !== "student") {
+        const { error: deskErr } = await admin.from("consultants").upsert(
+          {
+            id: profile.id,
+            status: "inactive",
+          },
+          { onConflict: "id" },
+        );
+        if (deskErr) throw new Error(deskErr.message);
+      }
+
+      const { error: banErr } = await admin.auth.admin.updateUserById(profile.id, {
+        ban_duration: authBanDurationForRemoveAccess(),
+      });
+      if (banErr) {
+        throw new AuthError(
+          `Could not ban Auth access: ${banErr.message}. Desk may already be inactive — fix Auth in Dashboard.`,
+          500,
+        );
+      }
+
+      let sessionsRevoked = true;
+      try {
+        const { error: signOutErr } = await admin.auth.admin.signOut(profile.id, "global");
+        if (signOutErr) sessionsRevoked = false;
+      } catch {
+        sessionsRevoked = false;
+      }
+
+      try {
+        const { requireAoSupabaseClient } = await import("@/server/ao-data");
+        const userClient = requireAoSupabaseClient();
+        const { writeAudit } = await import("@/services/db");
+        await writeAudit(userClient, {
+          action: "account.access_removed",
+          entity_type: "profiles",
+          entity_id: profile.id,
+          metadata: {
+            email: profile.email,
+            fullName: profile.full_name,
+            targetRole: profile.role,
+            sessionsRevoked,
+            by: actorUserId,
+          },
+        });
+      } catch {
+        /* audit best-effort */
+      }
+
+      return {
+        ok: true as const,
+        state: "access_removed" as const,
+        sessionsRevoked,
+        message: sessionsRevoked
+          ? "Access removed: Auth banned, sessions revoked, and desk deactivated. Business records preserved."
+          : "Access removed: Auth banned and desk deactivated. Session revoke was best-effort — ask the user to sign out if needed.",
+      };
+    } catch (error) {
+      toError(error);
+    }
+  });
+
+/**
+ * Delete User — Auth Admin deleteUser after FK-safe preflight.
+ * Blocks self, last admin, and logins linked to student CRM.
+ * Never exposes service-role to the browser.
+ */
+export const portalDeleteAccount = createServerFn({ method: "POST" })
+  .validator((data: { userId: string; confirmEmail: string }) => data)
+  .handler(async ({ data }) => {
+    try {
+      const session = await requireAdminAccountManager();
+      const targetId = data.userId?.trim() ?? "";
+      const confirmEmail = (data.confirmEmail ?? "").trim().toLowerCase();
+      const admin = requireAdminSupabase();
+
+      const { data: profile, error: profileErr } = await admin
+        .from("profiles")
+        .select("id, role, email, full_name")
+        .eq("id", targetId)
+        .maybeSingle();
+      if (profileErr) throw new Error(profileErr.message);
+      if (!profile) throw new AuthError("Account not found.", 404);
+
+      if (!confirmEmail || confirmEmail !== (profile.email ?? "").toLowerCase()) {
+        throw new AuthError(
+          "Confirmation email does not match this account. Type the exact email to delete.",
+          400,
+        );
+      }
+
+      const actorUserId = requireActorUserId(session);
+      const protectedAdminCount = await countProtectedAdmins(admin);
+      let links: AccountLinkCounts;
+      try {
+        links = await loadAccountLinkCounts(admin, profile.id);
+      } catch (e) {
+        throw new AuthError(
+          e instanceof Error
+            ? `Could not inspect linked business data: ${e.message}`
+            : "Could not inspect linked business data.",
+          500,
+        );
+      }
+
+      const guard = validateAccountAccessAction({
+        action: "delete_user",
+        actorUserId,
+        targetUserId: profile.id,
+        targetAppRole: profile.role ?? "student",
+        protectedAdminCount,
+        links,
+      });
+      if (!guard.ok) throw new AuthError(guard.error, guard.status);
+
+      // Audit BEFORE Auth delete so actor/profile still exist for RLS write paths.
+      try {
+        const { requireAoSupabaseClient } = await import("@/server/ao-data");
+        const userClient = requireAoSupabaseClient();
+        const { writeAudit } = await import("@/services/db");
+        await writeAudit(userClient, {
+          action: "account.delete_attempted",
+          entity_type: "profiles",
+          entity_id: profile.id,
+          metadata: {
+            email: profile.email,
+            fullName: profile.full_name,
+            targetRole: profile.role,
+            links,
+            by: actorUserId,
+            strategy: guard.strategy,
+          },
+        });
+      } catch {
+        /* continue — deletion still allowed; outcome audit may also fail */
+      }
+
+      // Ban + revoke first so partial failure still locks the account.
+      let banned = false;
+      let sessionsRevoked = false;
+      try {
+        const { error: banErr } = await admin.auth.admin.updateUserById(profile.id, {
+          ban_duration: authBanDurationForRemoveAccess(),
+        });
+        banned = !banErr;
+      } catch {
+        banned = false;
+      }
+      try {
+        const { error: signOutErr } = await admin.auth.admin.signOut(profile.id, "global");
+        sessionsRevoked = !signOutErr;
+      } catch {
+        sessionsRevoked = false;
+      }
+      if (profile.role !== "student") {
+        try {
+          await admin.from("consultants").upsert(
+            { id: profile.id, status: "inactive" },
+            { onConflict: "id" },
+          );
+        } catch {
+          /* best-effort */
+        }
+      }
+
+      const { error: deleteErr } = await admin.auth.admin.deleteUser(profile.id);
+      if (deleteErr) {
+        try {
+          const { requireAoSupabaseClient } = await import("@/server/ao-data");
+          const userClient = requireAoSupabaseClient();
+          const { writeAudit } = await import("@/services/db");
+          await writeAudit(userClient, {
+            action: "account.delete_failed",
+            entity_type: "profiles",
+            entity_id: profile.id,
+            metadata: {
+              email: profile.email,
+              by: actorUserId,
+              banned,
+              sessionsRevoked,
+              error: deleteErr.message,
+            },
+          });
+        } catch {
+          /* ignore */
+        }
+        throw new AuthError(
+          banned
+            ? `Auth delete failed after access was removed (${deleteErr.message}). Account state: access revoked (banned); profile still exists.`
+            : `Could not delete Auth user: ${deleteErr.message}`,
+          500,
+        );
+      }
+
+      try {
+        const { requireAoSupabaseClient } = await import("@/server/ao-data");
+        const userClient = requireAoSupabaseClient();
+        const { writeAudit } = await import("@/services/db");
+        await writeAudit(userClient, {
+          action: "account.deleted",
+          entity_type: "profiles",
+          entity_id: profile.id,
+          metadata: {
+            email: profile.email,
+            fullName: profile.full_name,
+            by: actorUserId,
+            links,
+            note: "Auth identity and profile removed; student/business rows preserved via SET NULL FKs.",
+          },
+        });
+      } catch {
+        /* profile may already be gone — audit via admin JWT may fail; attempt already logged */
+      }
+
+      return {
+        ok: true as const,
+        state: "deleted" as const,
+        message: `Deleted Auth identity for ${profile.email}. Profile removed; student CRM, applications, fees, documents, and audit history were not cascade-deleted.`,
+        links,
+      };
     } catch (error) {
       toError(error);
     }

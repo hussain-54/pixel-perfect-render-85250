@@ -133,8 +133,10 @@ import {
 } from "@/server/portal-operations";
 import {
   portalCreateAccount,
+  portalDeleteAccount,
   portalListAccountOptions,
   portalListAccounts,
+  portalRemoveAccountAccess,
   portalResendPasswordReset,
   portalRevokeAccountSessions,
   portalSetConsultantDeskStatus,
@@ -692,6 +694,12 @@ export const setPortalConsultantDeskStatus = (data: {
 
 export const revokePortalAccountSessions = (data: { userId: string }) =>
   withAuth((opts) => portalRevokeAccountSessions({ ...opts, data }));
+
+export const removePortalAccountAccess = (data: { userId: string }) =>
+  withAuth((opts) => portalRemoveAccountAccess({ ...opts, data }));
+
+export const deletePortalAccount = (data: { userId: string; confirmEmail: string }) =>
+  withAuth((opts) => portalDeleteAccount({ ...opts, data }));
 
 /** Admin RBAC permission matrix (persisted business_module_permissions). */
 export const getPermissionMatrix = () => withAuth((opts) => portalGetPermissionMatrix(opts));

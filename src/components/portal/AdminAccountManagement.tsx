@@ -18,9 +18,21 @@ import { BUSINESS_ROLE_LABELS, type BusinessRole } from "@/lib/business-permissi
 import type { AppRole } from "@/lib/roles";
 import { PASSWORD_MIN_LENGTH, validatePasswordConfirmation } from "@/lib/password-policy";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   createPortalAccount,
+  deletePortalAccount,
   listPortalAccountOptions,
   listPortalAccounts,
+  removePortalAccountAccess,
   resendPortalPasswordReset,
   revokePortalAccountSessions,
   setPortalConsultantDeskStatus,
@@ -60,6 +72,9 @@ export function AdminAccountManagement({ focus = "all" }: { focus?: AccountManag
   const [tempPwTarget, setTempPwTarget] = useState<string | null>(null);
   const [tempPwForm, setTempPwForm] = useState({ temporaryPassword: "", confirmPassword: "" });
   const [roleDrafts, setRoleDrafts] = useState<Record<string, BusinessRole>>({});
+  const [removeTarget, setRemoveTarget] = useState<AccountListItem | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<AccountListItem | null>(null);
+  const [deleteConfirmEmail, setDeleteConfirmEmail] = useState("");
 
   const showCreate = focus === "all" || focus === "create";
   const showDirectory = focus === "all" || focus === "directory" || focus === "actions";
@@ -185,6 +200,27 @@ export function AdminAccountManagement({ focus = "all" }: { focus?: AccountManag
     onError: (e) => setMessage(portalErrorMessage(e, "Could not revoke sessions."), true),
   });
 
+  const removeAccessM = useMutation({
+    mutationFn: (userId: string) => removePortalAccountAccess({ userId }),
+    onSuccess: async (result) => {
+      setMessage(result.message);
+      setRemoveTarget(null);
+      await invalidate();
+    },
+    onError: (e) => setMessage(portalErrorMessage(e, "Could not remove access."), true),
+  });
+
+  const deleteAccountM = useMutation({
+    mutationFn: (input: { userId: string; confirmEmail: string }) => deletePortalAccount(input),
+    onSuccess: async (result) => {
+      setMessage(result.message);
+      setDeleteTarget(null);
+      setDeleteConfirmEmail("");
+      await invalidate();
+    },
+    onError: (e) => setMessage(portalErrorMessage(e, "Could not delete user."), true),
+  });
+
   const updateRoleM = useMutation({
     mutationFn: (input: { userId: string; businessRole: BusinessRole }) =>
       updatePortalAccountBusinessRole(input),
@@ -214,8 +250,12 @@ export function AdminAccountManagement({ focus = "all" }: { focus?: AccountManag
     );
   }, [accounts, filter]);
 
+  const viewerUserId = accountsQ.data?.viewerUserId ?? null;
+
   const actionBusy =
     setTempPasswordM.isPending ||
+    removeAccessM.isPending ||
+    deleteAccountM.isPending ||
     resetPasswordM.isPending ||
     deskStatusM.isPending ||
     revokeM.isPending ||
@@ -537,6 +577,12 @@ export function AdminAccountManagement({ focus = "all" }: { focus?: AccountManag
                             deskStatusM.mutate({ userId: account.id, status })
                           }
                           onRevokeSessions={() => revokeM.mutate(account.id)}
+                          isSelf={Boolean(viewerUserId && account.id === viewerUserId)}
+                          onRemoveAccess={() => setRemoveTarget(account)}
+                          onDeleteUser={() => {
+                            setDeleteConfirmEmail("");
+                            setDeleteTarget(account);
+                          }}
                         />
                       );
                     })}
@@ -545,6 +591,109 @@ export function AdminAccountManagement({ focus = "all" }: { focus?: AccountManag
               )}
             </Panel>
           ) : null}
+
+          <AlertDialog
+            open={Boolean(removeTarget)}
+            onOpenChange={(open) => {
+              if (!open && !removeAccessM.isPending) setRemoveTarget(null);
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Remove access?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Immediately ban Auth login and revoke sessions for{" "}
+                  <span className="font-medium text-foreground">
+                    {removeTarget?.fullName || "this user"}
+                  </span>{" "}
+                  ({removeTarget?.email}). Their consultant desk (if any) is deactivated. Student
+                  CRM, applications, fees, documents, and audit history are preserved. This is not
+                  the same as permanently deleting the Auth user.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={removeAccessM.isPending}>Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  disabled={removeAccessM.isPending || !removeTarget}
+                  onClick={(e) => {
+                    e.preventDefault();
+                    if (!removeTarget) return;
+                    removeAccessM.mutate(removeTarget.id);
+                  }}
+                >
+                  {removeAccessM.isPending ? "Removing…" : "Remove access"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+
+          <AlertDialog
+            open={Boolean(deleteTarget)}
+            onOpenChange={(open) => {
+              if (!open && !deleteAccountM.isPending) {
+                setDeleteTarget(null);
+                setDeleteConfirmEmail("");
+              }
+            }}
+          >
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete user permanently?</AlertDialogTitle>
+                <AlertDialogDescription asChild>
+                  <div className="space-y-3 text-sm text-muted-foreground">
+                    <p>
+                      You are about to delete the Auth identity for{" "}
+                      <span className="font-medium text-foreground">
+                        {deleteTarget?.fullName || "this user"}
+                      </span>{" "}
+                      (<span className="font-medium text-foreground">{deleteTarget?.email}</span>
+                      . This may be irreversible.
+                    </p>
+                    <p>
+                      Student CRM rows, applications, fees, documents, and audit history are not
+                      cascade-deleted. Logins linked to a student CRM record are blocked — use
+                      Remove Access instead. Self-delete and deleting the last administrator are
+                      blocked.
+                    </p>
+                    <div>
+                      <Label htmlFor="delete-confirm-email">Type the user&apos;s email to confirm</Label>
+                      <Input
+                        id="delete-confirm-email"
+                        className="mt-1.5"
+                        autoComplete="off"
+                        value={deleteConfirmEmail}
+                        onChange={(e) => setDeleteConfirmEmail(e.target.value)}
+                        placeholder={deleteTarget?.email || "email@example.com"}
+                        disabled={deleteAccountM.isPending}
+                      />
+                    </div>
+                  </div>
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel disabled={deleteAccountM.isPending}>Cancel</AlertDialogCancel>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  disabled={
+                    deleteAccountM.isPending ||
+                    !deleteTarget ||
+                    deleteConfirmEmail.trim().toLowerCase() !==
+                      (deleteTarget?.email ?? "").toLowerCase()
+                  }
+                  onClick={() => {
+                    if (!deleteTarget) return;
+                    deleteAccountM.mutate({
+                      userId: deleteTarget.id,
+                      confirmEmail: deleteConfirmEmail.trim(),
+                    });
+                  }}
+                >
+                  {deleteAccountM.isPending ? "Deleting…" : "Delete user"}
+                </Button>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </>
     );
@@ -589,6 +738,9 @@ function AccountRow({
   onPasswordReset,
   onSetDeskStatus,
   onRevokeSessions,
+  isSelf,
+  onRemoveAccess,
+  onDeleteUser,
 }: {
   account: AccountListItem;
   busy: boolean;
@@ -606,6 +758,9 @@ function AccountRow({
   onPasswordReset: () => void;
   onSetDeskStatus: (status: "active" | "inactive") => void;
   onRevokeSessions: () => void;
+  isSelf: boolean;
+  onRemoveAccess: () => void;
+  onDeleteUser: () => void;
 }) {
   const businessLabel =
     account.businessRole && account.businessRole in BUSINESS_ROLE_LABELS
@@ -691,7 +846,8 @@ function AccountRow({
               type="button"
               variant="outline"
               size="sm"
-              disabled={busy}
+              disabled={busy || isSelf}
+              title={isSelf ? "Use sign-out on your own session" : undefined}
               onClick={onRevokeSessions}
             >
               Revoke sessions
@@ -701,7 +857,12 @@ function AccountRow({
                 type="button"
                 variant="outline"
                 size="sm"
-                disabled={busy}
+                disabled={busy || (isSelf && account.deskStatus !== "inactive")}
+                title={
+                  isSelf && account.deskStatus !== "inactive"
+                    ? "You cannot deactivate your own account"
+                    : undefined
+                }
                 onClick={() =>
                   onSetDeskStatus(account.deskStatus === "inactive" ? "active" : "inactive")
                 }
@@ -709,6 +870,26 @@ function AccountRow({
                 {account.deskStatus === "inactive" ? "Reactivate" : "Deactivate"}
               </Button>
             ) : null}
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              disabled={busy || isSelf}
+              title={isSelf ? "You cannot remove your own access" : undefined}
+              onClick={onRemoveAccess}
+            >
+              Remove access
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              size="sm"
+              disabled={busy || isSelf}
+              title={isSelf ? "You cannot delete your own account" : undefined}
+              onClick={onDeleteUser}
+            >
+              Delete user
+            </Button>
           </div>
           {tempPwOpen ? (
             <div className="grid max-w-sm gap-2 rounded-md border border-border bg-muted/30 p-2">
