@@ -6,6 +6,8 @@ export type PortalSessionPayload = {
   source: "supabase" | "demo";
   /** Demo consultant mock id when source is demo + consultant. */
   consultantId?: string;
+  /** Trusted profiles.business_role snapshot for shell branding (not an authz grant). */
+  businessRole?: string | null;
   exp: number;
 };
 

@@ -20,6 +20,7 @@ import { getOfficerDashboard, reviewStudentDocument } from "@/services";
 import { cn } from "@/lib/utils";
 import { isFrontDeskBusinessRole, staffHomeForBusinessRole } from "@/lib/staff-business-access";
 import { isSpecialtyOnlyBusinessRole } from "@/lib/specialty-desk-access";
+import { workspaceTitleForSession } from "@/lib/workspace-branding";
 import type { BusinessRole } from "@/lib/business-permissions";
 import type { AppRole } from "@/lib/roles";
 
@@ -41,8 +42,16 @@ export const Route = createFileRoute("/staff/dashboard")({
 });
 
 function StaffDashboard() {
+  const { auth } = Route.useRouteContext() as {
+    auth?: { businessRole?: BusinessRole | null; role?: AppRole };
+  };
   const queryClient = useQueryClient();
   const dashQ = useData(["officer", "dashboard"], getOfficerDashboard);
+  const workspaceTitle = workspaceTitleForSession({
+    portal: "staff",
+    businessRole: auth?.businessRole,
+    appRole: auth?.role,
+  });
   const [reviewError, setReviewError] = useState<string | null>(null);
 
   const reviewM = useMutation({
@@ -74,7 +83,7 @@ function StaffDashboard() {
     <div>
       <PageHeader
         title={`Good day, ${data.greetingName}`}
-        subtitle={data.deskLabel}
+        subtitle={workspaceTitle}
       />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

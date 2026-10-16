@@ -9,10 +9,14 @@ import { RoleSwitcher } from "@/components/site/RoleSwitcher";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import { BUSINESS_ROLE_LABELS, type BusinessRole } from "@/lib/business-permissions";
 import { isDemoAuthEnabled } from "@/lib/demo-auth";
 import { getAuthSession, signOut } from "@/lib/auth";
 import { shouldShowDemoSessionIndicator } from "@/lib/portal-data-plane";
+import {
+  workspaceIdentityLabelForSession,
+  workspaceTitleForSession,
+} from "@/lib/workspace-branding";
+import type { PublicSession } from "@/server/portal-data";
 import { searchAuthorizedStudents } from "@/services";
 import { cn } from "@/lib/utils";
 
@@ -79,29 +83,21 @@ export type PortalNavItem = {
 const roleMeta: Record<
   PortalRole,
   {
-    title: string;
     switcherLabel: string;
     home: "/student/dashboard" | "/staff/dashboard" | "/admin/dashboard";
-    fallbackRoleLabel: string;
   }
 > = {
   student: {
-    title: "Student Portal",
     switcherLabel: "Student",
     home: "/student/dashboard",
-    fallbackRoleLabel: "Student",
   },
   staff: {
-    title: "Consultant Portal",
     switcherLabel: "Consultant",
     home: "/staff/dashboard",
-    fallbackRoleLabel: "Staff",
   },
   admin: {
-    title: "Admin Panel",
     switcherLabel: "Admin",
     home: "/admin/dashboard",
-    fallbackRoleLabel: "Admin",
   },
 };
 
@@ -165,10 +161,15 @@ type PortalShellProps = {
   children?: ReactNode;
   /** Optional override for the top bar title */
   barTitle?: string;
+  /**
+   * Session from route beforeLoad (requirePortalAccess). When provided, skips a
+   * duplicate establishSession round-trip used only for chrome branding.
+   */
+  session?: PublicSession | null;
 };
 
 /** Shared portal chrome: sidebar, top bar, logout; demo role switcher only when demo auth is enabled. */
-export function PortalShell({ role, nav, children, barTitle }: PortalShellProps) {
+export function PortalShell({ role, nav, children, barTitle, session }: PortalShellProps) {
   const meta = roleMeta[role];
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -178,19 +179,31 @@ export function PortalShell({ role, nav, children, barTitle }: PortalShellProps)
   const showDemoSwitcher = isDemoAuthEnabled();
   const showGlobalSearch = role === "staff";
 
+  // Prefer route-context session; only refetch when the layout did not supply one.
   const sessionQ = useQuery({
     queryKey: ["portal", "auth-session"],
     queryFn: () => getAuthSession(),
-    staleTime: 30_000,
+    staleTime: 60_000,
+    enabled: !session,
+    initialData: session ?? undefined,
   });
-  const showDemoSessionBadge = shouldShowDemoSessionIndicator(sessionQ.data?.source);
+  const resolvedSession = session ?? sessionQ.data ?? null;
+  const showDemoSessionBadge = shouldShowDemoSessionIndicator(resolvedSession?.source);
 
-  const businessRole = sessionQ.data?.businessRole as BusinessRole | null | undefined;
-  const roleLabel =
-    businessRole && businessRole in BUSINESS_ROLE_LABELS
-      ? BUSINESS_ROLE_LABELS[businessRole]
-      : meta.fallbackRoleLabel;
-  const identityEmail = sessionQ.data?.email?.trim() || null;
+  const brand = {
+    title: workspaceTitleForSession({
+      portal: role,
+      businessRole: resolvedSession?.businessRole,
+      appRole: resolvedSession?.role,
+    }),
+    identityLabel: workspaceIdentityLabelForSession({
+      portal: role,
+      businessRole: resolvedSession?.businessRole,
+      appRole: resolvedSession?.role,
+    }),
+  };
+  const roleLabel = brand.identityLabel;
+  const identityEmail = resolvedSession?.email?.trim() || null;
 
   const searchQTrim = searchQ.trim();
   const searchResults = useQuery({
@@ -271,7 +284,7 @@ export function PortalShell({ role, nav, children, barTitle }: PortalShellProps)
           className="w-[17rem] border-0 bg-sidebar p-0 text-sidebar-foreground"
         >
           <SheetHeader className="sr-only">
-            <SheetTitle>Portal menu</SheetTitle>
+            <SheetTitle>Workspace menu</SheetTitle>
           </SheetHeader>
           {brandBlock}
           <SidebarNav items={nav} onNavigate={() => setMobileOpen(false)} />
@@ -293,7 +306,7 @@ export function PortalShell({ role, nav, children, barTitle }: PortalShellProps)
           </Button>
           <div className="flex min-w-0 flex-1 items-center gap-3">
             <span className="truncate font-display text-base font-semibold text-navy md:text-lg">
-              {barTitle ?? meta.title}
+              {barTitle ?? brand.title}
             </span>
             {showDemoSessionBadge ? (
               <span

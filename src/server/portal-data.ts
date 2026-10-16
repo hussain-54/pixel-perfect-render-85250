@@ -18,6 +18,7 @@ import {
   isMockCrmAllowed,
 } from "@/lib/portal-data-plane";
 import * as db from "@/data/mock";
+import { normalizeTrustedBusinessRole } from "@/lib/staff-business-access";
 import {
   businessRoleFromSession,
   denyFrontDeskConsultantWorkflows,
@@ -81,6 +82,9 @@ export const getPortalSession = createServerFn({ method: "GET" }).handler(async 
     email: cookie.email,
     source: cookie.source,
     ...(cookie.consultantId ? { consultantId: cookie.consultantId } : {}),
+    businessRole: cookie.businessRole
+      ? (normalizeTrustedBusinessRole(cookie.businessRole) ?? null)
+      : null,
   } satisfies PublicSession;
 });
 

@@ -211,13 +211,14 @@ export async function requireTrustedSession(): Promise<TrustedSession> {
       role: session.role,
       email: session.email,
       source: "supabase",
+      businessRole: session.businessRole ?? null,
     });
     return session;
   }
 
   const cookie = readPortalSessionCookie();
   if (cookie?.source === "supabase") {
-    // Cookie alone is not enough for data access without a JWT â€” require Bearer.
+    // Cookie alone is not enough for data access without a JWT — require Bearer.
     throw new AuthError("Sign in required. Missing access token.");
   }
   if (cookie?.source === "demo") {
@@ -257,6 +258,7 @@ export async function establishSupabaseSession(accessToken: string): Promise<Tru
     role: session.role,
     email: session.email,
     source: "supabase",
+    businessRole: session.businessRole ?? null,
   });
   return session;
 }

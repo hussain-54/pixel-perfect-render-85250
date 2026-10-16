@@ -34,7 +34,8 @@ import {
   type SpecialtyStaffPath,
 } from "@/lib/specialty-desk-access";
 import type { BusinessRole } from "@/lib/business-permissions";
-import type { AppRole } from "@/lib/roles";
+import { workspaceDocumentTitle } from "@/lib/workspace-branding";
+import type { PublicSession } from "@/server/portal-data";
 import type { LucideIcon } from "lucide-react";
 
 const consultantNav: PortalNavItem[] = [
@@ -101,10 +102,7 @@ function buildStaffNav(businessRole: BusinessRole | null | undefined): PortalNav
 export const Route = createFileRoute("/staff")({
   beforeLoad: async (ctx) => {
     const result = await requirePortalAccess("staff")();
-    const auth = result.auth as {
-      role?: AppRole;
-      businessRole?: BusinessRole | null;
-    };
+    const auth = result.auth as PublicSession;
     const businessRole = auth.businessRole;
     const pathname =
       typeof window !== "undefined" ? window.location.pathname : (ctx.location?.pathname ?? "");
@@ -121,20 +119,26 @@ export const Route = createFileRoute("/staff")({
 
     return result;
   },
-  head: () =>
-    pageHead({
+  head: ({ match }) => {
+    const auth = (match.context as { auth?: PublicSession }).auth;
+    return pageHead({
       path: "/staff",
-      title: "Staff Portal — Global Roots Consultants",
+      title: workspaceDocumentTitle({
+        portal: "staff",
+        businessRole: auth?.businessRole,
+        appRole: auth?.role,
+      }),
       description: "Authenticated staff workspace.",
       indexable: false,
-    }),
+    });
+  },
   component: StaffPortalLayout,
 });
 
 function StaffPortalLayout() {
   const { auth } = Route.useRouteContext() as {
-    auth: { businessRole?: BusinessRole | null };
+    auth: PublicSession;
   };
   const nav = buildStaffNav(auth?.businessRole);
-  return <PortalShell role="staff" nav={nav} />;
+  return <PortalShell role="staff" nav={nav} session={auth} />;
 }

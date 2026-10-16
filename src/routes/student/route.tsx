@@ -3,6 +3,8 @@ import { LayoutDashboard, Calendar, FileText, GraduationCap, User, Bell } from "
 import { PortalShell, type PortalNavItem } from "@/components/portal/PortalShell";
 import { requirePortalAccess } from "@/lib/portal-guard";
 import { pageHead } from "@/lib/seo";
+import { workspaceDocumentTitle } from "@/lib/workspace-branding";
+import type { PublicSession } from "@/server/portal-data";
 
 const studentNav: PortalNavItem[] = [
   { to: "/student/dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -15,16 +17,23 @@ const studentNav: PortalNavItem[] = [
 
 export const Route = createFileRoute("/student")({
   beforeLoad: requirePortalAccess("student"),
-  head: () =>
-    pageHead({
+  head: ({ match }) => {
+    const auth = (match.context as { auth?: PublicSession }).auth;
+    return pageHead({
       path: "/student",
-      title: "Student Portal — Global Roots Consultants",
+      title: workspaceDocumentTitle({
+        portal: "student",
+        businessRole: auth?.businessRole ?? "student_portal",
+        appRole: auth?.role,
+      }),
       description: "Authenticated student workspace.",
       indexable: false,
-    }),
+    });
+  },
   component: StudentPortalLayout,
 });
 
 function StudentPortalLayout() {
-  return <PortalShell role="student" nav={studentNav} />;
+  const { auth } = Route.useRouteContext() as { auth: PublicSession };
+  return <PortalShell role="student" nav={studentNav} session={auth} />;
 }

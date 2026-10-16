@@ -17,6 +17,8 @@ import {
 import { PortalShell, type PortalNavItem } from "@/components/portal/PortalShell";
 import { requirePortalAccess } from "@/lib/portal-guard";
 import { pageHead } from "@/lib/seo";
+import { workspaceDocumentTitle } from "@/lib/workspace-branding";
+import type { PublicSession } from "@/server/portal-data";
 
 /**
  * Admin sidebar — exactly one entry per approved module (+ Dashboard).
@@ -40,16 +42,23 @@ const adminNav: PortalNavItem[] = [
 
 export const Route = createFileRoute("/admin")({
   beforeLoad: requirePortalAccess("admin"),
-  head: () =>
-    pageHead({
+  head: ({ match }) => {
+    const auth = (match.context as { auth?: PublicSession }).auth;
+    return pageHead({
       path: "/admin",
-      title: "Admin Portal — Global Roots Consultants",
+      title: workspaceDocumentTitle({
+        portal: "admin",
+        businessRole: auth?.businessRole,
+        appRole: auth?.role,
+      }),
       description: "Authenticated admin workspace.",
       indexable: false,
-    }),
+    });
+  },
   component: AdminPortalLayout,
 });
 
 function AdminPortalLayout() {
-  return <PortalShell role="admin" nav={adminNav} />;
+  const { auth } = Route.useRouteContext() as { auth: PublicSession };
+  return <PortalShell role="admin" nav={adminNav} session={auth} />;
 }

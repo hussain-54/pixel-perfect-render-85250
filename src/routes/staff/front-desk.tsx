@@ -17,6 +17,7 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { useData } from "@/lib/useData";
 import { getFrontDeskDashboard } from "@/services";
 import { isFrontDeskBusinessRole } from "@/lib/staff-business-access";
+import { workspaceTitleForSession } from "@/lib/workspace-branding";
 
 export const Route = createFileRoute("/staff/front-desk")({
   beforeLoad: ({ context }) => {
@@ -48,7 +49,7 @@ function FrontDeskDashboardPage() {
   return (
     <div className="space-y-8">
       <PageHeader
-        title={`Front Desk — ${data.greetingName}`}
+        title={`${workspaceTitleForSession({ portal: "staff", businessRole: "front_desk_student_affairs" })} — ${data.greetingName}`}
         subtitle="Register students, record intake fees, and assign counsellors."
         actions={
           <Button asChild>
