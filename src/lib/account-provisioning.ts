@@ -3,7 +3,7 @@
  * Never invents roles. Never offers super_admin for routine creation.
  */
 import type { AppRole } from "@/lib/roles";
-import { BUSINESS_ROLES, type BusinessRole } from "@/lib/business-permissions";
+import { wouldRemoveLastProtectedAdmin, type BusinessRole } from "@/lib/business-permissions";
 
 export type AccountProvisioningOption = {
   id: BusinessRole;
@@ -136,6 +136,77 @@ export function appRoleForBusinessRole(businessRole: BusinessRole): AppRole {
   const option = getProvisioningOption(businessRole);
   if (!option) throw new Error("Unsupported business role.");
   return option.appRole;
+}
+
+/**
+ * Pure guards for reassigning an existing account's business role (no Auth calls).
+ * Used by portalUpdateAccountBusinessRole and unit tests.
+ */
+export function validateAccountRoleUpdate(input: {
+  targetAppRole: string;
+  nextBusinessRole: string;
+  isSelf: boolean;
+  protectedAdminCount: number;
+}):
+  | {
+      ok: true;
+      appRole: AppRole;
+      businessRole: BusinessRole;
+      needsConsultantDesk: boolean;
+      option: AccountProvisioningOption;
+    }
+  | { ok: false; error: string; status: number } {
+  if (input.targetAppRole === "super_admin") {
+    return {
+      ok: false,
+      error: "super_admin accounts cannot be reassigned through this form.",
+      status: 403,
+    };
+  }
+
+  const option = getProvisioningOption(input.nextBusinessRole);
+  if (!option) {
+    return { ok: false, error: "Unsupported business role.", status: 400 };
+  }
+  try {
+    assertRolePair(option.appRole, option.businessRole);
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : "Invalid role pair.",
+      status: 400,
+    };
+  }
+  // ACCOUNT_PROVISIONING_OPTIONS never includes super_admin; assertRolePair also blocks it.
+
+  const targetIsProtectedAdmin =
+    input.targetAppRole === "admin" || input.targetAppRole === "super_admin";
+  const nextIsProtectedAdmin = option.appRole === "admin";
+
+  if (input.isSelf && targetIsProtectedAdmin && !nextIsProtectedAdmin) {
+    return {
+      ok: false,
+      error: "You cannot demote your own admin access.",
+      status: 403,
+    };
+  }
+
+  const guard = wouldRemoveLastProtectedAdmin({
+    protectedAdminCount: input.protectedAdminCount,
+    targetIsProtectedAdmin,
+    nextIsProtectedAdmin,
+  });
+  if (!guard.ok) {
+    return { ok: false, error: guard.error, status: 403 };
+  }
+
+  return {
+    ok: true,
+    appRole: option.appRole,
+    businessRole: option.businessRole,
+    needsConsultantDesk: option.needsConsultantDesk,
+    option,
+  };
 }
 
 export type AccountListItem = {

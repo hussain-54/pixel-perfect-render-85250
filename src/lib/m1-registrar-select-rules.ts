@@ -85,17 +85,18 @@ export const STUDENTS_SENSITIVE_COLUMNS = [
 export const M1_OUT_OF_SCOPE_RESIDUALS = [
   {
     id: "R1",
-    description: "students_select_fee_verifier — org-wide students SELECT for fee verifiers",
+    description:
+      "students_select_fee_verifier — org-wide until …14090000 queue-scope apply + JWT proof",
   },
   {
     id: "R2",
     description:
-      "front_desk_assign_counsellor — DEFINER previously returned full public.students; local …14080000 narrows return (remote apply + JWT proof still required)",
+      "front_desk_assign_counsellor — full public.students until …14080000 narrow return apply + JWT proof",
   },
   {
     id: "R3",
     description:
-      "Permissive OR paths — admin / fee-verifier / assigned-to-self / self-profile still SELECT",
+      "Permissive OR paths — admin / fee-verifier(queue) / assigned-to-self / self-profile still SELECT",
   },
 ] as const;
 

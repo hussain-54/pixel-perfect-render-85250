@@ -90,6 +90,7 @@ export function UniversityCard({ u }: { u: University }) {
 }
 
 export function ScholarshipCard({ s }: { s: Scholarship }) {
+  const officialUrl = s.applicationUrl?.trim();
   return (
     <article className="panel flex flex-col p-5">
       <div className="flex items-center justify-between gap-2">
@@ -100,6 +101,9 @@ export function ScholarshipCard({ s }: { s: Scholarship }) {
       <p className="mt-1 text-sm text-muted-foreground">
         {s.level} · {s.field}
       </p>
+      {s.provider ? (
+        <p className="mt-1 text-xs text-muted-foreground">Provider: {s.provider}</p>
+      ) : null}
       <p className="mt-3 text-sm leading-relaxed text-foreground/80">
         <Award className="mr-1 inline h-3.5 w-3.5 text-royal" aria-hidden />
         {s.eligibility}
@@ -107,9 +111,18 @@ export function ScholarshipCard({ s }: { s: Scholarship }) {
       <p className="mt-3 flex items-center gap-1 text-xs font-semibold text-navy">
         <CalendarDays className="h-3.5 w-3.5" aria-hidden /> Deadline {fmtDate(s.deadline)}
       </p>
-      <Button asChild variant="outline" size="sm" className="mt-5 self-start">
-        <Link to="/contact">View Scholarship</Link>
-      </Button>
+      <div className="mt-5 flex flex-wrap gap-2 self-start">
+        {officialUrl ? (
+          <Button asChild variant="navy" size="sm">
+            <a href={officialUrl} target="_blank" rel="noopener noreferrer">
+              Official application
+            </a>
+          </Button>
+        ) : null}
+        <Button asChild variant="outline" size="sm">
+          <Link to="/contact">Ask a consultant</Link>
+        </Button>
+      </div>
     </article>
   );
 }

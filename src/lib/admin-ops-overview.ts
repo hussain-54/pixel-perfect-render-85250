@@ -80,16 +80,19 @@ export function buildAdminOpsMetrics(input: AdminOpsCountsInput): AdminOpsOvervi
   };
 }
 
-/** Who may view the admin ops overview (server must still enforce session + RLS). */
+/**
+ * Who may view the admin ops overview (server must still enforce session + RLS).
+ * Firm-wide queue aggregates — Front Desk and ordinary counsellor desks are denied
+ * even when matrix grants reports+students View (those roles must not see firm totals).
+ */
 export function canViewAdminOpsOverview(input: {
   appRole: AppRole;
   businessRole: BusinessRole | null;
 }): boolean {
   if (rolesAtLeastAdmin(input.appRole)) return true;
+  if (input.businessRole === "front_desk_student_affairs") return false;
   if (input.businessRole === "manager") return true;
-  return (
-    canViewModule(input.businessRole, "reports") && canViewModule(input.businessRole, "students")
-  );
+  return false;
 }
 
 /** Accounts may see fee aggregates but not document content payloads. */

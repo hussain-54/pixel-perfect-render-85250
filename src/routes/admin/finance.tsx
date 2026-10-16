@@ -24,7 +24,7 @@ import {
 import type { UniversityFeeKindDb, UniversityFeeStatusDb } from "@/types/database";
 
 export const Route = createFileRoute("/admin/finance")({
-  component: AdminFinance,
+  component: FinanceModulePage,
 });
 
 type StatusFilter = UniversityFeeStatusDb | "queue";
@@ -37,7 +37,8 @@ const FEE_KINDS: UniversityFeeKindDb[] = [
   "other",
 ];
 
-function AdminFinance() {
+/** Shared fees workspace — also mounted at `/staff/finance` for specialty desks. */
+export function FinanceModulePage() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("queue");
   const [msg, setMsg] = useState<string | null>(null);

@@ -16,7 +16,8 @@ export function canViewMarketing(input: {
   businessRole: BusinessRole | null;
 }): boolean {
   if (rolesAtLeastAdmin(input.appRole)) return true;
-  // Matrix-only: Digital Marketing module (FD View=1, counsellor=0, etc.).
+  // Product deny: Front Desk must not use Digital Marketing (even if matrix View=1).
+  if (input.businessRole === "front_desk_student_affairs") return false;
   return canViewModule(input.businessRole, "digital_marketing");
 }
 
@@ -25,8 +26,17 @@ export function canMutateMarketing(input: {
   businessRole: BusinessRole | null;
 }): boolean {
   if (rolesAtLeastAdmin(input.appRole)) return true;
+  if (input.businessRole === "front_desk_student_affairs") return false;
   if (input.businessRole === "digital_manager" || input.businessRole === "manager") return true;
   return canEditModule(input.businessRole, "digital_marketing");
+}
+
+/** Campaign attribution is a marketing Edit action — never open to every consultant. */
+export function canAttributeInquiryCampaign(input: {
+  appRole: AppRole;
+  businessRole: BusinessRole | null;
+}): boolean {
+  return canMutateMarketing(input);
 }
 
 /** Super Admin may reopen completed campaigns; Admin may not invent extra privileges beyond matrix. */

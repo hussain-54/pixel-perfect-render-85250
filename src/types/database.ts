@@ -33,6 +33,11 @@ export type ApplicationStage =
 export type DocumentStatusDb = "pending_review" | "approved" | "rejected" | "needs_correction";
 export type DocumentReviewAction =
   "approved" | "rejected" | "needs_correction" | "reupload_requested";
+export type ScholarshipStatusDb = "draft" | "published" | "archived";
+export type ScholarshipFundingTypeDb =
+  | "fully_funded"
+  | "partial_funding"
+  | "tuition_waiver";
 export type OfferType = "conditional" | "unconditional";
 export type OfferStatus =
   "awaiting_student" | "conditions_pending" | "accepted" | "declined" | "expired";
@@ -425,6 +430,52 @@ export type Database = {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["programs"]["Insert"]>;
+        Relationships: [];
+      };
+      scholarships: {
+        Row: {
+          id: string;
+          title: string;
+          description: string;
+          provider: string;
+          university_id: string | null;
+          country: string;
+          study_level: string;
+          field_of_study: string;
+          funding_type: ScholarshipFundingTypeDb;
+          funding_description: string;
+          eligibility: string;
+          opens_on: string | null;
+          closes_on: string | null;
+          application_url: string | null;
+          status: ScholarshipStatusDb;
+          created_by: string | null;
+          updated_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          description?: string;
+          provider?: string;
+          university_id?: string | null;
+          country?: string;
+          study_level?: string;
+          field_of_study?: string;
+          funding_type?: ScholarshipFundingTypeDb;
+          funding_description?: string;
+          eligibility?: string;
+          opens_on?: string | null;
+          closes_on?: string | null;
+          application_url?: string | null;
+          status?: ScholarshipStatusDb;
+          created_by?: string | null;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["scholarships"]["Insert"]>;
         Relationships: [];
       };
       shortlist_items: {
@@ -945,6 +996,32 @@ export type Database = {
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["internal_notes"]["Insert"]>;
+        Relationships: [];
+      };
+      organization_settings: {
+        Row: {
+          id: number;
+          consultancy_name: string;
+          support_email: string;
+          portal_footer_note: string;
+          email_admins_on_new_leads: boolean;
+          student_document_alerts: boolean;
+          updated_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: number;
+          consultancy_name?: string;
+          support_email?: string;
+          portal_footer_note?: string;
+          email_admins_on_new_leads?: boolean;
+          student_document_alerts?: boolean;
+          updated_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["organization_settings"]["Insert"]>;
         Relationships: [];
       };
       notifications: {
@@ -1539,6 +1616,8 @@ export type Database = {
       handover_status: HandoverStatusDb;
       university_fee_kind: UniversityFeeKindDb;
       university_fee_status: UniversityFeeStatusDb;
+      scholarship_status: ScholarshipStatusDb;
+      scholarship_funding_type: ScholarshipFundingTypeDb;
     };
     CompositeTypes: Record<string, never>;
   };
@@ -1575,5 +1654,6 @@ export type ShortlistItemRow = Tables<"shortlist_items">;
 export type StudentAcademicProfileRow = Tables<"student_academic_profiles">;
 export type StudentAssessmentRow = Tables<"student_assessments">;
 export type AuditEventRow = Tables<"audit_events">;
+export type ScholarshipRow = Tables<"scholarships">;
 
 export { STUDENT_DOCUMENTS_BUCKET, studentDocumentStoragePath } from "@/lib/document-storage";

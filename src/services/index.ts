@@ -139,8 +139,10 @@ import {
   portalRevokeAccountSessions,
   portalSetConsultantDeskStatus,
   portalSetTemporaryPassword,
+  portalUpdateAccountBusinessRole,
   type CreateAccountInput,
   type SetTemporaryPasswordInput,
+  type UpdateAccountBusinessRoleInput,
 } from "@/server/portal-accounts";
 import {
   portalGetPermissionMatrix,
@@ -185,6 +187,48 @@ import {
   portalListCounsellorDesks,
   portalListFrontDeskIntake,
 } from "@/server/portal-front-desk";
+import {
+  portalDeleteProgram,
+  portalDeleteUniversity,
+  portalGetCatalogPrograms,
+  portalGetCatalogUniversities,
+  portalListCatalogProgramsAdmin,
+  portalListCatalogUniversitiesAdmin,
+  portalListPublishedPrograms,
+  portalListPublishedUniversities,
+  portalUpsertProgram,
+  portalUpsertUniversity,
+} from "@/server/portal-catalog";
+import {
+  portalListPublishedScholarships,
+  portalListScholarshipsAdmin,
+  portalSetScholarshipStatus,
+  portalUpsertScholarship,
+} from "@/server/portal-scholarships";
+import type { ScholarshipListFilters, ScholarshipWriteInput } from "@/lib/scholarship-rules";
+import type {
+  CatalogListFilters,
+  ProgramWriteInput,
+  UniversityWriteInput,
+} from "@/lib/catalog-rules";
+import {
+  portalCommitCatalogImport,
+  portalExportCrmCsv,
+  portalImportUniversitiesCsv,
+  portalPreviewCatalogImport,
+} from "@/server/portal-import-export";
+import type {
+  CatalogImportEntity,
+  CrmExportEntity,
+  DuplicatePolicy,
+} from "@/lib/crm-export";
+import {
+  portalGetOrganizationSettings,
+  portalUpdateOrganizationSettings,
+} from "@/server/portal-settings";
+import type { OrganizationSettingsInput } from "@/lib/admin-settings-rules";
+import { portalGetConsultantLeaderboard } from "@/server/portal-leaderboard";
+import type { LeaderboardFilters } from "@/server/portal-leaderboard";
 
 async function withAuth<T>(fn: (opts: { headers?: HeadersInit }) => Promise<T>): Promise<T> {
   const headers = await getAuthRequestHeaders();
@@ -260,11 +304,90 @@ export const assignLead = (data: { leadId: string; consultantId: string | null }
 export const updateLeadStatus = (data: { leadId: string; status: string }) =>
   withAuth((opts) => portalUpdateLeadStatus({ ...opts, data }));
 
-/** Public catalog — safe without portal auth. */
-export const getUniversities = () => Promise.resolve(db.universities);
+/** Public universities — live catalog; labelled demo only in DEV when live unavailable. */
+export const listPublishedUniversities = (filters?: CatalogListFilters) =>
+  portalListPublishedUniversities({ data: filters ?? {} });
 
-/** Public catalog — safe without portal auth. */
-export const getScholarships = () => Promise.resolve(db.scholarships);
+/** @deprecated Prefer listPublishedUniversities for source awareness. */
+export const getUniversities = () =>
+  listPublishedUniversities().then((payload) => payload.rows);
+
+/** Public programs — live catalog; labelled demo only in DEV when live unavailable. */
+export const listPublishedPrograms = (filters?: CatalogListFilters) =>
+  portalListPublishedPrograms({ data: filters ?? {} });
+
+/** Public scholarships — published live rows only (no demo fixture fallback). */
+export const listPublishedScholarships = (filters?: ScholarshipListFilters) =>
+  portalListPublishedScholarships({ data: filters ?? {} });
+
+/** @deprecated Prefer listPublishedScholarships for source/unavailable awareness. */
+export const getScholarships = () =>
+  listPublishedScholarships().then((payload) => payload.rows);
+
+/** Admin/staff admissions catalog — live universities when JWT plane is active. */
+export const getCatalogUniversities = () =>
+  withAuth((opts) => portalGetCatalogUniversities(opts));
+
+/** Admin/staff admissions catalog — live programs when JWT plane is active. */
+export const getCatalogPrograms = () => withAuth((opts) => portalGetCatalogPrograms(opts));
+
+export const listCatalogUniversitiesAdmin = (filters?: CatalogListFilters) =>
+  withAuth((opts) => portalListCatalogUniversitiesAdmin({ ...opts, data: filters ?? {} }));
+
+export const listCatalogProgramsAdmin = (filters?: CatalogListFilters) =>
+  withAuth((opts) => portalListCatalogProgramsAdmin({ ...opts, data: filters ?? {} }));
+
+export const upsertUniversity = (data: UniversityWriteInput & { id?: string }) =>
+  withAuth((opts) => portalUpsertUniversity({ ...opts, data }));
+
+export const deleteUniversity = (id: string) =>
+  withAuth((opts) => portalDeleteUniversity({ ...opts, data: { id } }));
+
+export const upsertProgram = (data: ProgramWriteInput & { id?: string }) =>
+  withAuth((opts) => portalUpsertProgram({ ...opts, data }));
+
+export const deleteProgram = (id: string) =>
+  withAuth((opts) => portalDeleteProgram({ ...opts, data: { id } }));
+
+/** Admin/staff scholarships catalog — live when JWT plane is active. */
+export const listScholarshipsAdmin = (filters?: ScholarshipListFilters) =>
+  withAuth((opts) => portalListScholarshipsAdmin({ ...opts, data: filters ?? {} }));
+
+export const upsertScholarship = (data: ScholarshipWriteInput & { id?: string }) =>
+  withAuth((opts) => portalUpsertScholarship({ ...opts, data }));
+
+export const setScholarshipStatus = (data: {
+  id: string;
+  status: "draft" | "published" | "archived";
+}) => withAuth((opts) => portalSetScholarshipStatus({ ...opts, data }));
+
+export const exportCrmCsv = (entity: CrmExportEntity) =>
+  withAuth((opts) => portalExportCrmCsv({ ...opts, data: { entity } }));
+
+export const previewCatalogImport = (data: { entity: CatalogImportEntity; csvText: string }) =>
+  withAuth((opts) => portalPreviewCatalogImport({ ...opts, data }));
+
+export const commitCatalogImport = (data: {
+  entity: CatalogImportEntity;
+  csvText: string;
+  duplicatePolicy: DuplicatePolicy;
+  confirmed: boolean;
+}) => withAuth((opts) => portalCommitCatalogImport({ ...opts, data }));
+
+/** @deprecated Prefer previewCatalogImport + commitCatalogImport (duplicates are skipped). */
+export const importUniversitiesCsv = (csvText: string) =>
+  withAuth((opts) => portalImportUniversitiesCsv({ ...opts, data: { csvText } }));
+
+/** Admin organization settings — live singleton when JWT plane + migration are available. */
+export const getOrganizationSettings = () =>
+  withAuth((opts) => portalGetOrganizationSettings(opts));
+
+export const updateOrganizationSettings = (data: OrganizationSettingsInput) =>
+  withAuth((opts) => portalUpdateOrganizationSettings({ ...opts, data }));
+
+/** Firm consultant leaderboard — live aggregates only (no demo score invention). */
+export const getConsultantLeaderboard = (filters?: LeaderboardFilters) =>
+  withAuth((opts) => portalGetConsultantLeaderboard({ ...opts, data: filters ?? {} }));
 
 export const getNotifications = (audience: "student" | "staff" | "admin") =>
   withAuth((opts) => portalGetNotifications({ ...opts, data: { audience } }));
@@ -552,6 +675,9 @@ export const listPortalAccountOptions = () => withAuth((opts) => portalListAccou
 
 export const createPortalAccount = (data: CreateAccountInput) =>
   withAuth((opts) => portalCreateAccount({ ...opts, data }));
+
+export const updatePortalAccountBusinessRole = (data: UpdateAccountBusinessRoleInput) =>
+  withAuth((opts) => portalUpdateAccountBusinessRole({ ...opts, data }));
 
 export const setPortalTemporaryPassword = (data: SetTemporaryPasswordInput) =>
   withAuth((opts) => portalSetTemporaryPassword({ ...opts, data }));

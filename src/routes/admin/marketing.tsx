@@ -26,10 +26,11 @@ import {
 import { formatMetricValue, type MarketingCampaignStatus } from "@/lib/marketing-rules";
 
 export const Route = createFileRoute("/admin/marketing")({
-  component: AdminMarketing,
+  component: MarketingModulePage,
 });
 
-function AdminMarketing() {
+/** Shared marketing workspace — also mounted at `/staff/marketing` for specialty desks. */
+export function MarketingModulePage() {
   const queryClient = useQueryClient();
   const [includeArchived, setIncludeArchived] = useState(false);
   const overviewQ = useQuery({

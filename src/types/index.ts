@@ -50,6 +50,8 @@ export interface Student {
   studyLevel: string;
   stage: StageKey;
   consultantId: string;
+  /** Server-enriched assigned consultant display name (live plane). */
+  consultantName?: string;
   lastActivity: string;
   qualification: string;
   institution: string;
@@ -110,6 +112,8 @@ export interface StudentDocument {
   status: DocumentStatus;
   comment?: string;
   reviewer?: string;
+  /** Server-enriched display name (live plane); mock UI may still use lookupStudent. */
+  studentName?: string;
   /** Passport or certificate expiry. Absent when the document type has none. */
   expiresOn?: string;
   /** File version. Greater than 1 means the student re-uploaded. */
@@ -145,6 +149,8 @@ export interface Application {
   deadline: string;
   status: ApplicationStatus;
   officerId: string;
+  /** Server-enriched display name (live plane); mock UI may still use lookupStudent. */
+  studentName?: string;
 }
 
 export type LeadStatus =
@@ -174,6 +180,7 @@ export interface University {
 }
 
 export type FundingType = "Fully Funded" | "Partial Funding" | "Tuition Waiver";
+export type ScholarshipStatus = "draft" | "published" | "archived";
 export interface Scholarship {
   id: string;
   name: string;
@@ -183,6 +190,16 @@ export interface Scholarship {
   field: string;
   eligibility: string;
   deadline: string;
+  /** Live catalog fields (optional for legacy demo rows). */
+  description?: string;
+  provider?: string;
+  universityId?: string | null;
+  universityName?: string | null;
+  fundingDescription?: string;
+  opensOn?: string | null;
+  applicationUrl?: string | null;
+  status?: ScholarshipStatus;
+  updatedAt?: string;
 }
 
 export interface Notification {

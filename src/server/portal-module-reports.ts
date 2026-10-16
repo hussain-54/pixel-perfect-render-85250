@@ -9,6 +9,7 @@ import {
   requireTrustedSession,
   type TrustedSession,
 } from "@/server/portal-auth";
+import { denyFrontDeskConsultantWorkflows } from "@/server/staff-access";
 import {
   resolveBusinessRoleFromTrustedAppRole,
   type BusinessRole,
@@ -539,6 +540,7 @@ export const portalGetModuleReports = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "module reports");
       const businessRole = await resolveSessionBusinessRole(session);
       if (!canViewReportsPortal({ appRole: session.role, businessRole })) {
         throw new AuthError("You do not have access to Reports.", 403);
@@ -581,6 +583,7 @@ export const portalExportModuleReports = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "module reports export");
       const businessRole = await resolveSessionBusinessRole(session);
       if (!canExportReports({ appRole: session.role, businessRole })) {
         throw new AuthError("You do not have permission to export reports.", 403);

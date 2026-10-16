@@ -1147,14 +1147,61 @@ export const portalUploadStudentDocument = createServerFn({ method: "POST" })
     }
   });
 
+/** Authorize document preview: students own docs; staff need documents View + deny FD + visible student. */
+async function resolveAuthorizedPreviewDocument(
+  session: TrustedSession,
+  documentId: string,
+): Promise<StudentDocument> {
+  const id = documentId.trim();
+  if (!id) throw new AuthError("Document not found.", 404);
+
+  const { usesSupabaseDataPlane } = await import("@/server/ao-data");
+  if (usesSupabaseDataPlane(session)) {
+    const {
+      requireAoSupabaseClient,
+      assertStudentVisibleDb,
+      resolveOwnStudentDb,
+      enrichDocumentsWithVersions,
+    } = await import("@/server/ao-data");
+    const { getStudentDocumentById } = await import("@/services/db");
+    const { mapDocumentRow } = await import("@/lib/ao-mappers");
+    const client = requireAoSupabaseClient();
+    const row = await getStudentDocumentById(client, id);
+    if (!row) throw new AuthError("Document not found.", 404);
+
+    if (session.role === "student") {
+      const owner = await resolveOwnStudentDb(client, session);
+      if (row.student_id !== owner.id) {
+        throw new AuthError("You do not have access to this document.", 403);
+      }
+    } else {
+      denyFrontDeskConsultantWorkflows(session, "document preview");
+      await requireModulePermission(session, "documents", 1, "document preview");
+      await assertStudentVisibleDb(client, session, row.student_id);
+    }
+
+    const [enriched] = await enrichDocumentsWithVersions(client, [mapDocumentRow(row)]);
+    if (!enriched) throw new AuthError("Document not found.", 404);
+    return enriched;
+  }
+
+  // Demo plane — still gate staff modules; visibility stays mock-scoped.
+  if (session.role !== "student") {
+    denyFrontDeskConsultantWorkflows(session, "document preview");
+    await requireModulePermission(session, "documents", 1, "document preview");
+  }
+  const doc = visibleDocuments(session).find((d) => d.id === id);
+  if (!doc) throw new AuthError("Document not found.", 404);
+  return doc;
+}
+
 export const portalIssueDocumentPreview = createServerFn({ method: "POST" })
   .validator((data: { documentId: string; versionId?: string }) => data)
   .handler(async ({ data }): Promise<DocumentPreviewIssue> => {
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["student", "consultant", "admin", "super_admin"]);
-      const doc = visibleDocuments(session).find((d) => d.id === data.documentId);
-      if (!doc) throw new AuthError("Document not found.", 404);
+      const doc = await resolveAuthorizedPreviewDocument(session, data.documentId);
       if (!hasPrivateFile(doc)) {
         throw new AuthError("No private file is available for preview.", 404);
       }
@@ -1217,9 +1264,8 @@ export const portalFetchDocumentPreview = createServerFn({ method: "POST" })
       const grant = consumePreviewGrant(data.token, session.email);
       if (!grant) throw new AuthError("Preview link expired or is invalid.", 403);
 
-      // Re-check document visibility at fetch time.
-      const doc = visibleDocuments(session).find((d) => d.id === grant.documentId);
-      if (!doc) throw new AuthError("You do not have access to this document.", 403);
+      // Re-check authorization at fetch time (live visibility, not mock-only).
+      await resolveAuthorizedPreviewDocument(session, grant.documentId);
 
       const accessToken = bearerToken();
       if (session.source === "supabase" && accessToken) {

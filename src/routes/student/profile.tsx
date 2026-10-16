@@ -72,7 +72,8 @@ function StudentProfile() {
   if (studentQ.isError || !studentQ.data) return <ErrorState />;
 
   const s = studentQ.data;
-  const consultant = lookupConsultant(s.consultantId);
+  const consultantName =
+    s.consultantName ?? lookupConsultant(s.consultantId)?.name ?? null;
   const values = form ?? {
     phone: s.phone,
     whatsapp: s.whatsapp,
@@ -91,7 +92,7 @@ function StudentProfile() {
     ["Grades", s.grade || "—"],
     ["English test", s.englishTest || "—"],
     ["Journey stage", stageLabel(s.stage)],
-    ["Consultant", consultant?.name ?? "—"],
+    ["Consultant", consultantName ?? "—"],
   ];
 
   const editable: { key: keyof ContactForm; label: string; type?: string }[] = [

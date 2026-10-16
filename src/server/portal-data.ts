@@ -200,6 +200,12 @@ export const portalGetCurrentStudent = createServerFn({ method: "GET" }).handler
           403,
         );
       }
+      if (student.consultantId) {
+        const { namesForIds } = await import("@/server/ao-data");
+        const names = await namesForIds(client, [student.consultantId]);
+        const consultantName = names.get(student.consultantId)?.trim();
+        if (consultantName) return { ...student, consultantName };
+      }
       return student;
     }
 
@@ -288,6 +294,43 @@ export const portalGetConsultants = createServerFn({ method: "GET" }).handler(as
   try {
     const session = await requireTrustedSession();
     requireRoles(session, ["admin", "super_admin"]);
+
+    const { usesSupabaseDataPlane } = await import("@/server/ao-data");
+    if (usesSupabaseDataPlane(session)) {
+      await requireModulePermission(session, "students", 1, "consultant roster");
+      const { requireAoSupabaseClient } = await import("@/server/ao-data");
+      const { listConsultants } = await import("@/services/db");
+      const {
+        countStudentsByConsultantId,
+        mapConsultantDeskRow,
+      } = await import("@/lib/consultant-mappers");
+      const client = requireAoSupabaseClient();
+      const desks = await listConsultants(client);
+      if (!desks.length) return [];
+
+      const ids = desks.map((d) => d.id);
+      const [{ data: profiles, error: profileErr }, { data: studentRows, error: studentErr }] =
+        await Promise.all([
+          client.from("profiles").select("id,full_name,email").in("id", ids),
+          client
+            .from("students")
+            .select("assigned_consultant_id")
+            .is("archived_at", null)
+            .in("assigned_consultant_id", ids),
+        ]);
+      if (profileErr) throw new Error(profileErr.message);
+      if (studentErr) throw new Error(studentErr.message);
+
+      const profileById = new Map((profiles ?? []).map((p) => [p.id, p]));
+      const studentCounts = countStudentsByConsultantId(studentRows ?? []);
+      return desks.map((desk) =>
+        mapConsultantDeskRow(desk, {
+          profile: profileById.get(desk.id) ?? null,
+          studentCount: studentCounts.get(desk.id) ?? 0,
+        }),
+      );
+    }
+
     return crmListOrEmpty(session.source, db.consultants);
   } catch (error) {
     toError(error);
@@ -300,15 +343,43 @@ export const portalGetConsultant = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
-      if (!isMockCrmAllowed(session.source)) {
-        return crmRecordOrNull(session.source, null);
-      }
       if (
         session.role === "consultant" &&
         session.consultantId &&
         data.id !== session.consultantId
       ) {
         throw new AuthError("You do not have access to this consultant record.", 403);
+      }
+
+      const { usesSupabaseDataPlane } = await import("@/server/ao-data");
+      if (usesSupabaseDataPlane(session)) {
+        if (rolesAtLeastAdmin(session.role)) {
+          await requireModulePermission(session, "students", 1, "consultant records");
+        }
+        const { requireAoSupabaseClient } = await import("@/server/ao-data");
+        const { getConsultantById } = await import("@/services/db");
+        const { mapConsultantDeskRow } = await import("@/lib/consultant-mappers");
+        const client = requireAoSupabaseClient();
+        const desk = await getConsultantById(client, data.id);
+        if (!desk) return crmRecordOrNull(session.source, null);
+
+        const [{ data: profile }, { count }] = await Promise.all([
+          client.from("profiles").select("full_name,email").eq("id", desk.id).maybeSingle(),
+          client
+            .from("students")
+            .select("id", { count: "exact", head: true })
+            .eq("assigned_consultant_id", desk.id)
+            .is("archived_at", null),
+        ]);
+
+        return mapConsultantDeskRow(desk, {
+          profile: profile ?? null,
+          studentCount: count ?? 0,
+        });
+      }
+
+      if (!isMockCrmAllowed(session.source)) {
+        return crmRecordOrNull(session.source, null);
       }
       return crmRecordOrNull(session.source, db.consultants.find((c) => c.id === data.id) ?? null);
     } catch (error) {
@@ -649,19 +720,35 @@ export const portalGetDocuments = createServerFn({ method: "GET" })
         });
         if (!scope.ok) throw new AuthError(scope.error, scope.status);
         // JWT + RLS can_access_student on student_documents — never service role / fixtures.
-        return await listDocsForStudents(client, scope.studentIds);
+        const docs = await listDocsForStudents(client, scope.studentIds);
+        const studentIds = [...new Set(docs.map((d) => d.studentId))];
+        if (!studentIds.length) return docs;
+        const { data: nameRows, error: nameErr } = await client
+          .from("students")
+          .select("id,full_name")
+          .in("id", studentIds);
+        if (nameErr) throw new Error(nameErr.message);
+        const { attachStudentNames, studentNameByIdFromRows } =
+          await import("@/lib/crm-display-names");
+        return attachStudentNames(docs, studentNameByIdFromRows(nameRows ?? []));
       }
 
       if (!isMockCrmAllowed(session.source)) {
         return [];
       }
-      const visibleIds = new Set(filterStudentsForSession(session).map((s) => s.id));
+      const visibleStudents = filterStudentsForSession(session);
+      const visibleIds = new Set(visibleStudents.map((s) => s.id));
       let rows = db.documents.filter((d) => visibleIds.has(d.studentId));
       if (data.studentId) {
         assertStudentVisible(session, data.studentId);
         rows = rows.filter((d) => d.studentId === data.studentId);
       }
-      return crmListOrEmpty(session.source, rows);
+      const { attachStudentNames, studentNameByIdFromRows } =
+        await import("@/lib/crm-display-names");
+      return crmListOrEmpty(
+        session.source,
+        attachStudentNames(rows, studentNameByIdFromRows(visibleStudents)),
+      );
     } catch (error) {
       toError(error);
     }
@@ -710,19 +797,35 @@ export const portalGetApplications = createServerFn({ method: "GET" })
         });
         if (!scope.ok) throw new AuthError(scope.error, scope.status);
         // JWT + RLS can_access_student on applications — never service role / fixtures.
-        return await listAppsForStudents(client, scope.studentIds);
+        const apps = await listAppsForStudents(client, scope.studentIds);
+        const studentIds = [...new Set(apps.map((a) => a.studentId))];
+        if (!studentIds.length) return apps;
+        const { data: nameRows, error: nameErr } = await client
+          .from("students")
+          .select("id,full_name")
+          .in("id", studentIds);
+        if (nameErr) throw new Error(nameErr.message);
+        const { attachStudentNames, studentNameByIdFromRows } =
+          await import("@/lib/crm-display-names");
+        return attachStudentNames(apps, studentNameByIdFromRows(nameRows ?? []));
       }
 
       if (!isMockCrmAllowed(session.source)) {
         return [];
       }
-      const visibleIds = new Set(filterStudentsForSession(session).map((s) => s.id));
+      const visibleStudents = filterStudentsForSession(session);
+      const visibleIds = new Set(visibleStudents.map((s) => s.id));
       let rows = db.applications.filter((a) => visibleIds.has(a.studentId));
       if (data.studentId) {
         assertStudentVisible(session, data.studentId);
         rows = rows.filter((a) => a.studentId === data.studentId);
       }
-      return crmListOrEmpty(session.source, rows);
+      const { attachStudentNames, studentNameByIdFromRows } =
+        await import("@/lib/crm-display-names");
+      return crmListOrEmpty(
+        session.source,
+        attachStudentNames(rows, studentNameByIdFromRows(visibleStudents)),
+      );
     } catch (error) {
       toError(error);
     }
@@ -1028,6 +1131,22 @@ export const portalGetAuditLogs = createServerFn({ method: "GET" }).handler(asyn
   try {
     const session = await requireTrustedSession();
     requireRoles(session, ["admin", "super_admin"]);
+    // Same reports module gate as the activity workspace; admin retains Full on reports.
+    await requireModulePermission(session, "reports", 1, "audit logs");
+
+    const { usesSupabaseDataPlane } = await import("@/server/ao-data");
+    if (usesSupabaseDataPlane(session)) {
+      const { requireAoSupabaseClient, listScopedAuditEvents } = await import("@/server/ao-data");
+      const {
+        ADMIN_AUDIT_LOG_LIMIT,
+        mapPortalAuditEventToAdminLog,
+      } = await import("@/lib/admin-audit-log");
+      const client = requireAoSupabaseClient();
+      // JWT + RLS on audit_events — same authorized source as portalGetActivityLog.
+      const events = await listScopedAuditEvents(client, {});
+      return events.slice(0, ADMIN_AUDIT_LOG_LIMIT).map(mapPortalAuditEventToAdminLog);
+    }
+
     return crmListOrEmpty(session.source, db.auditLogs);
   } catch (error) {
     toError(error);

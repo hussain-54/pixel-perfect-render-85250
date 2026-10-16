@@ -1,5 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PageHeader, TableWrap, fmtDate, LoadingRows } from "@/components/common";
+import {
+  PageHeader,
+  TableWrap,
+  fmtDate,
+  LoadingRows,
+  EmptyState,
+  ErrorState,
+  portalErrorMessage,
+} from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useData } from "@/lib/useData";
 import { getAppointments, lookupStudent, lookupConsultant } from "@/services";
@@ -17,6 +25,10 @@ function AdminAppointments() {
       <PageHeader title="Counselling" subtitle="Firm-wide counselling appointments and schedule." />
       {apptsQ.isLoading ? (
         <LoadingRows />
+      ) : apptsQ.isError ? (
+        <ErrorState body={portalErrorMessage(apptsQ.error)} />
+      ) : !rows.length ? (
+        <EmptyState title="No appointments" body="No counselling appointments scheduled yet." />
       ) : (
         <TableWrap>
           <thead>

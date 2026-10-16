@@ -13,10 +13,11 @@ import {
 import { getOpsDashboard, listUniversityFeeQueue } from "@/services";
 
 export const Route = createFileRoute("/admin/banking")({
-  component: AdminBanking,
+  component: BankingModulePage,
 });
 
-function AdminBanking() {
+/** Shared banking workspace — also mounted at `/staff/banking` for specialty desks. */
+export function BankingModulePage() {
   const opsQ = useQuery({
     queryKey: ["admin", "banking", "ops-dashboard"],
     queryFn: getOpsDashboard,

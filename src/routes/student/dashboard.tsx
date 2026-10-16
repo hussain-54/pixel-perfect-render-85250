@@ -41,7 +41,9 @@ function StudentDashboard() {
     return <ErrorState body="Could not load your student profile." />;
 
   const student = studentQ.data;
-  const consultant = lookupConsultant(student.consultantId);
+  const consultantName =
+    student.consultantName ?? lookupConsultant(student.consultantId)?.name ?? null;
+  const consultantRole = lookupConsultant(student.consultantId)?.role;
   const docs = docsQ.data ?? [];
   const actionCount = filterActionRequired(docs).length;
   const upcoming = (apptsQ.data ?? [])
@@ -88,8 +90,8 @@ function StudentDashboard() {
         />
         <StatCard
           label="Consultant"
-          value={consultant?.name.split(" ")[0] ?? "—"}
-          {...(consultant?.role ? { hint: consultant.role } : {})}
+          value={consultantName?.split(" ")[0] ?? "—"}
+          {...(consultantRole ? { hint: consultantRole } : {})}
           icon={<Calendar />}
         />
       </div>

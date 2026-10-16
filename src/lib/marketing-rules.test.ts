@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   campaignConversionMetrics,
   campaignInquiryMetrics,
+  canAttributeInquiryCampaign,
   canMutateMarketing,
   canReopenCompletedCampaign,
   canViewMarketing,
@@ -12,7 +13,7 @@ import {
 } from "./marketing-rules";
 
 describe("digital marketing rules", () => {
-  it("allows digital manager to mutate; counsellor denied digital_marketing (matrix=0)", () => {
+  it("allows digital manager to mutate; counsellor and Front Desk denied", () => {
     expect(canMutateMarketing({ appRole: "consultant", businessRole: "digital_manager" })).toBe(
       true,
     );
@@ -22,8 +23,21 @@ describe("digital marketing rules", () => {
     expect(canViewMarketing({ appRole: "consultant", businessRole: "counsellor_consultant" })).toBe(
       false,
     );
+    // Product deny overrides matrix View=1 for Front Desk.
     expect(
       canViewMarketing({ appRole: "consultant", businessRole: "front_desk_student_affairs" }),
+    ).toBe(false);
+    expect(
+      canMutateMarketing({ appRole: "consultant", businessRole: "front_desk_student_affairs" }),
+    ).toBe(false);
+    expect(
+      canAttributeInquiryCampaign({
+        appRole: "consultant",
+        businessRole: "counsellor_consultant",
+      }),
+    ).toBe(false);
+    expect(
+      canAttributeInquiryCampaign({ appRole: "consultant", businessRole: "digital_manager" }),
     ).toBe(true);
   });
 

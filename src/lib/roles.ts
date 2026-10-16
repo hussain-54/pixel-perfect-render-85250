@@ -7,7 +7,17 @@ export type AppRole = "student" | "consultant" | "admin" | "super_admin";
 /** Portal shell / route tree kinds — `staff` is the consultant portal path alias. */
 export type PortalKind = "student" | "staff" | "admin";
 
-export type PortalHome = "/student/dashboard" | "/staff/dashboard" | "/admin/dashboard";
+export type PortalHome =
+  | "/student/dashboard"
+  | "/staff/dashboard"
+  | "/staff/front-desk"
+  | "/staff/hr"
+  | "/staff/marketing"
+  | "/staff/finance"
+  | "/staff/banking"
+  | "/staff/operations"
+  | "/staff/reports"
+  | "/admin/dashboard";
 
 export const portalHomeByRole: Record<AppRole, PortalHome> = {
   student: "/student/dashboard",

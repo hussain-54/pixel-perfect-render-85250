@@ -56,7 +56,7 @@ function StaffStudentProfile() {
       tab={tab}
       onTabChange={(next) => {
         void navigate({
-          search: (prev) => ({ ...prev, tab: next }),
+          search: (prev: { tab?: string }) => ({ ...prev, tab: next }),
           replace: true,
         });
       }}

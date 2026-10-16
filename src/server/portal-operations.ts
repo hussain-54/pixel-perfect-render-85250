@@ -10,8 +10,6 @@ import {
   type TrustedSession,
 } from "@/server/portal-auth";
 import {
-  canMutateOfficeOps,
-  canViewOfficeOps,
   canViewOpsExpenses,
   expenseImpliesVerifiedPayment,
   isValidPurchaseTransition,
@@ -21,9 +19,16 @@ import {
   type OpsPurchaseStatus,
 } from "@/lib/ops-rules";
 import {
+  getPermissionLevelFromMatrix,
   resolveBusinessRoleFromTrustedAppRole,
   type BusinessRole,
 } from "@/lib/business-permissions";
+import { rolesAtLeastAdmin } from "@/lib/roles";
+import {
+  businessRoleFromSession,
+  requireModulePermission,
+} from "@/server/staff-access";
+import { loadAuthorizationMatrix } from "@/server/permission-matrix-store";
 
 function toError(error: unknown): never {
   if (error instanceof AuthError) {
@@ -50,16 +55,49 @@ async function resolveSessionBusinessRole(session: TrustedSession): Promise<Busi
   return mapped;
 }
 
-function requireOpsView(session: TrustedSession, businessRole: BusinessRole | null) {
-  if (!canViewOfficeOps({ appRole: session.role, businessRole })) {
+/**
+ * Matrix gate for Orders/Sales/Purchase, with Accounts kept off the Ops portal
+ * (expenses visibility remains via canViewOpsExpenses / fees_payments).
+ */
+async function requireOpsView(session: TrustedSession, businessRole: BusinessRole | null) {
+  const role = businessRoleFromSession(session) ?? businessRole;
+  if (!rolesAtLeastAdmin(session.role) && role === "accounts_banking_finance") {
     throw new AuthError("You do not have access to Office Operations.", 403);
   }
+  await requireModulePermission(session, "orders_sales_purchase", 1, "Office Operations");
 }
 
-function requireOpsMutate(session: TrustedSession, businessRole: BusinessRole | null) {
-  if (!canMutateOfficeOps({ appRole: session.role, businessRole })) {
+async function requireOpsMutate(session: TrustedSession, businessRole: BusinessRole | null) {
+  const role = businessRoleFromSession(session) ?? businessRole;
+  if (!rolesAtLeastAdmin(session.role) && role === "accounts_banking_finance") {
     throw new AuthError("You do not have permission to change Office Operations records.", 403);
   }
+  await requireModulePermission(session, "orders_sales_purchase", 2, "Office Operations changes");
+}
+
+async function opsCapabilityFlags(session: TrustedSession, businessRole: BusinessRole | null) {
+  const role = businessRoleFromSession(session) ?? businessRole;
+  if (rolesAtLeastAdmin(session.role)) {
+    return { canMutate: true, canSeeExpenses: true };
+  }
+  if (role === "accounts_banking_finance") {
+    return {
+      canMutate: false,
+      canSeeExpenses: canViewOpsExpenses({ appRole: session.role, businessRole: role }),
+    };
+  }
+  const loaded = await loadAuthorizationMatrix(session);
+  if (loaded.source === "unavailable") {
+    throw new AuthError(
+      "Permission matrix is temporarily unavailable. Try again or contact an administrator.",
+      503,
+    );
+  }
+  const level = getPermissionLevelFromMatrix(loaded.matrix, role, "orders_sales_purchase");
+  return {
+    canMutate: level >= 2,
+    canSeeExpenses: canViewOpsExpenses({ appRole: session.role, businessRole: role }),
+  };
 }
 
 export const portalGetOpsDashboard = createServerFn({ method: "GET" }).handler(async () => {
@@ -67,11 +105,12 @@ export const portalGetOpsDashboard = createServerFn({ method: "GET" }).handler(a
     const session = await requireTrustedSession();
     requireRoles(session, ["consultant", "admin", "super_admin"]);
     const businessRole = await resolveSessionBusinessRole(session);
-    requireOpsView(session, businessRole);
+    await requireOpsView(session, businessRole);
+    const caps = await opsCapabilityFlags(session, businessRole);
 
     const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
-    const canMutate = canMutateOfficeOps({ appRole: session.role, businessRole });
-    const canSeeExpenses = canViewOpsExpenses({ appRole: session.role, businessRole });
+    const canMutate = caps.canMutate;
+    const canSeeExpenses = caps.canSeeExpenses;
 
     if (!usesSupabaseDataPlane(session)) {
       return {
@@ -239,7 +278,7 @@ export const portalUpsertOpsSupplier = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       const businessRole = await resolveSessionBusinessRole(session);
-      requireOpsMutate(session, businessRole);
+      await requireOpsMutate(session, businessRole);
       if (!data.name.trim()) throw new AuthError("Supplier name is required.", 400);
 
       const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
@@ -307,7 +346,7 @@ export const portalUpsertOpsInventoryItem = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       const businessRole = await resolveSessionBusinessRole(session);
-      requireOpsMutate(session, businessRole);
+      await requireOpsMutate(session, businessRole);
       if (!data.sku.trim() || !data.name.trim()) {
         throw new AuthError("SKU and name are required.", 400);
       }
@@ -369,7 +408,7 @@ export const portalCreatePurchaseOrder = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       const businessRole = await resolveSessionBusinessRole(session);
-      requireOpsMutate(session, businessRole);
+      await requireOpsMutate(session, businessRole);
       if (!data.lines.length) throw new AuthError("At least one purchase line is required.", 400);
       for (const line of data.lines) {
         if (line.quantityOrdered <= 0) throw new AuthError("Ordered quantity must be > 0.", 400);
@@ -428,7 +467,7 @@ export const portalUpdatePurchaseStatus = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       const businessRole = await resolveSessionBusinessRole(session);
-      requireOpsMutate(session, businessRole);
+      await requireOpsMutate(session, businessRole);
 
       const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {
@@ -482,7 +521,7 @@ export const portalReceivePurchaseLine = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       const businessRole = await resolveSessionBusinessRole(session);
-      requireOpsMutate(session, businessRole);
+      await requireOpsMutate(session, businessRole);
 
       const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {
@@ -586,7 +625,7 @@ export const portalCreateOpsSalesOrder = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       const businessRole = await resolveSessionBusinessRole(session);
-      requireOpsMutate(session, businessRole);
+      await requireOpsMutate(session, businessRole);
       if (!data.customerName.trim()) throw new AuthError("Customer name is required.", 400);
       const money = validateMoneyAmount(data.totalAmount);
       if (!money.ok) throw new AuthError(money.error, 400);
@@ -644,7 +683,7 @@ export const portalUpsertOpsExpense = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       const businessRole = await resolveSessionBusinessRole(session);
-      requireOpsMutate(session, businessRole);
+      await requireOpsMutate(session, businessRole);
       if (!data.description.trim()) throw new AuthError("Expense description is required.", 400);
       const money = validateMoneyAmount(data.amount);
       if (!money.ok) throw new AuthError(money.error, 400);

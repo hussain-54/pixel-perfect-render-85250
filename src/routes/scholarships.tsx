@@ -1,10 +1,11 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { SiteLayout, PageHero } from "@/components/site/SiteLayout";
-import { ScholarshipCard, CtaBand, CatalogueSampleNotice } from "@/components/site/blocks";
-import { FilterSelect, EmptyState, LoadingRows } from "@/components/common";
-import { useData } from "@/lib/useData";
-import { getScholarships } from "@/services";
+import { ScholarshipCard, CtaBand } from "@/components/site/blocks";
+import { FilterSelect, EmptyState, LoadingRows, ErrorState, portalErrorMessage } from "@/components/common";
+import type { ScholarshipListFilters } from "@/lib/scholarship-rules";
+import { listPublishedScholarships } from "@/services";
 import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/scholarships")({
@@ -13,33 +14,47 @@ export const Route = createFileRoute("/scholarships")({
       path: "/scholarships",
       title: "Scholarships — Global Roots Consultants",
       description:
-        "Browse sample scholarship listings by country, degree level, funding type and field.",
+        "Browse published scholarships by country, degree level, funding type and field.",
     }),
   component: Page,
 });
 
 function Page() {
-  const { data, isLoading } = useData(["scholarships"], getScholarships);
   const [f, setF] = useState({ country: "", level: "", funding: "", field: "" });
-  const all = data ?? [];
-  const list = all.filter(
-    (s) =>
-      (!f.country || s.country === f.country) &&
-      (!f.level || s.level === f.level) &&
-      (!f.funding || s.funding === f.funding) &&
-      (!f.field || s.field === f.field),
-  );
-  const uniq = (xs: string[]) => [...new Set(xs)].sort();
+  const { data, isLoading, isError, error } = useQuery({
+    queryKey: ["scholarships", "published", f.country, f.level, f.funding],
+    queryFn: () => {
+      const filters: ScholarshipListFilters = { pageSize: 100 };
+      if (f.country) filters.country = f.country;
+      if (f.level) filters.level = f.level;
+      if (f.funding) filters.funding = f.funding;
+      return listPublishedScholarships(filters);
+    },
+    staleTime: 60_000,
+  });
+
+  const all = data?.rows ?? [];
+  const list = all.filter((s) => !f.field || s.field === f.field);
+  const uniq = (xs: string[]) => [...new Set(xs.filter((x) => x && x !== "—"))].sort();
   const set = (k: keyof typeof f) => (v: string) => setF({ ...f, [k]: v });
+
   return (
     <SiteLayout>
       <PageHero
         eyebrow="Scholarships"
-        title="Featured scholarships and funding"
-        body="Explore sample listings such as France Eiffel, Hungarian Stipendium, Bright Scholarships and regional awards — then speak with a consultant about the right fit."
+        title="Scholarships and funding"
+        body="Published awards and funding opportunities. Confirm eligibility and deadlines with a Global Roots consultant before applying."
       />
       <section className="container-page section-y">
-        <CatalogueSampleNotice kind="scholarships" />
+        {data?.source === "unavailable" ? (
+          <p
+            role="note"
+            className="mb-6 border border-border bg-surface px-4 py-3 text-sm leading-relaxed text-muted-foreground"
+          >
+            The live scholarship catalog is not available yet. Check back after listings are
+            published, or contact a consultant for current opportunities.
+          </p>
+        ) : null}
         <div className="mb-8 flex flex-wrap gap-2.5 border-b border-border pb-5">
           <FilterSelect
             label="Country"
@@ -68,8 +83,17 @@ function Page() {
         </div>
         {isLoading ? (
           <LoadingRows rows={6} />
+        ) : isError ? (
+          <ErrorState body={portalErrorMessage(error)} />
         ) : list.length === 0 ? (
-          <EmptyState title="No scholarships match" body="Try clearing a filter." />
+          <EmptyState
+            title="No published scholarships"
+            body={
+              f.country || f.level || f.funding || f.field
+                ? "No published scholarships match these filters. Try clearing a filter."
+                : "There are no published scholarships right now. Speak with a consultant about current funding options."
+            }
+          />
         ) : (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {list.map((s) => (

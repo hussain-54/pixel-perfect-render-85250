@@ -21,6 +21,7 @@ import {
   canViewAdminOpsOverview,
   type AdminOpsOverviewMetrics,
 } from "@/lib/admin-ops-overview";
+import { denyFrontDeskConsultantWorkflows } from "@/server/staff-access";
 
 function toError(error: unknown): never {
   if (error instanceof AuthError) {
@@ -69,6 +70,7 @@ export const portalGetAdminOpsOverview = createServerFn({ method: "GET" }).handl
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "operations overview");
       const businessRole = await resolveSessionBusinessRole(session);
 
       if (!canViewAdminOpsOverview({ appRole: session.role, businessRole })) {
@@ -167,19 +169,22 @@ export const portalGetAdminOpsOverview = createServerFn({ method: "GET" }).handl
           .from("appointments")
           .select("id", { count: "exact", head: true })
           .in("status", ["requested", "confirmed"]),
-        rolesAtLeastAdmin(session.role) || studentIds.length === 0
+        // Never treat empty visible set as "load all" — firm-wide search is admin-only.
+        rolesAtLeastAdmin(session.role)
           ? client
               .from("students")
               .select("id, full_name, case_id, journey_stage, archived_at, updated_at")
               .is("archived_at", null)
               .order("updated_at", { ascending: false })
               .limit(40)
-          : client
-              .from("students")
-              .select("id, full_name, case_id, journey_stage, archived_at, updated_at")
-              .in("id", studentIds)
-              .order("updated_at", { ascending: false })
-              .limit(40),
+          : studentIds.length
+            ? client
+                .from("students")
+                .select("id, full_name, case_id, journey_stage, archived_at, updated_at")
+                .in("id", studentIds)
+                .order("updated_at", { ascending: false })
+                .limit(40)
+            : Promise.resolve({ data: [], error: null }),
       ]);
 
       for (const res of [

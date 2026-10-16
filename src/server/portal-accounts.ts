@@ -23,6 +23,7 @@ import {
   isValidPersonName,
   isValidWorkEmail,
   normalizeWorkEmail,
+  validateAccountRoleUpdate,
   type AccountListItem,
 } from "@/lib/account-provisioning";
 import { passwordRecoveryRedirectUrl, resolveAuthAppOrigin } from "@/lib/auth-redirects";
@@ -92,6 +93,11 @@ export type SetTemporaryPasswordInput = {
   userId: string;
   temporaryPassword: string;
   confirmPassword: string;
+};
+
+export type UpdateAccountBusinessRoleInput = {
+  userId: string;
+  businessRole: BusinessRole;
 };
 
 export const portalListAccountOptions = createServerFn({ method: "GET" }).handler(async () => {
@@ -350,6 +356,125 @@ export const portalCreateAccount = createServerFn({ method: "POST" })
         },
         message:
           "Account created. Share the temporary password through your secure channel. The employee can sign in immediately and may change their password from the portal when they choose.",
+      };
+    } catch (error) {
+      toError(error);
+    }
+  });
+
+/**
+ * Reassign business role (+ derived app role) on an existing profile.
+ * Does not create Auth users or duplicate profiles.
+ */
+export const portalUpdateAccountBusinessRole = createServerFn({ method: "POST" })
+  .validator((data: UpdateAccountBusinessRoleInput) => data)
+  .handler(async ({ data }) => {
+    try {
+      const session = await requireAdminAccountManager();
+      const userId = data.userId?.trim();
+      if (!userId) throw new AuthError("Account id is required.", 400);
+
+      const admin = requireAdminSupabase();
+      const { data: profile, error: profileErr } = await admin
+        .from("profiles")
+        .select("id, email, role, business_role")
+        .eq("id", userId)
+        .maybeSingle();
+      if (profileErr) throw new Error(profileErr.message);
+      if (!profile) throw new AuthError("Account not found.", 404);
+
+      const { count, error: countErr } = await admin
+        .from("profiles")
+        .select("id", { count: "exact", head: true })
+        .in("role", ["admin", "super_admin"]);
+      if (countErr) throw new Error(countErr.message);
+
+      const validated = validateAccountRoleUpdate({
+        targetAppRole: profile.role || "student",
+        nextBusinessRole: data.businessRole,
+        isSelf: userId === session.userId,
+        protectedAdminCount: count ?? 0,
+      });
+      if (!validated.ok) throw new AuthError(validated.error, validated.status);
+
+      const { appRole, businessRole, needsConsultantDesk, option } = validated;
+
+      // No-op when already on this pair — avoid duplicate desk/role writes.
+      if (profile.role === appRole && profile.business_role === businessRole) {
+        return {
+          ok: true as const,
+          account: {
+            id: profile.id,
+            email: profile.email,
+            appRole,
+            businessRole,
+          },
+          message: "Account already has this business role.",
+        };
+      }
+
+      const { requireAoSupabaseClient } = await import("@/server/ao-data");
+      const userClient = requireAoSupabaseClient();
+      const { adminSetUserRole, writeAudit } = await import("@/services/db");
+
+      if (profile.role !== appRole) {
+        try {
+          await adminSetUserRole(userClient, userId, appRole);
+        } catch (roleErr) {
+          const message = roleErr instanceof Error ? roleErr.message : "Role assignment failed.";
+          throw new AuthError(`Role update failed: ${message}`, 500);
+        }
+      }
+
+      const { error: bizErr } = await userClient
+        .from("profiles")
+        .update({ business_role: businessRole })
+        .eq("id", userId);
+      if (bizErr) {
+        throw new AuthError(`Business role update failed: ${bizErr.message}`, 500);
+      }
+
+      if (needsConsultantDesk) {
+        const { error: deskErr } = await userClient.from("consultants").upsert(
+          {
+            id: userId,
+            status: "active",
+            job_title: option.label,
+          },
+          { onConflict: "id" },
+        );
+        if (deskErr) {
+          throw new AuthError(`Role updated but consultant desk failed: ${deskErr.message}`, 500);
+        }
+      }
+
+      try {
+        await writeAudit(userClient, {
+          action: "account.role_updated",
+          entity_type: "profiles",
+          entity_id: userId,
+          metadata: {
+            email: profile.email,
+            previousAppRole: profile.role,
+            previousBusinessRole: profile.business_role,
+            appRole,
+            businessRole,
+            by: session.userId,
+          },
+        });
+      } catch {
+        /* audit failure should not hide success */
+      }
+
+      return {
+        ok: true as const,
+        account: {
+          id: profile.id,
+          email: profile.email,
+          appRole,
+          businessRole,
+        },
+        message: `Updated to ${option.label} (${appRole}).`,
       };
     } catch (error) {
       toError(error);

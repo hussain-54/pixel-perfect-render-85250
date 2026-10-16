@@ -129,8 +129,8 @@ export function LoadingRows({ rows = 4 }: { rows?: number }) {
 export function TableWrap({ children }: { children: ReactNode }) {
   return (
     <div className="panel overflow-hidden">
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[720px] text-left text-sm [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-border [&_th]:bg-transparent [&_th]:px-4 [&_th]:py-2.5 [&_th]:text-[0.6875rem] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.1em] [&_th]:text-muted-foreground [&_td]:border-t [&_td]:border-border/70 [&_td]:px-4 [&_td]:py-3 [&_td]:align-middle">
+      <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
+        <table className="w-full min-w-[640px] text-left text-sm sm:min-w-[720px] [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-border [&_th]:bg-transparent [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-[0.6875rem] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.1em] [&_th]:text-muted-foreground sm:[&_th]:px-4 [&_td]:border-t [&_td]:border-border/70 [&_td]:px-3 [&_td]:py-3 [&_td]:align-middle sm:[&_td]:px-4 [&_a]:rounded-sm [&_a]:focus-visible:outline-none [&_a]:focus-visible:ring-2 [&_a]:focus-visible:ring-royal/40 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-royal/40 [&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-royal/40">
           {children}
         </table>
       </div>

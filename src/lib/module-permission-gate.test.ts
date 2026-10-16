@@ -382,4 +382,63 @@ describe("Phase 3 module permission gates (unit)", () => {
       ),
     ).rejects.toThrow(AuthError);
   });
+
+  it("HR / Digital Marketing / Orders gates honor lowered persisted matrix cells", () => {
+    const lowered = mergePermissionMatrixCells([
+      { businessRole: "hr_system", module: "hr_attendance", level: 1 },
+      { businessRole: "digital_manager", module: "digital_marketing", level: 1 },
+      { businessRole: "office_ops", module: "orders_sales_purchase", level: 1 },
+    ]);
+
+    expect(() =>
+      assertModulePermission(
+        session({ role: "consultant", businessRole: "hr_system" }),
+        "hr_attendance",
+        2,
+        "HR record changes",
+        lowered,
+      ),
+    ).toThrow(AuthError);
+    expect(() =>
+      assertModulePermission(
+        session({ role: "consultant", businessRole: "digital_manager" }),
+        "digital_marketing",
+        2,
+        "Digital Marketing changes",
+        lowered,
+      ),
+    ).toThrow(AuthError);
+    expect(() =>
+      assertModulePermission(
+        session({ role: "consultant", businessRole: "office_ops" }),
+        "orders_sales_purchase",
+        2,
+        "Office Operations changes",
+        lowered,
+      ),
+    ).toThrow(AuthError);
+
+    // Default matrix still grants department edit/full on their home modules.
+    expect(() =>
+      assertModulePermission(
+        session({ role: "consultant", businessRole: "hr_system" }),
+        "hr_attendance",
+        2,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertModulePermission(
+        session({ role: "consultant", businessRole: "digital_manager" }),
+        "digital_marketing",
+        2,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertModulePermission(
+        session({ role: "consultant", businessRole: "office_ops" }),
+        "orders_sales_purchase",
+        2,
+      ),
+    ).not.toThrow();
+  });
 });

@@ -187,8 +187,9 @@ export const SIGNUP_FEE_RLS_INTEGRATION_MATRIX = [
   },
   {
     actor: "Accounts/verifier",
-    action: "SELECT any; verify via RPC / UPDATE terminal",
-    expected: "allow via can_verify_signup_fee",
+    action: "SELECT students (R1 …14090000); verify via RPC / UPDATE terminal",
+    expected:
+      "students SELECT only with unpaid|claimed fee queue; fee table + verify RPC via can_verify_signup_fee",
   },
   {
     actor: "Admin",

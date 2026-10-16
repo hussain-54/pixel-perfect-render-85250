@@ -88,3 +88,5 @@ $$;
 revoke all on function public.front_desk_assign_counsellor(uuid, uuid) from public;
 revoke all on function public.front_desk_assign_counsellor(uuid, uuid) from anon;
 grant execute on function public.front_desk_assign_counsellor(uuid, uuid) to authenticated;
+-- Match production ACL evidence (authenticated + service_role). DROP+CREATE clears prior grants.
+grant execute on function public.front_desk_assign_counsellor(uuid, uuid) to service_role;

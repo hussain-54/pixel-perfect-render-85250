@@ -8,6 +8,8 @@ import {
   type AppRole,
   type PortalHome,
 } from "@/lib/roles";
+import type { BusinessRole } from "@/lib/business-permissions";
+import { staffHomeForBusinessRole } from "@/lib/staff-business-access";
 import { passwordRecoveryRedirectUrl } from "@/lib/auth-redirects";
 import { validatePasswordConfirmation } from "@/lib/password-policy";
 import { accessTokenNeedsRefresh } from "@/lib/session-auth";
@@ -28,7 +30,17 @@ const REMEMBER_EMAIL_KEY = "gr_remember_email";
 const DEMO_SESSION_KEY = "gr_demo_session";
 
 export type SignInResult =
-  { ok: true; role: AppRole; redirectTo: PortalHome } | { ok: false; error: string };
+  | {
+      ok: true;
+      role: AppRole;
+      redirectTo: PortalHome;
+      businessRole?: BusinessRole | null;
+    }
+  | { ok: false; error: string };
+
+function landingForSession(role: AppRole, businessRole?: BusinessRole | null): PortalHome {
+  return staffHomeForBusinessRole(role, businessRole ?? null);
+}
 
 function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
@@ -244,7 +256,8 @@ export async function signInWithPassword(options: {
         return {
           ok: true,
           role: established.role,
-          redirectTo: portalHomeByRole[established.role],
+          businessRole: established.businessRole ?? null,
+          redirectTo: landingForSession(established.role, established.businessRole),
         };
       } catch {
         return { ok: false, error: "Unable to sign in right now. Please try again." };
@@ -265,7 +278,12 @@ export async function signInWithPassword(options: {
         });
         const role = established.role;
         // Optional password change remains available in-portal; never block entry.
-        return { ok: true, role, redirectTo: portalHomeByRole[role] };
+        return {
+          ok: true,
+          role,
+          businessRole: established.businessRole ?? null,
+          redirectTo: landingForSession(role, established.businessRole),
+        };
       }
 
       const supabaseMsg = error?.message ?? "Invalid email or password. Please try again.";

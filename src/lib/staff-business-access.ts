@@ -12,6 +12,7 @@ import {
   type BusinessModule,
   type BusinessRole,
 } from "@/lib/business-permissions";
+import { staffLandingPathForBusinessRole } from "@/lib/specialty-desk-access";
 
 /** Consultant-desk modules Front Desk must not access (server + nav). */
 export const FRONT_DESK_DENIED_MODULES = [
@@ -27,7 +28,10 @@ export const FRONT_DESK_DENIED_MODULES = [
 
 export type FrontDeskDeniedModule = (typeof FRONT_DESK_DENIED_MODULES)[number];
 
-/** Staff routes that Front Desk must not open. */
+/**
+ * Staff routes Front Desk must not open.
+ * Keep in sync with `src/routes/staff/route.tsx` beforeLoad (single source of truth for tests).
+ */
 export const FRONT_DESK_DENIED_PATH_PREFIXES = [
   "/staff/applications",
   "/staff/documents",
@@ -36,7 +40,9 @@ export const FRONT_DESK_DENIED_PATH_PREFIXES = [
   "/staff/leads",
   "/staff/reports",
   "/staff/activity",
-  "/staff/students/", // detailed student workspace (assessments, etc.)
+  "/staff/students", // roster + detailed workspace
+  "/staff/appointments",
+  "/staff/dashboard",
 ] as const;
 
 export function isFrontDeskBusinessRole(businessRole: BusinessRole | null | undefined): boolean {
@@ -56,17 +62,12 @@ export function normalizeTrustedBusinessRole(value: unknown): BusinessRole | nul
   return value;
 }
 
-/** Front Desk home within the staff portal. */
+/** Staff/admin/student landing — specialty desks land on their module under `/staff`. */
 export function staffHomeForBusinessRole(
   appRole: AppRole,
   businessRole: BusinessRole | null | undefined,
-): "/staff/front-desk" | "/staff/dashboard" | "/admin/dashboard" | "/student/dashboard" {
-  if (appRole === "student") return "/student/dashboard";
-  if (rolesAtLeastAdmin(appRole)) return "/admin/dashboard";
-  if (appRole === "consultant" && isFrontDeskBusinessRole(businessRole)) {
-    return "/staff/front-desk";
-  }
-  return "/staff/dashboard";
+): ReturnType<typeof staffLandingPathForBusinessRole> {
+  return staffLandingPathForBusinessRole(appRole, businessRole);
 }
 
 export function frontDeskNavAllowed(path: string): boolean {
@@ -77,12 +78,10 @@ export function frontDeskNavAllowed(path: string): boolean {
 
 export function isFrontDeskDeniedPath(path: string): boolean {
   if (frontDeskNavAllowed(path)) return false;
-  if (path === "/staff" || path === "/staff/" || path === "/staff/dashboard") {
-    // Dashboard redirects to front-desk; treat as not denied for guard redirect.
-    return false;
-  }
+  // Bare /staff index is OK (layout); dashboard itself is denied and redirects to front-desk.
+  if (path === "/staff" || path === "/staff/") return false;
   return FRONT_DESK_DENIED_PATH_PREFIXES.some(
-    (prefix) => path === prefix || path.startsWith(prefix),
+    (prefix) => path === prefix || path.startsWith(`${prefix}/`) || path.startsWith(prefix),
   );
 }
 

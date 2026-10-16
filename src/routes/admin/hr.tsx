@@ -27,10 +27,11 @@ import {
 import type { HrAttendanceStatus, HrEmploymentStatus } from "@/lib/hr-rules";
 
 export const Route = createFileRoute("/admin/hr")({
-  component: AdminHr,
+  component: HrModulePage,
 });
 
-function AdminHr() {
+/** Shared HR workspace — also mounted at `/staff/hr` for specialty desks. */
+export function HrModulePage() {
   const queryClient = useQueryClient();
   const dashQ = useQuery({
     queryKey: ["admin", "hr-dashboard"],

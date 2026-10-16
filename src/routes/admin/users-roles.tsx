@@ -43,7 +43,14 @@ function AdminUsersRoles() {
     [],
   );
 
-  const showAccounts = tab === "users" || tab === "create" || tab === "actions";
+  const accountFocus =
+    tab === "create"
+      ? "create"
+      : tab === "actions"
+        ? "actions"
+        : tab === "users"
+          ? "directory"
+          : null;
 
   return (
     <div className="space-y-6">
@@ -72,17 +79,20 @@ function AdminUsersRoles() {
         <TabsContent value="users" className="space-y-4">
           <Panel title="User Management">
             <p className="mb-4 text-sm text-muted-foreground">
-              Search, filter, and review existing portal accounts.
+              Search, filter, review existing portal accounts, and update business roles without
+              creating duplicates.
             </p>
+            {accountFocus === "directory" ? <AdminAccountManagement focus="directory" /> : null}
           </Panel>
         </TabsContent>
 
         <TabsContent value="create" className="space-y-4">
           <Panel title="Create User Account">
             <p className="mb-4 text-sm text-muted-foreground">
-              Use the create form below to provision a new Auth user with an app role and business
-              role.
+              Provision a new Auth user with an app role and business role. Existing emails are
+              rejected.
             </p>
+            {accountFocus === "create" ? <AdminAccountManagement focus="create" /> : null}
           </Panel>
         </TabsContent>
 
@@ -100,14 +110,13 @@ function AdminUsersRoles() {
         <TabsContent value="actions" className="space-y-4">
           <Panel title="Account Actions">
             <p className="mb-4 text-sm text-muted-foreground">
-              Reset passwords, revoke sessions, and update consultant desk status from the account
-              list actions below.
+              Reset passwords, revoke sessions, update consultant desk status, and reassign business
+              roles from the account list.
             </p>
+            {accountFocus === "actions" ? <AdminAccountManagement focus="actions" /> : null}
           </Panel>
         </TabsContent>
       </Tabs>
-
-      {showAccounts ? <AdminAccountManagement /> : null}
     </div>
   );
 }

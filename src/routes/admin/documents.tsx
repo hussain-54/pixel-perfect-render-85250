@@ -1,5 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PageHeader, TableWrap, fmtDate, LoadingRows } from "@/components/common";
+import {
+  PageHeader,
+  TableWrap,
+  fmtDate,
+  LoadingRows,
+  EmptyState,
+  ErrorState,
+  portalErrorMessage,
+} from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { isActionRequired } from "@/components/portal/ActionRequiredDocs";
 import { useData } from "@/lib/useData";
@@ -18,6 +26,10 @@ function AdminDocuments() {
       <PageHeader title="Documents" subtitle="Global document registry." />
       {docsQ.isLoading ? (
         <LoadingRows />
+      ) : docsQ.isError ? (
+        <ErrorState body={portalErrorMessage(docsQ.error)} />
+      ) : !docsQ.data?.length ? (
+        <EmptyState title="No documents" body="No student documents in scope yet." />
       ) : (
         <TableWrap>
           <thead>
@@ -31,9 +43,11 @@ function AdminDocuments() {
             </tr>
           </thead>
           <tbody>
-            {(docsQ.data ?? []).map((d) => (
+            {docsQ.data.map((d) => (
               <tr key={d.id} className={cn(isActionRequired(d) && "bg-warning-soft/50")}>
-                <td className="font-medium text-navy">{lookupStudent(d.studentId)?.name ?? "—"}</td>
+                <td className="font-medium text-navy">
+                  {d.studentName ?? lookupStudent(d.studentId)?.name ?? "—"}
+                </td>
                 <td>{d.name}</td>
                 <td>{d.category}</td>
                 <td>{fmtDate(d.uploaded)}</td>

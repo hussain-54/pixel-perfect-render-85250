@@ -72,19 +72,22 @@ function SignInPage() {
     return Object.keys(next).length === 0;
   }
 
-  function resolveDestination(role: AppRole): PortalHome {
+  function resolveDestination(
+    role: AppRole,
+    preferred?: PortalHome,
+  ): PortalHome {
     if (redirectTo) {
       if (redirectTo.startsWith("/student") && roleCanAccessPortal(role, "student")) {
-        return redirectTo;
+        return redirectTo as PortalHome;
       }
       if (redirectTo.startsWith("/staff") && roleCanAccessPortal(role, "staff")) {
-        return redirectTo;
+        return redirectTo as PortalHome;
       }
       if (redirectTo.startsWith("/admin") && roleCanAccessPortal(role, "admin")) {
-        return redirectTo;
+        return redirectTo as PortalHome;
       }
     }
-    return portalHomeByRole[role];
+    return preferred ?? portalHomeByRole[role];
   }
 
   async function onSubmit(e: FormEvent) {
@@ -100,7 +103,7 @@ function SignInPage() {
         setError(result.error);
         return;
       }
-      await navigate({ to: resolveDestination(result.role) });
+      await navigate({ to: resolveDestination(result.role, result.redirectTo) });
     } finally {
       setLoading(false);
     }

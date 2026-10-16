@@ -1,5 +1,12 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { PageHeader, TableWrap, fmtDate, LoadingRows } from "@/components/common";
+import {
+  PageHeader,
+  TableWrap,
+  LoadingRows,
+  EmptyState,
+  ErrorState,
+  portalErrorMessage,
+} from "@/components/common";
 import { AdminModuleSubnav } from "@/components/portal/AdminModuleSubnav";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useData } from "@/lib/useData";
@@ -28,6 +35,10 @@ function AdminApplications() {
       />
       {appsQ.isLoading ? (
         <LoadingRows />
+      ) : appsQ.isError ? (
+        <ErrorState body={portalErrorMessage(appsQ.error)} />
+      ) : !appsQ.data?.length ? (
+        <EmptyState title="No applications" body="No university applications in scope yet." />
       ) : (
         <TableWrap>
           <thead>
@@ -41,10 +52,12 @@ function AdminApplications() {
             </tr>
           </thead>
           <tbody>
-            {(appsQ.data ?? []).map((a) => (
+            {appsQ.data.map((a) => (
               <tr key={a.id}>
                 <td>{a.id}</td>
-                <td className="font-medium text-navy">{lookupStudent(a.studentId)?.name ?? "—"}</td>
+                <td className="font-medium text-navy">
+                  {a.studentName ?? lookupStudent(a.studentId)?.name ?? "—"}
+                </td>
                 <td>{a.university}</td>
                 <td>{a.program}</td>
                 <td>{a.intake}</td>

@@ -33,13 +33,20 @@ describe("Front Desk trusted business role", () => {
     expect(staffHomeForBusinessRole("consultant", "counsellor_consultant")).toBe(
       "/staff/dashboard",
     );
+    expect(staffHomeForBusinessRole("consultant", "hr_system")).toBe("/staff/hr");
+    expect(staffHomeForBusinessRole("consultant", "digital_manager")).toBe("/staff/marketing");
     expect(frontDeskNavAllowed("/staff/register")).toBe(true);
     expect(frontDeskNavAllowed("/staff/intake")).toBe(true);
     expect(isFrontDeskDeniedPath("/staff/applications")).toBe(true);
     expect(isFrontDeskDeniedPath("/staff/offers")).toBe(true);
     expect(isFrontDeskDeniedPath("/staff/documents")).toBe(true);
     expect(isFrontDeskDeniedPath("/staff/tasks")).toBe(true);
+    expect(isFrontDeskDeniedPath("/staff/students")).toBe(true);
+    expect(isFrontDeskDeniedPath("/staff/students/abc")).toBe(true);
+    expect(isFrontDeskDeniedPath("/staff/appointments")).toBe(true);
+    expect(isFrontDeskDeniedPath("/staff/dashboard")).toBe(true);
     expect(isFrontDeskDeniedPath("/staff/front-desk")).toBe(false);
+    expect(isFrontDeskDeniedPath("/staff/register")).toBe(false);
   });
 
   it("3–4. Front Desk workflow deny predicate + client ownership rejected", () => {

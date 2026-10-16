@@ -29,10 +29,11 @@ import {
 import type { OpsExpenseStatus, OpsPurchaseStatus } from "@/lib/ops-rules";
 
 export const Route = createFileRoute("/admin/operations")({
-  component: AdminOperations,
+  component: OperationsModulePage,
 });
 
-function AdminOperations() {
+/** Shared office-ops workspace — also mounted at `/staff/operations` for specialty desks. */
+export function OperationsModulePage() {
   const queryClient = useQueryClient();
   const dashQ = useQuery({
     queryKey: ["admin", "ops-dashboard"],

@@ -110,6 +110,12 @@ Do not paste real credentials into this file. Store JWT material only in an appr
 1. **`…14040000` not reflected on staging** — missing `is_front_desk_fee_registrar`; fee RLS still on `is_intake_registrar`.
 2. **No authoritative application migration history table** — cannot list which version rows exist.
 
+### Remediation plan (local only — not applied)
+
+Missing-only fee-registrar apply plan (preconditions, R1/R2 non-conflict, post-verify, owner decision):  
+[`docs/database/FEE-REGISTRAR-14040000-REMEDIATION-PLAN.md`](../database/FEE-REGISTRAR-14040000-REMEDIATION-PLAN.md).  
+**B3 remains NOT RUN** until owner executes that plan and records evidence here.
+
 ### Unknowns (need more read-only evidence)
 
 - Whether `registered_by` column / stamp trigger / `is_front_desk` / `list_front_desk_intake_summaries` / `is_intake_registrar` exist.
@@ -383,8 +389,8 @@ Note: `signup_fee_payments` may allow FD via `is_front_desk_fee_registrar` — *
 
 | ID | Residual | Status |
 | --- | --- | --- |
-| R1 | `students_select_fee_verifier` — org-wide students SELECT for fee verifiers | **OPEN** — not in M1 closure |
-| R2 | `front_desk_assign_counsellor` SECURITY DEFINER returns full `public.students` row | **OPEN** — not in M1 closure |
+| R1 | `students_select_fee_verifier` — org-wide students SELECT for fee verifiers | **OPEN** — local prep `…14090000` queue-scope; remote apply + JWT proof required (`docs/database/R1-R2-OWNER-VERIFICATION.sql`) |
+| R2 | `front_desk_assign_counsellor` SECURITY DEFINER returns full `public.students` row | **OPEN** — local prep `…14080000` narrow return; remote apply + JWT proof required |
 | R3 | Permissive OR paths: FD still SELECTs if admin, fee-verifier, `assigned_consultant_id=self`, or `profile_id=self` | **OPEN** — mitigated for E by Gate D; not eliminated |
 
 Do not mark R1–R3 PASS when recording E1 PASS.

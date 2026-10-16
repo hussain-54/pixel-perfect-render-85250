@@ -50,7 +50,7 @@ describe("admin ops overview", () => {
     expect(metrics.outstandingUniversityFees).toBe(7);
   });
 
-  it("allows admin/manager ops overview and denies bare counsellor for ops matrix", () => {
+  it("allows admin/manager ops overview; denies counsellor and Front Desk firm-wide totals", () => {
     expect(
       canViewAdminOpsOverview({
         appRole: "admin",
@@ -66,9 +66,21 @@ describe("admin ops overview", () => {
     expect(
       canViewAdminOpsOverview({
         appRole: "consultant",
+        businessRole: "manager",
+      }),
+    ).toBe(true);
+    expect(
+      canViewAdminOpsOverview({
+        appRole: "consultant",
         businessRole: "counsellor_consultant",
       }),
-    ).toBe(true); // reports+students view (1) for counsellor
+    ).toBe(false);
+    expect(
+      canViewAdminOpsOverview({
+        appRole: "consultant",
+        businessRole: "front_desk_student_affairs",
+      }),
+    ).toBe(false);
   });
 
   it("hides document details from accounts and finance aggregates from counsellor", () => {

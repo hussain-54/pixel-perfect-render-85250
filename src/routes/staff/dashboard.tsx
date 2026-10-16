@@ -18,14 +18,23 @@ import { Button } from "@/components/ui/button";
 import { useData } from "@/lib/useData";
 import { getOfficerDashboard, reviewStudentDocument } from "@/services";
 import { cn } from "@/lib/utils";
-import { isFrontDeskBusinessRole } from "@/lib/staff-business-access";
+import { isFrontDeskBusinessRole, staffHomeForBusinessRole } from "@/lib/staff-business-access";
+import { isSpecialtyOnlyBusinessRole } from "@/lib/specialty-desk-access";
 import type { BusinessRole } from "@/lib/business-permissions";
+import type { AppRole } from "@/lib/roles";
 
 export const Route = createFileRoute("/staff/dashboard")({
   beforeLoad: ({ context }) => {
-    const auth = (context as { auth?: { businessRole?: BusinessRole | null } }).auth;
+    const auth = (
+      context as { auth?: { role?: AppRole; businessRole?: BusinessRole | null } }
+    ).auth;
     if (isFrontDeskBusinessRole(auth?.businessRole)) {
       throw redirect({ to: "/staff/front-desk" });
+    }
+    if (isSpecialtyOnlyBusinessRole(auth?.businessRole)) {
+      throw redirect({
+        href: staffHomeForBusinessRole(auth?.role ?? "consultant", auth?.businessRole),
+      });
     }
   },
   component: StaffDashboard,

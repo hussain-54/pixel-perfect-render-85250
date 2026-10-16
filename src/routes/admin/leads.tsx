@@ -135,7 +135,8 @@ function AdminLeads() {
                     {l.consultantId &&
                     !(assigneesQ.data ?? []).some((o) => o.id === l.consultantId) ? (
                       <option value={l.consultantId}>
-                        {lookupConsultant(l.consultantId)?.name ?? "Assigned"}
+                        {lookupConsultant(l.consultantId)?.name ??
+                          `Assigned (${l.consultantId.slice(0, 8)})`}
                       </option>
                     ) : null}
                   </select>

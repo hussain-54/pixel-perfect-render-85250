@@ -9,19 +9,26 @@ import {
   type TrustedSession,
 } from "@/server/portal-auth";
 import {
-  canMutateMarketing,
-  canViewMarketing,
   campaignConversionMetrics,
   campaignInquiryMetrics,
+  canAttributeInquiryCampaign,
   isValidCampaignStatusTransition,
   validateCampaignCreate,
   validateCampaignId,
   type MarketingCampaignStatus,
 } from "@/lib/marketing-rules";
 import {
+  getPermissionLevelFromMatrix,
   resolveBusinessRoleFromTrustedAppRole,
   type BusinessRole,
 } from "@/lib/business-permissions";
+import { rolesAtLeastAdmin } from "@/lib/roles";
+import {
+  businessRoleFromSession,
+  denyFrontDeskConsultantWorkflows,
+  requireModulePermission,
+} from "@/server/staff-access";
+import { loadAuthorizationMatrix } from "@/server/permission-matrix-store";
 
 function toError(error: unknown): never {
   if (error instanceof AuthError) {
@@ -48,6 +55,32 @@ async function resolveSessionBusinessRole(session: TrustedSession): Promise<Busi
   return mapped;
 }
 
+async function requireMarketingView(session: TrustedSession) {
+  denyFrontDeskConsultantWorkflows(session, "Digital Marketing");
+  await requireModulePermission(session, "digital_marketing", 1, "Digital Marketing");
+}
+
+async function requireMarketingMutate(session: TrustedSession) {
+  denyFrontDeskConsultantWorkflows(session, "Digital Marketing changes");
+  await requireModulePermission(session, "digital_marketing", 2, "Digital Marketing changes");
+}
+
+async function marketingCanMutate(
+  session: TrustedSession,
+  businessRole: BusinessRole | null,
+): Promise<boolean> {
+  if (rolesAtLeastAdmin(session.role)) return true;
+  const loaded = await loadAuthorizationMatrix(session);
+  if (loaded.source === "unavailable") {
+    throw new AuthError(
+      "Permission matrix is temporarily unavailable. Try again or contact an administrator.",
+      503,
+    );
+  }
+  const role = businessRoleFromSession(session) ?? businessRole;
+  return getPermissionLevelFromMatrix(loaded.matrix, role, "digital_marketing") >= 2;
+}
+
 export type MarketingCampaignView = {
   id: string;
   name: string;
@@ -72,12 +105,10 @@ export const portalGetMarketingOverview = createServerFn({ method: "GET" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       const businessRole = await resolveSessionBusinessRole(session);
-      if (!canViewMarketing({ appRole: session.role, businessRole })) {
-        throw new AuthError("You do not have access to Digital Marketing.", 403);
-      }
+      await requireMarketingView(session);
 
       const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
-      const canMutate = canMutateMarketing({ appRole: session.role, businessRole });
+      const canMutate = await marketingCanMutate(session, businessRole);
 
       if (!usesSupabaseDataPlane(session)) {
         return {
@@ -191,10 +222,7 @@ export const portalUpsertMarketingCampaign = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
-      const businessRole = await resolveSessionBusinessRole(session);
-      if (!canMutateMarketing({ appRole: session.role, businessRole })) {
-        throw new AuthError("Only Digital Marketing / Manager / Admin may edit campaigns.", 403);
-      }
+      await requireMarketingMutate(session);
 
       const validated = validateCampaignCreate(data);
       if (!validated.ok) throw new AuthError(validated.error, 400);
@@ -285,10 +313,7 @@ export const portalArchiveMarketingCampaign = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
-      const businessRole = await resolveSessionBusinessRole(session);
-      if (!canMutateMarketing({ appRole: session.role, businessRole })) {
-        throw new AuthError("Not authorized to archive campaigns.", 403);
-      }
+      await requireMarketingMutate(session);
 
       const idCheck = validateCampaignId(data.campaignId);
       if (!idCheck.ok || !idCheck.id)
@@ -334,11 +359,12 @@ export const portalAttributeInquiryToCampaign = createServerFn({ method: "POST" 
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      denyFrontDeskConsultantWorkflows(session, "inquiry campaign attribution");
       const businessRole = await resolveSessionBusinessRole(session);
+      // Marketing Edit only — never open to every consultant / Front Desk.
       const allowed =
-        canMutateMarketing({ appRole: session.role, businessRole }) ||
-        businessRole === "front_desk_student_affairs" ||
-        session.role === "consultant";
+        (await marketingCanMutate(session, businessRole)) &&
+        canAttributeInquiryCampaign({ appRole: session.role, businessRole });
       if (!allowed) {
         throw new AuthError("Not authorized to attribute inquiries.", 403);
       }
@@ -431,10 +457,7 @@ export const portalListAttributionHistory = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
-      const businessRole = await resolveSessionBusinessRole(session);
-      if (!canViewMarketing({ appRole: session.role, businessRole })) {
-        throw new AuthError("You do not have access to attribution history.", 403);
-      }
+      await requireMarketingView(session);
 
       const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {

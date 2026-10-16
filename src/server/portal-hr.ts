@@ -9,9 +9,6 @@ import {
   type TrustedSession,
 } from "@/server/portal-auth";
 import {
-  canDecideLeave,
-  canMutateHr,
-  canViewHr,
   isValidEmploymentTransition,
   summarizeAttendance,
   validateAttendanceDate,
@@ -22,9 +19,16 @@ import {
   type HrEmploymentStatus,
 } from "@/lib/hr-rules";
 import {
+  getPermissionLevelFromMatrix,
   resolveBusinessRoleFromTrustedAppRole,
   type BusinessRole,
 } from "@/lib/business-permissions";
+import { rolesAtLeastAdmin } from "@/lib/roles";
+import {
+  businessRoleFromSession,
+  requireModulePermission,
+} from "@/server/staff-access";
+import { loadAuthorizationMatrix } from "@/server/permission-matrix-store";
 
 function toError(error: unknown): never {
   if (error instanceof AuthError) {
@@ -51,16 +55,29 @@ async function resolveSessionBusinessRole(session: TrustedSession): Promise<Busi
   return mapped;
 }
 
-function requireHrView(session: TrustedSession, businessRole: BusinessRole | null) {
-  if (!canViewHr({ appRole: session.role, businessRole })) {
-    throw new AuthError("You do not have access to HR & Attendance.", 403);
-  }
+/** Loaded matrix gate (DB authoritative on live); preserves role restrictions via requireModulePermission. */
+async function requireHrView(session: TrustedSession) {
+  await requireModulePermission(session, "hr_attendance", 1, "HR & Attendance");
 }
 
-function requireHrMutate(session: TrustedSession, businessRole: BusinessRole | null) {
-  if (!canMutateHr({ appRole: session.role, businessRole })) {
-    throw new AuthError("You do not have permission to change HR records.", 403);
+async function requireHrMutate(session: TrustedSession) {
+  await requireModulePermission(session, "hr_attendance", 2, "HR record changes");
+}
+
+async function hrCapabilityFlags(session: TrustedSession, businessRole: BusinessRole | null) {
+  if (rolesAtLeastAdmin(session.role)) {
+    return { canMutate: true, canDecideLeave: true };
   }
+  const loaded = await loadAuthorizationMatrix(session);
+  if (loaded.source === "unavailable") {
+    throw new AuthError(
+      "Permission matrix is temporarily unavailable. Try again or contact an administrator.",
+      503,
+    );
+  }
+  const role = businessRoleFromSession(session) ?? businessRole;
+  const level = getPermissionLevelFromMatrix(loaded.matrix, role, "hr_attendance");
+  return { canMutate: level >= 2, canDecideLeave: level >= 3 };
 }
 
 export type HrEmployeeView = {
@@ -130,11 +147,10 @@ export const portalGetHrDashboard = createServerFn({ method: "GET" }).handler(as
     const session = await requireTrustedSession();
     requireRoles(session, ["consultant", "admin", "super_admin"]);
     const businessRole = await resolveSessionBusinessRole(session);
-    requireHrView(session, businessRole);
+    await requireHrView(session);
+    const caps = await hrCapabilityFlags(session, businessRole);
 
     const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
-    const canMutate = canMutateHr({ appRole: session.role, businessRole });
-    const canLeave = canDecideLeave({ appRole: session.role, businessRole });
 
     if (!usesSupabaseDataPlane(session)) {
       return {
@@ -143,8 +159,8 @@ export const portalGetHrDashboard = createServerFn({ method: "GET" }).handler(as
         attendance: [] as HrAttendanceView[],
         leavePending: [] as HrLeaveView[],
         summaries: summarizeAttendance([]),
-        canMutate,
-        canDecideLeave: canLeave,
+        canMutate: caps.canMutate,
+        canDecideLeave: caps.canDecideLeave,
         isSuperAdmin: session.role === "super_admin",
       };
     }
@@ -209,8 +225,8 @@ export const portalGetHrDashboard = createServerFn({ method: "GET" }).handler(as
       attendance,
       leavePending,
       summaries: summarizeAttendance(attendance),
-      canMutate,
-      canDecideLeave: canLeave,
+      canMutate: caps.canMutate,
+      canDecideLeave: caps.canDecideLeave,
       isSuperAdmin: session.role === "super_admin",
     };
   } catch (error) {
@@ -222,8 +238,7 @@ export const portalListHrEmployees = createServerFn({ method: "GET" }).handler(a
   try {
     const session = await requireTrustedSession();
     requireRoles(session, ["consultant", "admin", "super_admin"]);
-    const businessRole = await resolveSessionBusinessRole(session);
-    requireHrView(session, businessRole);
+    await requireHrView(session);
 
     const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
     if (!usesSupabaseDataPlane(session)) {
@@ -260,14 +275,15 @@ export const portalListHrAttendance = createServerFn({ method: "GET" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       const businessRole = await resolveSessionBusinessRole(session);
-      requireHrView(session, businessRole);
+      await requireHrView(session);
+      const caps = await hrCapabilityFlags(session, businessRole);
 
       const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {
         return {
           ok: true as const,
           records: [] as HrAttendanceView[],
-          canMutate: canMutateHr({ appRole: session.role, businessRole }),
+          canMutate: caps.canMutate,
         };
       }
 
@@ -293,7 +309,7 @@ export const portalListHrAttendance = createServerFn({ method: "GET" })
           status: r.status,
           notes: r.notes,
         })),
-        canMutate: canMutateHr({ appRole: session.role, businessRole }),
+        canMutate: caps.canMutate,
       };
     } catch (error) {
       toError(error);
@@ -318,8 +334,7 @@ export const portalUpsertHrEmployee = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
-      const businessRole = await resolveSessionBusinessRole(session);
-      requireHrMutate(session, businessRole);
+      await requireHrMutate(session);
 
       const validated = validateEmployeeCreate(data);
       if (!validated.ok) throw new AuthError(validated.error, 400);
@@ -443,8 +458,7 @@ export const portalRecordHrAttendance = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
-      const businessRole = await resolveSessionBusinessRole(session);
-      requireHrMutate(session, businessRole);
+      await requireHrMutate(session);
 
       const dateCheck = validateAttendanceDate(data.workDate);
       if (!dateCheck.ok) throw new AuthError(dateCheck.error, 400);
@@ -528,8 +542,7 @@ export const portalCorrectHrAttendance = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
-      const businessRole = await resolveSessionBusinessRole(session);
-      requireHrMutate(session, businessRole);
+      await requireHrMutate(session);
 
       const reason = data.reason.trim();
       if (reason.length < 3)
@@ -615,7 +628,7 @@ export const portalSubmitHrLeave = createServerFn({ method: "POST" })
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       const businessRole = await resolveSessionBusinessRole(session);
       // Employees linked by profile may submit; HR may submit on behalf.
-      const mutateOk = canMutateHr({ appRole: session.role, businessRole });
+      const mutateOk = (await hrCapabilityFlags(session, businessRole)).canMutate;
 
       const range = validateLeaveRange(data.startDate, data.endDate);
       if (!range.ok) throw new AuthError(range.error, 400);
@@ -712,7 +725,7 @@ export const portalDecideHrLeave = createServerFn({ method: "POST" })
       const ownerProfileId = emp?.profile_id ?? null;
 
       const isOwner = Boolean(session.userId && ownerProfileId === session.userId);
-      const decideOk = canDecideLeave({ appRole: session.role, businessRole });
+      const decideOk = (await hrCapabilityFlags(session, businessRole)).canDecideLeave;
       const decision = canDecideLeaveRequest({
         currentStatus: existing.status,
         action: data.action,
@@ -777,8 +790,7 @@ export const portalListHrLeave = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
-      const businessRole = await resolveSessionBusinessRole(session);
-      requireHrView(session, businessRole);
+      await requireHrView(session);
 
       const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {
