@@ -87,6 +87,13 @@ export function mapIntakeRegisterRpcError(rawMessage: string): {
       message: "This email is already linked to another student record.",
     };
   }
+  if (/permission denied for function write_audit_event/i.test(message)) {
+    return {
+      status: 500,
+      message:
+        "Registration may have saved, but audit logging failed. Check Intake for this email before retrying. Apply write_audit_event EXECUTE grant migration if needed.",
+    };
+  }
   return {
     status: 400,
     message: "Could not complete registration. Try again or contact an administrator.",

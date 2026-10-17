@@ -239,10 +239,12 @@ export const portalIntakeRegisterStudent = createServerFn({ method: "POST" })
       });
 
       const { mapIntakeRegisterRpcError } = await import("@/lib/intake-register-rules");
+      const { mapInquiryChannelForLegacyDb } = await import("@/lib/intake-form-options");
+      const { mapWriteAuditPermissionError } = await import("@/lib/write-audit-grants-rules");
       const caseId = `GR-${Date.now().toString(36).toUpperCase()}`;
       // p_profile_id retained for RPC signature compatibility; …14070000 ignores it and
       // resolves profile_id by matching profiles.email to p_email inside the DEFINER body.
-      const { data: rpcRows, error: rpcErr } = await client.rpc("intake_register_student", {
+      const rpcPayload = {
         p_case_id: caseId,
         p_full_name: name,
         p_email: email,
@@ -258,7 +260,27 @@ export const portalIntakeRegisterStudent = createServerFn({ method: "POST" })
         p_intake_date: data.intakeDate?.trim() || null,
         p_registration_notes: data.registrationNotes?.trim() || null,
         p_profile_id: link.profileId,
-      });
+      };
+
+      let { data: rpcRows, error: rpcErr } = await client.rpc(
+        "intake_register_student",
+        rpcPayload,
+      );
+      // If extended inquiry_channel enum not applied yet, retry with legacy physical|online.
+      if (
+        rpcErr &&
+        data.inquiryChannel &&
+        /invalid input value for enum inquiry_channel/i.test(rpcErr.message)
+      ) {
+        const legacy = mapInquiryChannelForLegacyDb(data.inquiryChannel);
+        const channelNote = `Inquiry channel: ${data.inquiryChannel}`;
+        const notes = [rpcPayload.p_registration_notes, channelNote].filter(Boolean).join("\n");
+        ({ data: rpcRows, error: rpcErr } = await client.rpc("intake_register_student", {
+          ...rpcPayload,
+          p_inquiry_channel: legacy,
+          p_registration_notes: notes || null,
+        }));
+      }
       if (rpcErr) {
         const mapped = mapIntakeRegisterRpcError(rpcErr.message);
         throw new AuthError(mapped.message, mapped.status);
@@ -295,20 +317,29 @@ export const portalIntakeRegisterStudent = createServerFn({ method: "POST" })
         }
       }
 
-      await writeAudit(client, {
-        action: "student.intake_register",
-        entity_type: "students",
-        entity_id: created.id,
-        student_id: created.id,
-        metadata: {
-          assignedConsultantId,
-          registeredBy: created.registered_by ?? session.userId,
-          feeStatus,
-          feeWarning,
-          inquiryChannel: data.inquiryChannel ?? null,
-          via: "intake_register_student",
-        },
-      });
+      // Audit after create — must not look like a total failure if student already exists.
+      let auditWarning: string | null = null;
+      try {
+        await writeAudit(client, {
+          action: "student.intake_register",
+          entity_type: "students",
+          entity_id: created.id,
+          student_id: created.id,
+          metadata: {
+            assignedConsultantId,
+            registeredBy: created.registered_by ?? session.userId,
+            feeStatus,
+            feeWarning,
+            inquiryChannel: data.inquiryChannel ?? null,
+            via: "intake_register_student",
+          },
+        });
+      } catch (auditErr) {
+        const raw = auditErr instanceof Error ? auditErr.message : String(auditErr);
+        auditWarning = mapWriteAuditPermissionError(raw).staffMessage;
+      }
+
+      const warning = [feeWarning, auditWarning].filter(Boolean).join(" ") || null;
 
       // Narrow RPC payload — do not map through full StudentRow (avoids inventing dob etc.).
       return {
@@ -327,7 +358,7 @@ export const portalIntakeRegisterStudent = createServerFn({ method: "POST" })
             : ("pending" as const),
           registeredBy: created.registered_by ?? session.userId,
         },
-        ...(feeWarning ? { warning: feeWarning } : {}),
+        ...(warning ? { warning } : {}),
       };
     } catch (error) {
       toError(error);

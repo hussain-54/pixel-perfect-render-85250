@@ -66,7 +66,15 @@ export type BusinessRoleDb =
   | "manager"
   | "admin";
 export type SignupFeeStatusDb = "unpaid" | "claimed" | "verified" | "waived" | "rejected";
-export type InquiryChannelDb = "physical" | "online";
+export type InquiryChannelDb =
+  | "physical"
+  | "online"
+  | "phone"
+  | "whatsapp"
+  | "referral"
+  | "education_expo"
+  | "social_media"
+  | "other";
 export type CounsellingSessionModeDb = "physical" | "online";
 export type HandoverStatusDb = "submitted" | "accepted" | "returned";
 export type UniversityFeeKindDb =
