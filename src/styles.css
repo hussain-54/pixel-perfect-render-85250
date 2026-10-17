@@ -241,11 +241,11 @@
 }
 
 @utility animate-uni-marquee-ltr {
-  animation: uni-marquee-ltr 70s linear infinite;
+  animation: uni-marquee-ltr 120s linear infinite;
 }
 
 @utility animate-uni-marquee-rtl {
-  animation: uni-marquee-rtl 75s linear infinite;
+  animation: uni-marquee-rtl 120s linear infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

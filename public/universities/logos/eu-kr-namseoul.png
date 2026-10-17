@@ -1,0 +1,359 @@
+
+
+<!DOCTYPE html>
+<html>
+ 
+<body>
+	
+	
+	
+
+
+
+ 
+
+
+
+
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+	<meta charset="utf-8">
+	<meta http-equiv="X-UA-compatible" content="IE=edge">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0, user-scalable=no">
+	<meta name="format-detection" content="telephone=no">
+	<title>남서울대학교 입학안내</title>
+
+	<meta name="subject" content="남서울대학교 입학안내" />
+	<meta name="keywords" content="남서울대학교 입학안내" />
+	<meta name="description" content="남서울대학교 입학안내" />
+	<meta content="/resources/skins/nsu/img/layout/logo_namseoul2.png" property="og:image" />
+
+	<link rel="stylesheet" type="text/css" href="/resources/skins/nsu/css/style.css">
+	<script type="text/javascript" src="/resources/skins/nsu/js/libs/jquery-3.3.1.min.js"></script>
+	<script type="text/javascript" src="/resources/skins/nsu/js/libs/slick.min.js"></script>
+	<script type="text/javascript" src="/resources/skins/nsu/js/base.js"></script>
+	<script type="text/javascript" src="/resources/skins/nsu/js/module-ui.js"></script>
+	<script type="text/javascript" src="/resources/skins/nsu/js/layout.js"></script>
+	<script type="text/javascript" src="/resources/skins/nsu/js/common.js"></script>
+</head>
+
+<body>
+<div class="wrap main" id="wrap">
+	<main class="intro">
+		<div class="intro_top">
+			<h1 class="intro_logo">
+				<a href="/"><span class="logo_nsu">남서울대학교</span></a>
+			</h1>
+
+			<ul class="intro_sns">
+				<li>
+					<a href="https://www.facebook.com/nsuniv" target="_blank">
+						<svg id="그룹_26616" data-name="그룹 26616" xmlns="http://www.w3.org/2000/svg" width="9.351" height="18" viewBox="0 0 9.351 18">
+							<path id="Vector" d="M7.659,2.988H9.351V.126A23.5,23.5,0,0,0,6.885,0,3.859,3.859,0,0,0,2.763,4.23V6.588H0v3.2H2.763V18H6.075V9.792H8.829l.414-3.2H6.075V4.545C6.075,3.6,6.327,2.988,7.659,2.988Z" fill="white"/>
+						</svg>
+					</a>
+				</li>
+				<li>
+					<a href="https://blog.naver.com/nsuniversity" target="_blank">
+						<svg xmlns="http://www.w3.org/2000/svg" width="12.214" height="16" viewBox="0 0 12.214 16">
+							<g id="그룹_26614" data-name="그룹 26614" transform="translate(0 0)">
+								<g id="그룹_3" data-name="그룹 3" transform="translate(0 0)">
+									<path id="패스_1" data-name="패스 1" d="M6.933,4.466A4.726,4.726,0,0,0,3.747,5.942V0H0V15.611H3.786V14.389A3.534,3.534,0,0,0,6.933,16a5.451,5.451,0,0,0,5.281-5.825c-.02-2.5-1.748-5.8-5.281-5.709m-.216,8.163a2.411,2.411,0,1,1,1.729-1.743,2.39,2.39,0,0,1-1.729,1.743" fill="white"/>
+								</g>
+							</g>
+						</svg>
+					</a>
+				</li>
+				<li>
+					<a href="https://www.instagram.com/namseoul_univ/" target="_blank">
+						<svg xmlns="http://www.w3.org/2000/svg" width="14.737" height="14.7" viewBox="0 0 14.737 14.7">
+							<g id="그룹_26613" data-name="그룹 26613" transform="translate(0 0)">
+								<path id="Vector" d="M10,7.52a2.48,2.48,0,1,0,.949.189A2.48,2.48,0,0,0,10,7.52Zm7.39,5.55a5.73,5.73,0,0,1-.39,1.8A3.86,3.86,0,0,1,14.87,17a5.73,5.73,0,0,1-1.81.35H6.94A5.73,5.73,0,0,1,5.13,17,3.722,3.722,0,0,1,3,14.87a5.49,5.49,0,0,1-.34-1.81V6.94A5.49,5.49,0,0,1,3,5.13a3.51,3.51,0,0,1,.86-1.31A3.59,3.59,0,0,1,5.13,3a5.73,5.73,0,0,1,1.81-.35h6.12A5.73,5.73,0,0,1,14.87,3a3.51,3.51,0,0,1,1.31.86A3.51,3.51,0,0,1,17,5.13a5.73,5.73,0,0,1,.35,1.81V10c0,2.06.07,2.27.04,3.06Zm-1.6-7.44a2.38,2.38,0,0,0-1.41-1.41A4,4,0,0,0,13,4H7a4,4,0,0,0-1.38.26A2.38,2.38,0,0,0,4.21,5.62,4.27,4.27,0,0,0,4,7v6a4.27,4.27,0,0,0,.26,1.38,2.38,2.38,0,0,0,1.41,1.41A4.27,4.27,0,0,0,7,16.05h6a4,4,0,0,0,1.38-.26,2.38,2.38,0,0,0,1.41-1.41A4,4,0,0,0,16.05,13V7a3.78,3.78,0,0,0-.26-1.38ZM10,13.82A3.81,3.81,0,0,1,6.19,10h0A3.82,3.82,0,1,1,10,13.82Zm4-6.89a.9.9,0,0,1,0-1.79h0a.9.9,0,0,1,0,1.79Z" transform="translate(-2.66 -2.65)" fill="white"/>
+							</g>
+						</svg>
+					</a>
+				</li>
+				<li>
+					<a href="https://www.youtube.com/channel/UCAdJZRWgr0ly4i_UqVI7Lsg" target="_blank">
+						<svg xmlns="http://www.w3.org/2000/svg" width="9.858" height="10.307" viewBox="0 0 9.858 10.307">
+							<g id="그룹_26615" data-name="그룹 26615" transform="translate(0 0)">
+								<path id="Vector" d="M8.749,14.709V4.4L18.607,9.58C15.842,11.112,12.2,12.844,8.749,14.709Z" transform="translate(-8.749 -4.401)" fill="white"/>
+							</g>
+						</svg>
+					</a>
+				</li>
+				<li>
+					<a href="https://pf.kakao.com/_BxaaFd" target="_blank">
+						<svg xmlns="http://www.w3.org/2000/svg" width="19" height="19" viewBox="0 0 19 19">
+							<g id="그룹_26992" data-name="그룹 26992" transform="translate(0.5 0.5)">
+								<circle id="타원_9516" data-name="타원 9516" cx="9" cy="9" r="9" fill="none" stroke="white" stroke-width="1"/>
+								<path id="패스_93019" data-name="패스 93019" d="M2122.292,8352h5.174a.36.36,0,0,1,.243.075.482.482,0,0,1,.095.263v5.54a7.16,7.16,0,0,1-1.471,3.979c-1.408,1.652-1.959,1.685-1.959,1.685l-1.745-1.99s2.3-1.684,2.174-3.674h-2.51a.6.6,0,0,1-.312-.08.467.467,0,0,1-.147-.257v-5.2a.475.475,0,0,1,.147-.263A.571.571,0,0,1,2122.292,8352Z" transform="translate(-2115.832 -8348.143)" fill="white"/>
+							</g>
+						</svg>
+					</a>
+				</li>
+			</ul>
+		</div>
+
+		<div class="intro_cont" style="padding-bottom:50px;">
+			<div class="intro_slogan">
+				<h1 class="intro_slogan_title">남서울대학교는 세상을 이끕니다.</h1>
+				<p class="intro_slogan_deck">LEADING THE WORLD!</p>
+			</div>
+			<div class="intro_nav">
+				<div class="intro_nav_slider">
+					<h2 class="intro_nav_tit"><a href="/submenu.do?menuurl=gs9VR9BYi%2fZXLMGbXvzNGw%3d%3d&categoryid=37">입시일정</a></h2>
+					<div class="intro_slider" id="introVisual">
+						
+							
+								
+								<div style="cursor:pointer;" onclick="location.href='/detail.do?menuurl=gs9VR9BYi%2FZXLMGbXvzNGw%3D%3D&board_seq=187137&pageNo=1&categoryid=37';">
+									<div class="intro_slider_tit"><span class="el_chip3">
+											미술 실기고사</span>
+									</div>
+
+									
+										
+											
+											
+												
+												
+													<div>
+															2026.10.16 (금) ~ <br>
+															2026.10.17 (토)
+													</div>
+												
+											
+										
+										
+									
+
+								</div>
+								
+								<div style="cursor:pointer;" onclick="location.href='/detail.do?menuurl=gs9VR9BYi%2FZXLMGbXvzNGw%3D%3D&board_seq=187138&pageNo=1&categoryid=37';">
+									<div class="intro_slider_tit"><span class="el_chip3">
+											학생부종합 면접형 1단계 합격자 발표</span>
+									</div>
+
+									
+										
+										
+											<div>
+													2026.10.22 (목) 11:00 ~ <br>
+													2026.10.22 (목) 11:00
+											</div>
+										
+									
+
+								</div>
+								
+							
+							
+						
+					</div>
+
+					<div class="intro_slider_paginator">
+						<button class="intro_slider_prev"><img src="/resources/skins/nsu/img/icons/arrow_prev.svg" alt=""></button>
+						<button class="intro_slider_play"><img src="/resources/skins/nsu/img/icons/play.svg" alt=""></button>
+						<button class="intro_slider_pause on"><img src="/resources/skins/nsu/img/icons/pause.svg" alt=""></button>
+						<button class="intro_slider_next"><img src="/resources/skins/nsu/img/icons/arrow_next.svg" alt=""></button>
+					</div>
+				</div>
+
+				
+					
+					
+					
+					
+						
+						
+							
+						
+						
+						
+						
+						
+					
+					<a href="https://r4-pass02.mncapro.com/nsu/pass/pass.php?CODE=RnF3ekw4SVVnekR2QXR2dXdlZG5kYkVyTEhQRmRVRDVRVDFoOHlobEwxRT0=" target="_self" class="intro_nav_btn">
+						<dl>
+							<dt class="hp_tc__primary">미술 실기<br>고사장 조회</dt>
+							<dd><font color=blue>바로가기 ☞</font color></dd>
+						</dl>
+					</a>
+				
+					
+					
+					
+					
+						
+						
+							
+						
+						
+						
+						
+						
+					
+					<a href="https://r4-pass02.mncapro.com/nsu/pass/pass.php?CODE=cDJEeUJYdE9ickFDV1Q5c0dhSFVhcnQwQk01aktOMFdtSSt4dDdKVStZVT0=" target="_blank" class="intro_nav_btn">
+						<dl>
+							<dt class="hp_tc__primary"><span style="white-space:nowrap;">미술 실기[10.16]</span><br>응시확인서</dt>
+							<dd><font color=blue>바로가기 ☞</font color></dd>
+						</dl>
+					</a>
+				
+					
+					
+					
+					
+						
+						
+							
+						
+						
+						
+						
+						
+					
+					<a href="https://r4-pass02.mncapro.com/nsu/pass/pass.php?CODE=cDJEeUJYdE9ickFDV1Q5c0dhSFVhdDlwdzVVS2M1M0xKMjRETjE1REk4TT0=" target="_self" class="intro_nav_btn">
+						<dl>
+							<dt class="hp_tc__primary">비대면 면접<br>응시확인서</dt>
+							<dd><font color=blue>바로가기 ☞</font color></dd>
+						</dl>
+					</a>
+				
+					
+					
+					
+					
+						
+						
+							
+						
+						
+						
+						
+						
+					
+					<a href="https://www.namseoul.net/submenu.do?menuurl=JQ7SGtRnM8nkbwYfvJMDcQ%3d%3d&" target="_self" class="intro_nav_btn">
+						<dl>
+							<dt class="hp_tc__primary">실기/면접<br>공개문제</dt>
+							<dd><font color=blue>바로가기 ☞</font color></dd>
+						</dl>
+					</a>
+				
+					
+					
+					
+					
+						
+						
+							
+						
+						
+						
+						
+						
+					
+					<a href="https://www.namseoul.net/submenu.do?menuurl=RnNfVbLHUGrJz9kJgEyRDQ%3d%3d&categoryid=0" target="_blank" class="intro_nav_btn">
+						<dl>
+							<dt class="hp_tc__primary">공지사항</dt>
+							<dd><font color=blue>바로가기 ☞</font color></dd>
+						</dl>
+					</a>
+				
+					
+					
+					
+					
+						
+						
+							
+						
+						
+						
+						
+						
+					
+					<a href="https://nsu.ac.kr/?m1=page%25&menu_id=58%25" target="_blank" class="intro_nav_btn">
+						<dl>
+							<dt class="hp_tc__primary">교통안내</dt>
+							<dd><font color=blue>바로가기 ☞</font color></dd>
+						</dl>
+					</a>
+				
+					
+					
+					
+					
+						
+						
+							
+						
+						
+						
+						
+						
+					
+					<a href="https://nsu.ac.kr/?m1=page%25&menu_id=151%25" target="_self" class="intro_nav_btn">
+						<dl>
+							<dt class="hp_tc__primary">장학금</dt>
+							<dd><font color=blue>바로가기 ☞</font color></dd>
+						</dl>
+					</a>
+				
+					
+					
+					
+					
+						
+						
+							
+						
+						
+						
+						
+						
+					
+					<a href="https://pf.kakao.com/_BxaaFd" target="_self" class="intro_nav_btn">
+						<dl>
+							<dt class="hp_tc__primary">입시상담</dt>
+							<dd><font color=blue>바로가기 ☞</font color></dd>
+						</dl>
+					</a>
+				
+
+
+			</div>
+
+			<div class="intro_bottom">
+				<div class="intro_bnnr">
+					<a href="https://www.nsu.ac.kr/?m1=page%25&menu_id=61%25" target="_blank">
+						<div class="in">
+							<div class="txt">
+								<h4 class="tit">수도권 전철 <strong>전지역 1시간대</strong></h4>
+								<p>수원에서 36분 / 서울역, 용산역 출발 모든 <span class="br"></span>급행전철 남서울대역(성환)정차</p>
+								<p>충남형 <span class="shadow">M버스(아산2000번)</span> 노선 신설(천안.<span class="br"></span>아산 ↔ 남서울대학교 ↔ 평택) : 1일 18회 운행</p>
+							</div>
+							<span class="arrow"><img src="/resources/skins/nsu/img/intro/arrow_right.png" alt="" /></span>
+						</div>						
+					</a>
+				</div>
+
+				<div class="intro_btn_wrap">
+					<a href="/main.do" class="intro_btn">입학 홈페이지 바로가기</a>
+					<a href="https://nsu.ac.kr/?m1=home"  target="_blank" class="intro_btn">대학 홈페이지 바로가기</a>
+					<a href="https://gr.nsu.ac.kr/?m=02"  target="_blank" class="intro_btn">대학원 홈페이지 바로가기 </a>
+				</div>
+			</div>
+
+		</div>
+	</main>
+</div>
+</body>
+</html>
+
+
+	
+</body>
+</html>

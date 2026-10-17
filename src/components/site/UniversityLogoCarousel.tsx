@@ -1,80 +1,77 @@
 import { useEffect, useId, useMemo, useState } from "react";
-import { Pause, Play } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { ArrowRight, Pause, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   EXPLORE_UNIVERSITIES_SECTION,
   exploreUniversities,
-  splitExploreUniversitiesForCarousel,
   type ExploreUniversity,
 } from "@/data/explore-universities";
 import { cn } from "@/lib/utils";
 
 function UniversityMark({ university }: { university: ExploreUniversity }) {
   const [imgFailed, setImgFailed] = useState(false);
-  const showLogo =
-    university.logoStatus === "verified_local" && Boolean(university.logoPath) && !imgFailed;
+  const showLogo = Boolean(university.logoPath) && !imgFailed;
 
   return (
     <article
-      className="flex w-[11.5rem] shrink-0 flex-col items-center justify-between rounded-xl border border-border/80 bg-white px-3 py-3 shadow-sm transition-shadow hover:shadow-md focus-within:shadow-md sm:w-[13rem] sm:px-4 sm:py-3.5"
+      className="group flex w-[12.5rem] shrink-0 flex-col items-center rounded-2xl border border-border/70 bg-white px-4 py-4 shadow-[0_1px_2px_rgba(2,20,51,0.04)] transition duration-300 hover:-translate-y-0.5 hover:border-royal/25 hover:shadow-md focus-within:border-royal/30 focus-within:shadow-md motion-reduce:transition-none motion-reduce:hover:translate-y-0 sm:w-[14rem]"
       tabIndex={0}
     >
-      <div className="flex h-14 w-full items-center justify-center sm:h-16">
+      <div className="flex h-16 w-full items-center justify-center rounded-xl bg-surface/80 px-3 sm:h-[4.5rem]">
         {showLogo ? (
           <img
             src={university.logoPath!}
-            alt=""
-            width={160}
-            height={64}
+            alt={`${university.name} logo`}
+            width={180}
+            height={72}
             loading="lazy"
             decoding="async"
             className="max-h-14 max-w-full object-contain sm:max-h-16"
             onError={() => setImgFailed(true)}
           />
         ) : (
-          <span
-            aria-hidden
-            className="flex h-12 w-12 items-center justify-center rounded-full bg-navy/5 font-display text-sm font-semibold text-navy sm:h-14 sm:w-14 sm:text-base"
-          >
-            {university.name
-              .replace(/[^\p{L}\p{N}\s]/gu, " ")
-              .trim()
-              .split(/\s+/)
-              .slice(0, 2)
-              .map((w) => w[0]?.toUpperCase() ?? "")
-              .join("")}
+          <span className="px-1 text-center font-display text-sm font-semibold leading-tight text-navy">
+            {university.name.split(",")[0]}
           </span>
         )}
       </div>
-      <p className="mt-2 line-clamp-3 text-center text-[0.7rem] font-medium leading-snug text-navy sm:text-xs">
-        <span className="sr-only">University: </span>
+      <p className="mt-3 line-clamp-2 min-h-[2.5rem] text-center text-xs font-semibold leading-snug text-navy sm:text-[0.8125rem]">
         {university.name}
       </p>
-      <p className="mt-1 text-[0.65rem] text-muted-foreground">{university.country}</p>
+      <p className="mt-1 text-[0.65rem] font-medium uppercase tracking-[0.08em] text-muted-foreground">
+        {university.country}
+      </p>
     </article>
   );
 }
 
 function MarqueeRow({
   items,
-  direction,
   paused,
-  label,
 }: {
   items: ExploreUniversity[];
-  direction: "ltr" | "rtl";
   paused: boolean;
-  label: string;
 }) {
-  // Duplicate track for seamless loop.
   const track = useMemo(() => [...items, ...items], [items]);
 
   return (
-    <div className="relative overflow-hidden" aria-label={label}>
+    <div
+      className="relative overflow-hidden"
+      aria-label="Universities scrolling horizontally"
+    >
+      <div
+        className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-surface to-transparent sm:w-16"
+        aria-hidden
+      />
+      <div
+        className="pointer-events-none absolute inset-y-0 right-0 z-10 w-10 bg-gradient-to-l from-surface to-transparent sm:w-16"
+        aria-hidden
+      />
       <div
         className={cn(
-          "flex w-max gap-3 py-1 sm:gap-4",
-          direction === "ltr" ? "animate-uni-marquee-ltr" : "animate-uni-marquee-rtl",
+          "flex w-max gap-4 py-2 sm:gap-5",
+          "animate-uni-marquee-ltr",
           paused && "[animation-play-state:paused]",
         )}
       >
@@ -86,10 +83,9 @@ function MarqueeRow({
   );
 }
 
-/** Two-row CSS marquee of universities to explore (not a verified partnership claim). */
+/** Single-row university destinations marquee with Explore more CTA. */
 export function UniversityLogoCarousel() {
   const headingId = useId();
-  const { rowA, rowB } = useMemo(() => splitExploreUniversitiesForCarousel(), []);
   const [paused, setPaused] = useState(false);
   const [reduceMotion, setReduceMotion] = useState(false);
 
@@ -120,28 +116,30 @@ export function UniversityLogoCarousel() {
               {EXPLORE_UNIVERSITIES_SECTION.body}
             </p>
           </div>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="shrink-0 self-start"
-            aria-pressed={paused}
-            onClick={() => setPaused((p) => !p)}
-          >
-            {paused ? (
-              <>
-                <Play className="h-3.5 w-3.5" aria-hidden /> Resume scroll
-              </>
-            ) : (
-              <>
-                <Pause className="h-3.5 w-3.5" aria-hidden /> Pause scroll
-              </>
-            )}
-          </Button>
+          {!reduceMotion ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="shrink-0 self-start"
+              aria-pressed={paused}
+              onClick={() => setPaused((p) => !p)}
+            >
+              {paused ? (
+                <>
+                  <Play className="h-3.5 w-3.5" aria-hidden /> Resume
+                </>
+              ) : (
+                <>
+                  <Pause className="h-3.5 w-3.5" aria-hidden /> Pause
+                </>
+              )}
+            </Button>
+          ) : null}
         </div>
 
         {reduceMotion ? (
-          <ul className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+          <ul className="flex gap-4 overflow-x-auto pb-2 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {exploreUniversities.map((u) => (
               <li key={u.id}>
                 <UniversityMark university={u} />
@@ -150,7 +148,6 @@ export function UniversityLogoCarousel() {
           </ul>
         ) : (
           <div
-            className="space-y-3 sm:space-y-4"
             onMouseEnter={() => setPaused(true)}
             onMouseLeave={() => setPaused(false)}
             onFocusCapture={() => setPaused(true)}
@@ -160,25 +157,37 @@ export function UniversityLogoCarousel() {
               }
             }}
           >
-            <MarqueeRow
-              items={rowA}
-              direction="ltr"
-              paused={paused}
-              label="University destinations, row one"
-            />
-            <MarqueeRow
-              items={rowB}
-              direction="rtl"
-              paused={paused}
-              label="University destinations, row two"
-            />
+            <MarqueeRow items={exploreUniversities} paused={paused} />
           </div>
         )}
 
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          Showing {exploreUniversities.length} institutions. Official logos are added only after
-          brand-asset review.
-        </p>
+        {/* Explore more */}
+        <div className="mt-10 rounded-2xl border border-border/80 bg-white px-5 py-6 sm:px-8 sm:py-7">
+          <div className="flex flex-col items-start justify-between gap-5 md:flex-row md:items-center">
+            <div className="max-w-xl">
+              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-royal">
+                Explore more
+              </p>
+              <h3 className="mt-1.5 font-display text-xl font-semibold text-navy md:text-2xl">
+                Looking for the right university fit?
+              </h3>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+                Browse the full university catalogue, or book a free consultation and we will
+                shortlist options around your goals, budget, and destination.
+              </p>
+            </div>
+            <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
+              <Button asChild variant="navy" size="lg">
+                <Link to="/universities">
+                  View all universities <ArrowRight className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button asChild variant="outline" size="lg">
+                <Link to="/contact">Book free consultation</Link>
+              </Button>
+            </div>
+          </div>
+        </div>
       </div>
     </section>
   );

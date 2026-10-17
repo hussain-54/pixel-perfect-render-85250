@@ -96,9 +96,13 @@ describe("explore universities catalogue", () => {
     expect(exploreUniversities.some((u) => u.name === "University of Skövde")).toBe(true);
   });
 
-  it("does not claim verified local logos until assets are reviewed", () => {
-    expect(exploreUniversitiesWithVerifiedLogos()).toHaveLength(0);
-    expect(exploreUniversitiesAwaitingLogos()).toHaveLength(60);
+  it("stores local logo assets for most institutions with text fallbacks for the rest", () => {
+    const verified = exploreUniversitiesWithVerifiedLogos();
+    const awaiting = exploreUniversitiesAwaitingLogos();
+    expect(verified.length).toBeGreaterThanOrEqual(50);
+    expect(verified.length + awaiting.length).toBe(60);
+    expect(exploreUniversities.some((u) => u.name === "Korean Bible University")).toBe(true);
+    expect(exploreUniversities.some((u) => u.name === "Sunway University Malaysia")).toBe(true);
   });
 
   it("splits into two non-empty carousel rows covering every entry", () => {
