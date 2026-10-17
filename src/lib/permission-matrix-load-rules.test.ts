@@ -87,4 +87,14 @@ describe("requireModulePermission unavailable fail-closed (demo path still works
     };
     await expect(requireModulePermission(session, "admissions", 1)).rejects.toThrow(AuthError);
   });
+
+  it("documents production empty/RLS-denied matrix as unavailable (fail closed)", () => {
+    expect(
+      resolveAuthorizationMatrixOutcome({
+        plane: "live_production",
+        errorMessage: null,
+        rowCount: 0,
+      }),
+    ).toBe("unavailable");
+  });
 });

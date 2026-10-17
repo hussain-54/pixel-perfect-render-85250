@@ -17,6 +17,11 @@ import {
   resolveMatrixLoadPlane,
   type MatrixLoadOutcome,
 } from "@/lib/permission-matrix-load-rules";
+import {
+  readAuthorizationMatrixCache,
+  writeAuthorizationMatrixCache,
+  type AuthorizationMatrixCacheEntry,
+} from "@/lib/authorization-matrix-cache-rules";
 
 export type AuthorizationMatrixSource = MatrixLoadOutcome;
 
@@ -24,6 +29,14 @@ export type AuthorizationMatrixResult = {
   matrix: PermissionMatrix;
   source: AuthorizationMatrixSource;
 };
+
+/** Org-wide matrix cache (not user records). Invalidated on Admin matrix writes. */
+let authorizationMatrixCache: AuthorizationMatrixCacheEntry<AuthorizationMatrixResult> | null =
+  null;
+
+export function invalidateAuthorizationMatrixCache(): void {
+  authorizationMatrixCache = null;
+}
 
 function isProductionRuntime(): boolean {
   try {
@@ -51,6 +64,12 @@ export async function loadAuthorizationMatrix(
     return { matrix: cloneDefaultPermissionMatrix(), source: "defaults" };
   }
 
+  const now = Date.now();
+  const cached = readAuthorizationMatrixCache(authorizationMatrixCache, now);
+  if (cached && (cached.source === "database" || cached.source === "defaults")) {
+    return cached;
+  }
+
   try {
     const { requireAoSupabaseClient } = await import("@/server/ao-data");
     const client = requireAoSupabaseClient();
@@ -65,10 +84,23 @@ export async function loadAuthorizationMatrix(
     });
 
     if (outcome === "unavailable") {
+      // Do not cache unavailable — allows recovery after RLS/migration apply.
+      if (error?.message) {
+        console.warn(
+          "[permission-matrix] authorization load unavailable:",
+          error.message.slice(0, 200),
+        );
+      } else {
+        console.warn(
+          "[permission-matrix] authorization load unavailable: empty result (check RLS SELECT for authenticated).",
+        );
+      }
       return { matrix: cloneDefaultPermissionMatrix(), source: "unavailable" };
     }
     if (outcome === "defaults") {
-      return { matrix: cloneDefaultPermissionMatrix(), source: "defaults" };
+      const result = { matrix: cloneDefaultPermissionMatrix(), source: "defaults" as const };
+      authorizationMatrixCache = writeAuthorizationMatrixCache(result, now);
+      return result;
     }
 
     const cells: PermissionMatrixCell[] = (data ?? []).map((row) => ({
@@ -77,12 +109,15 @@ export async function loadAuthorizationMatrix(
       level: row.permission_level as PermissionLevel,
     }));
 
-    return {
+    const result: AuthorizationMatrixResult = {
       matrix: mergePermissionMatrixCells(cells),
       source: "database",
     };
+    authorizationMatrixCache = writeAuthorizationMatrixCache(result, now);
+    return result;
   } catch (caught) {
     const message = caught instanceof Error ? caught.message : "unknown";
+    console.warn("[permission-matrix] authorization load error:", message.slice(0, 200));
     const outcome = resolveAuthorizationMatrixOutcome({
       plane,
       errorMessage: message,

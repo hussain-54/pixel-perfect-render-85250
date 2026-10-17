@@ -7,6 +7,18 @@ import {
   type PortalKind,
 } from "@/lib/roles";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
+import {
+  readPortalSessionCache,
+  writePortalSessionCache,
+  type PortalSessionCacheEntry,
+} from "@/lib/portal-session-cache-rules";
+
+/** Same-JWT short TTL — avoids establishSession on every in-portal navigation. */
+let portalSessionCache: PortalSessionCacheEntry<PublicSession> | null = null;
+
+export function clearPortalSessionClientCache(): void {
+  portalSessionCache = null;
+}
 
 async function bearerHeaders(): Promise<HeadersInit | undefined> {
   if (typeof window === "undefined") return undefined;
@@ -29,8 +41,8 @@ function portalHomePath(portal: PortalKind): PortalHome {
 
 /**
  * TanStack Router beforeLoad guard for portal layouts.
- * When a live Supabase JWT is present, always re-resolve role via establishSession
- * so profiles.role changes (e.g. owner admin SQL) are not masked by a stale cookie.
+ * When a live Supabase JWT is present, re-resolve role via establishSession
+ * (short same-token cache) so profiles.role changes are not masked by a stale cookie.
  * Client localStorage/sessionStorage roles are never trusted for portal access.
  */
 export function requirePortalAccess(portal: PortalKind) {
@@ -56,23 +68,30 @@ export function requirePortalAccess(portal: PortalKind) {
         }
         const token = data.session?.access_token;
         if (token) {
-          const { establishSession } = await import("@/server/portal-data");
-          try {
-            session = await establishSession({ data: { accessToken: token } });
-          } catch {
-            // Stale/revoked JWT (e.g. admin password rotation) — clear and force sign-in.
+          const cached = readPortalSessionCache(portalSessionCache, token, Date.now());
+          if (cached) {
+            session = cached;
+          } else {
+            const { establishSession } = await import("@/server/portal-data");
             try {
-              await supabase.auth.signOut();
+              session = await establishSession({ data: { accessToken: token } });
+              portalSessionCache = writePortalSessionCache(token, session, Date.now());
             } catch {
-              /* ignore */
+              portalSessionCache = null;
+              // Stale/revoked JWT (e.g. admin password rotation) — clear and force sign-in.
+              try {
+                await supabase.auth.signOut();
+              } catch {
+                /* ignore */
+              }
+              const { clearSession } = await import("@/server/portal-data");
+              try {
+                await clearSession();
+              } catch {
+                /* ignore */
+              }
+              session = null;
             }
-            const { clearSession } = await import("@/server/portal-data");
-            try {
-              await clearSession();
-            } catch {
-              /* ignore */
-            }
-            session = null;
           }
         }
       } catch {

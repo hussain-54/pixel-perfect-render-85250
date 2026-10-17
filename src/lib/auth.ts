@@ -308,6 +308,12 @@ export async function signInWithPassword(options: {
 
 export async function signOut(): Promise<void> {
   clearDemoSession();
+  try {
+    const { clearPortalSessionClientCache } = await import("@/lib/portal-guard");
+    clearPortalSessionClientCache();
+  } catch {
+    /* ignore */
+  }
   if (isSupabaseConfigured()) {
     try {
       await getSupabase().auth.signOut();

@@ -23,7 +23,10 @@ import {
   type PermissionMatrix,
   type PermissionMatrixCell,
 } from "@/lib/business-permissions";
-import { loadPermissionMatrixForDisplay } from "@/server/permission-matrix-store";
+import {
+  invalidateAuthorizationMatrixCache,
+  loadPermissionMatrixForDisplay,
+} from "@/server/permission-matrix-store";
 
 function toError(error: unknown): never {
   if (error instanceof AuthError) {
@@ -187,6 +190,7 @@ export const portalUpdatePermissionMatrixCell = createServerFn({ method: "POST" 
         /* audit failure must not hide successful persist */
       }
 
+      invalidateAuthorizationMatrixCache();
       const loaded = await loadPermissionMatrixForDisplay();
       return {
         ok: true as const,
