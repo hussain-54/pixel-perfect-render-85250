@@ -3,7 +3,8 @@ import { ArrowRight, Quote, ShieldCheck } from "lucide-react";
 import hero from "@/assets/hero.jpg";
 import consult from "@/assets/consult.jpg";
 import { SiteLayout, SectionHead } from "@/components/site/SiteLayout";
-import { DestinationCard, UniversityCard, CtaBand } from "@/components/site/blocks";
+import { DestinationCard, CtaBand } from "@/components/site/blocks";
+import { UniversityLogoCarousel } from "@/components/site/UniversityLogoCarousel";
 import { Button } from "@/components/ui/button";
 import {
   Accordion,
@@ -13,6 +14,7 @@ import {
 } from "@/components/ui/accordion";
 import {
   topDestinations,
+  europeanDestinations,
   programCategories,
   services,
   visaSteps,
@@ -25,7 +27,6 @@ import {
   trustSignals,
   featuredScholarships,
 } from "@/data/site";
-import { universities } from "@/data/mock";
 import { fmtDate } from "@/components/common";
 import { pageHead } from "@/lib/seo";
 
@@ -127,6 +128,29 @@ function Home() {
         </div>
       </section>
 
+      {/* European destinations — blue-hour card treatment */}
+      <section className="section-y bg-surface">
+        <div className="container-page">
+          <SectionHead
+            eyebrow="European destinations"
+            title="Study in Europe with confidence"
+            body="Explore English-taught programmes, scholarships, and post-study pathways across key European destinations."
+            action={
+              <Button asChild variant="outline">
+                <Link to="/destinations">
+                  All destinations <ArrowRight />
+                </Link>
+              </Button>
+            }
+          />
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5">
+            {europeanDestinations.map((d) => (
+              <DestinationCard key={`eu-${d.name}`} d={d} variant="feature" />
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Why */}
       <section className="section-y bg-surface">
         <div className="container-page grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
@@ -158,26 +182,8 @@ function Home() {
         </div>
       </section>
 
-      {/* Universities */}
-      <section className="container-page section-y">
-        <SectionHead
-          eyebrow="Featured universities"
-          title="Sample partner institutions"
-          body="Illustrative listings for exploration — confirm options with a consultant. This is not a live verified inventory."
-          action={
-            <Button asChild variant="outline">
-              <Link to="/universities">
-                Browse universities <ArrowRight />
-              </Link>
-            </Button>
-          }
-        />
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4 lg:gap-8">
-          {universities.slice(0, 4).map((u) => (
-            <UniversityCard key={u.id} u={u} />
-          ))}
-        </div>
-      </section>
+      {/* Universities to explore — full curated list (not a verified partnership claim) */}
+      <UniversityLogoCarousel />
 
       {/* Programs */}
       <section className="section-y bg-surface">

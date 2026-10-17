@@ -26,32 +26,69 @@ export function CatalogueSampleNotice({ kind }: { kind: "universities" | "schola
   );
 }
 
-export function DestinationCard({ d }: { d: (typeof destinations)[number] }) {
+export function DestinationCard({
+  d,
+  variant = "default",
+}: {
+  d: (typeof destinations)[number];
+  /** `feature` matches the European blue-hour card treatment (2×2 section). */
+  variant?: "default" | "feature";
+}) {
+  const feature = variant === "feature";
   return (
     <Link
       to="/destinations"
       hash={d.name.toLowerCase().replace(/\s/g, "-")}
-      className="group relative block aspect-[4/5] overflow-hidden rounded-lg"
+      className={
+        feature
+          ? "group relative block aspect-[4/3] overflow-hidden rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bright focus-visible:ring-offset-2"
+          : "group relative block aspect-[4/5] overflow-hidden rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-bright focus-visible:ring-offset-2"
+      }
     >
       <img
         src={d.img}
         alt={`Study in ${d.name}`}
         loading="lazy"
-        width={1024}
-        height={768}
-        className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] group-hover:scale-[1.03]"
+        width={feature ? 1280 : 1024}
+        height={feature ? 960 : 768}
+        className="absolute inset-0 h-full w-full object-cover transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] motion-reduce:transition-none group-hover:scale-[1.03] motion-reduce:group-hover:scale-100"
       />
-      <div className="bg-card-overlay absolute inset-0" />
-      <div className="absolute inset-x-0 bottom-0 p-4 text-navy-foreground md:p-5">
-        <h3 className="font-display text-xl font-semibold text-navy-foreground md:text-2xl">
+      <div
+        className={
+          feature
+            ? "absolute inset-0 bg-gradient-to-t from-[#021433]/95 via-[#021433]/45 to-transparent"
+            : "bg-card-overlay absolute inset-0"
+        }
+        aria-hidden
+      />
+      <div
+        className={
+          feature
+            ? "absolute inset-x-0 bottom-0 p-5 text-navy-foreground md:p-6"
+            : "absolute inset-x-0 bottom-0 p-4 text-navy-foreground md:p-5"
+        }
+      >
+        <h3
+          className={
+            feature
+              ? "font-display text-2xl font-semibold text-white md:text-[1.75rem]"
+              : "font-display text-xl font-semibold text-navy-foreground md:text-2xl"
+          }
+        >
           {d.name}
         </h3>
-        <p className="mt-1 line-clamp-2 text-xs leading-relaxed text-navy-foreground/80 md:text-sm">
+        <p
+          className={
+            feature
+              ? "mt-2 max-w-md text-sm leading-relaxed text-white/90 md:text-[0.95rem]"
+              : "mt-1 line-clamp-2 text-xs leading-relaxed text-navy-foreground/80 md:text-sm"
+          }
+        >
           {d.desc}
         </p>
         <span className="mt-3 inline-flex items-center gap-1 text-[0.6875rem] font-bold uppercase tracking-[0.12em] text-bright">
           Explore
-          <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+          <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5 motion-reduce:transition-none" />
         </span>
       </div>
     </Link>

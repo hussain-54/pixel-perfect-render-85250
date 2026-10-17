@@ -7,25 +7,24 @@ import france from "@/assets/dest-france.jpg";
 import japan from "@/assets/dest-japan.jpg";
 import malaysia from "@/assets/dest-malaysia.jpg";
 import nz from "@/assets/dest-nz.jpg";
-import finland from "@/assets/dest-finland.jpg";
+import nordic from "@/assets/dest-finland.jpg";
 
 /**
  * Destination imagery is reused for countries without a dedicated photo yet.
- * Dedicated assets exist for: UK, France, Germany, Italy, Finland, Canada, USA,
- * Malaysia, New Zealand, Japan. Other countries reuse regional fallback photos.
+ * Dedicated assets exist for: UK, France, Germany, Italy, Canada, USA,
+ * Malaysia, New Zealand, Japan. Nordic/Europe photos are regional fallbacks.
  */
 const img = {
   uk,
   france,
   germany,
   italy,
-  finland,
+  nordic,
   canada,
   usa,
   malaysia,
   nz,
   europe: germany,
-  nordic: finland,
   mediterranean: italy,
   asia: malaysia,
   eastAsia: japan,
@@ -59,14 +58,14 @@ export const destinations: Destination[] = [
   {
     name: "Ireland",
     img: img.uk,
-    desc: "English-taught degrees, welcoming campuses and strong post-study work opportunities.",
+    desc: "English-taught degrees, welcoming campuses, and post-study opportunities.",
     work: "Up to 2 years",
     intake: "Sep · Jan",
   },
   {
     name: "Austria",
     img: img.europe,
-    desc: "Affordable public universities in the heart of Europe with growing English programmes.",
+    desc: "Explore European universities, English-taught programmes, and study opportunities.",
     work: "12 months",
     intake: "Oct · Mar",
   },
@@ -87,29 +86,15 @@ export const destinations: Destination[] = [
   {
     name: "Hungary",
     img: img.europe,
-    desc: "Stipendium Hungaricum and affordable European degrees across a wide range of fields.",
-    work: "Varies",
-    intake: "Sep · Feb",
-  },
-  {
-    name: "Lithuania",
-    img: img.nordic,
-    desc: "Modern Baltic universities with competitive tuition and English-taught programmes.",
+    desc: "Discover European degree programmes and scholarship opportunities, including Stipendium Hungaricum where applicable.",
     work: "Varies",
     intake: "Sep · Feb",
   },
   {
     name: "Sweden",
     img: img.nordic,
-    desc: "Innovation-focused universities with strong research culture and quality of life.",
+    desc: "Explore innovative universities, English-taught programmes, and international study opportunities.",
     work: "Up to 1 year",
-    intake: "Aug · Jan",
-  },
-  {
-    name: "Finland",
-    img: img.finland,
-    desc: "Top-rated education system, innovation focus and a strong welfare state.",
-    work: "2 years",
     intake: "Aug · Jan",
   },
   {
@@ -226,8 +211,19 @@ export const destinations: Destination[] = [
   },
 ];
 
-/** Homepage “Top Study Destinations” — first 10 of the official list. */
-export const topDestinations = destinations.slice(0, 10);
+/** Homepage “Top Study Destinations” — first 8 of the official list. */
+export const topDestinations = destinations.slice(0, 8);
+
+/** Featured European destination cards (homepage 2×2 section). */
+const EUROPEAN_FEATURED_NAMES = ["Ireland", "Austria", "Hungary", "Sweden"] as const;
+
+export const europeanDestinations: Destination[] = EUROPEAN_FEATURED_NAMES.map((name) => {
+  const found = destinations.find((d) => d.name === name);
+  if (!found) {
+    throw new Error(`Missing featured European destination: ${name}`);
+  }
+  return found;
+});
 
 export const programCategories = [
   { name: "Business & Management", count: 1240, examples: "MBA, Finance, Marketing, Supply Chain" },
@@ -324,7 +320,7 @@ export const howItWorks = [
 export const whyUs = [
   {
     title: "Direct university partnerships",
-    body: "Official representation with 2,000+ institutions across 30+ countries.",
+    body: "Official representation with 2,000+ institutions across 26+ countries.",
   },
   {
     title: "SECP Registered",
@@ -463,8 +459,8 @@ export const resources = [
 /** Primary Global Roots company statistics. */
 export const stats = [
   { value: "2,000+", label: "Universities" },
-  { value: "30+", label: "Countries" },
-  { value: "500+", label: "Students Guided" },
+  { value: "26+", label: "Countries" },
+  { value: "250+", label: "Students Guided" },
   { value: "SECP", label: "Registered" },
 ];
 

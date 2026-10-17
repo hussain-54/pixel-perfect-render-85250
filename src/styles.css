@@ -220,3 +220,37 @@
 @utility prose-measure {
   max-width: 42rem;
 }
+
+/* University destinations marquee (homepage). Pause via animation-play-state. */
+@keyframes uni-marquee-ltr {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+@keyframes uni-marquee-rtl {
+  from {
+    transform: translate3d(-50%, 0, 0);
+  }
+  to {
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@utility animate-uni-marquee-ltr {
+  animation: uni-marquee-ltr 70s linear infinite;
+}
+
+@utility animate-uni-marquee-rtl {
+  animation: uni-marquee-rtl 75s linear infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-uni-marquee-ltr,
+  .animate-uni-marquee-rtl {
+    animation: none !important;
+  }
+}

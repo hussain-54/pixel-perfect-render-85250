@@ -33,7 +33,7 @@ function Page() {
             where they stand.
           </p>
           <p className="leading-relaxed">
-            Today we represent more than 2,000 universities across 30+ countries. Global Roots
+            Today we represent more than 2,000 universities across 26+ countries. Global Roots
             Consultants is SECP Registered, with our office in Faisalabad.
           </p>
           <div className="grid grid-cols-2 gap-5 pt-2">
