@@ -549,9 +549,13 @@ export const portalSaveStudentAssessment = createServerFn({ method: "POST" })
       await requireConsultantDesk(session, "student assessment", 2);
 
       const a = data.assessment;
-      if (!a.eligibility?.trim()) throw new AuthError("Eligibility assessment is required.", 400);
-      if (a.applicationTarget < 0 || a.applicationTarget > 50) {
-        throw new AuthError("Application target must be between 0 and 50.", 400);
+      const { validateAssessmentForSave } = await import("@/lib/counsellor-handover-rules");
+      const validated = validateAssessmentForSave({
+        eligibility: a.eligibility,
+        applicationTarget: a.applicationTarget,
+      });
+      if (!validated.ok) {
+        throw new AuthError(validated.message, 400);
       }
 
       const {

@@ -40,8 +40,22 @@ import {
   type ProfileTabId,
 } from "@/types/student-profile";
 import { cn } from "@/lib/utils";
-
-const ELIGIBILITY_OPTIONS = ["Good Fit", "Borderline", "Not Ready", "Pending Review"] as const;
+import { SearchableSelect } from "@/components/portal/SearchableSelect";
+import { validateAssessmentForSave } from "@/lib/counsellor-handover-rules";
+import {
+  COUNSELLOR_DESTINATIONS,
+  COUNSELLOR_ELIGIBILITY,
+  COUNSELLOR_FUNDING_SOURCES,
+  COUNSELLOR_LANGUAGE_TESTS,
+  COUNSELLOR_QUALIFICATIONS,
+  COUNSELLOR_SEASONS,
+  COUNSELLOR_STUDY_LEVELS,
+  formatIntakeLabel,
+  intakeYearOptions,
+  parseIntakeSeasonYear,
+  type IntakeSeason,
+} from "@/lib/counsellor-form-options";
+import { resolveCatalogOrOther } from "@/lib/intake-form-options";
 
 type Props = {
   workspace: StudentProfileWorkspace;
@@ -78,6 +92,15 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
   });
   const [handoverSummary, setHandoverSummary] = useState("");
   const [lifecycleMsg, setLifecycleMsg] = useState<string | null>(null);
+  const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const parsedIntake = parseIntakeSeasonYear(workspace.assessment.targetIntake);
+  const [intakeSeason, setIntakeSeason] = useState<IntakeSeason | "">(parsedIntake.season);
+  const [intakeYear, setIntakeYear] = useState<number | "">(parsedIntake.year);
+  const [qualificationOther, setQualificationOther] = useState("");
+  const [levelOther, setLevelOther] = useState("");
+  const [countryOther, setCountryOther] = useState("");
+  const [langOther, setLangOther] = useState("");
+  const [fundingOther, setFundingOther] = useState("");
   const feeQ = useQuery({
     queryKey: ["officer", "signup-fee", s.id],
     queryFn: () => getSignupFeeStatus(s.id),
@@ -92,20 +115,66 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
 
   useEffect(() => {
     setForm(toForm(workspace.assessment));
+    const parsed = parseIntakeSeasonYear(workspace.assessment.targetIntake);
+    setIntakeSeason(parsed.season);
+    setIntakeYear(parsed.year);
   }, [workspace.assessment]);
 
-  const invalidate = async () => {
+  const invalidateProfile = async () => {
     await queryClient.invalidateQueries({ queryKey: ["officer", "student-profile", s.id] });
+  };
+
+  const invalidate = async () => {
+    await invalidateProfile();
     await queryClient.invalidateQueries({ queryKey: ["officer", "dashboard"] });
     await queryClient.invalidateQueries({ queryKey: ["officer", "students-directory"] });
     await queryClient.invalidateQueries({ queryKey: ["applications"] });
   };
 
+  const buildAssessmentPayload = (): AssessmentSaveInput | null => {
+    const qual = catalogOrKeep(form.lastQualification, qualificationOther, COUNSELLOR_QUALIFICATIONS);
+    const level = catalogOrKeep(form.preferredLevel, levelOther, COUNSELLOR_STUDY_LEVELS);
+    const country = catalogOrKeep(form.targetCountries, countryOther, COUNSELLOR_DESTINATIONS);
+    const lang = catalogOrKeep(form.languageTest, langOther, COUNSELLOR_LANGUAGE_TESTS);
+    const funding = catalogOrKeep(form.fundingSource, fundingOther, COUNSELLOR_FUNDING_SOURCES);
+    if (!qual.ok) {
+      setSaveMsg(qual.error);
+      return null;
+    }
+    if (!level.ok) {
+      setSaveMsg(level.error);
+      return null;
+    }
+    if (!country.ok) {
+      setSaveMsg(country.error);
+      return null;
+    }
+    if (!lang.ok) {
+      setSaveMsg(lang.error);
+      return null;
+    }
+    if (!funding.ok) {
+      setSaveMsg(funding.error);
+      return null;
+    }
+    const intakeLabel =
+      formatIntakeLabel(intakeSeason, intakeYear) || form.targetIntake.trim();
+    return {
+      ...form,
+      lastQualification: qual.value,
+      preferredLevel: level.value,
+      targetCountries: country.value,
+      languageTest: lang.value,
+      fundingSource: funding.value,
+      targetIntake: intakeLabel,
+    };
+  };
+
   const saveM = useMutation({
-    mutationFn: () => saveStudentAssessment(s.id, form),
+    mutationFn: (payload: AssessmentSaveInput) => saveStudentAssessment(s.id, payload),
     onSuccess: async () => {
       setSaveMsg("Assessment saved.");
-      await invalidate();
+      await invalidateProfile();
     },
     onError: (err) => setSaveMsg(portalErrorMessage(err, "Could not save assessment.")),
   });
@@ -184,7 +253,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
             <span className="text-xs text-muted-foreground">{docsLabel}</span>
           </div>
           <p className="mt-2 text-sm text-muted-foreground">
-            Destination: {s.destination} Â· Intake: {s.intake} Â· Assigned consultant:{" "}
+            Destination: {s.destination} · Intake: {s.intake} · Assigned consultant:{" "}
             {s.consultantName}
           </p>
         </div>
@@ -205,33 +274,37 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
         </div>
       </div>
 
-      <Panel title="Lifecycle — fee, agreement, admission handover">
+      <Panel title="Counselling lifecycle">
         <div className="space-y-3 text-sm">
           <p className="text-muted-foreground">
             Signup fee:{" "}
-            <span className="font-medium text-navy">{feeQ.data?.fee?.status ?? "loading…"}</span>
+            <span className="font-medium text-navy">{feeQ.data?.fee?.status ?? "Loading…"}</span>
             {feeQ.data?.fee?.portalActivatedAt ? " · Portal activated" : " · Portal not activated"}
+          </p>
+          <p className="text-xs text-muted-foreground">
+            Before handover: save the eligibility assessment, record consent, then add a short summary.
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
               variant="outline"
-              disabled={!workspace.canEdit}
+              disabled={!workspace.canEdit || lifecycleBusy}
               onClick={async () => {
                 try {
+                  setLifecycleBusy(true);
                   setLifecycleMsg(null);
                   await recordCounsellingAgreement({
                     studentId: s.id,
                     consented: true,
                     summary: "Counselling session consent recorded in portal.",
-                    outcome: "Proceed to assessment / handover",
+                    outcome: "Proceed to assessment and handover",
                   });
-                  setLifecycleMsg("Counselling agreement recorded.");
-                  await queryClient.invalidateQueries({
-                    queryKey: ["officer", "student-profile", s.id],
-                  });
+                  setLifecycleMsg("Counselling consent recorded.");
+                  await invalidateProfile();
                 } catch (e) {
-                  setLifecycleMsg(portalErrorMessage(e, "Could not record agreement."));
+                  setLifecycleMsg(portalErrorMessage(e, "Could not record consent."));
+                } finally {
+                  setLifecycleBusy(false);
                 }
               }}
             >
@@ -240,58 +313,82 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
             <Button
               size="sm"
               variant="outline"
+              disabled={lifecycleBusy}
               onClick={async () => {
                 try {
+                  setLifecycleBusy(true);
                   setLifecycleMsg(null);
                   await verifySignupFee({
                     studentId: s.id,
                     action: "verify",
                     activatePortal: true,
                   });
-                  setLifecycleMsg("Signup fee verified and portal activated (if authorized).");
+                  setLifecycleMsg("Signup fee verified.");
                   await feeQ.refetch();
                 } catch (e) {
-                  setLifecycleMsg(portalErrorMessage(e, "Fee verification denied or failed."));
+                  setLifecycleMsg(
+                    portalErrorMessage(
+                      e,
+                      "Fee verification is limited to Accounts and Admin.",
+                    ),
+                  );
+                } finally {
+                  setLifecycleBusy(false);
                 }
               }}
             >
-              Verify signup fee (Accounts/Admin)
+              Verify signup fee
             </Button>
           </div>
           <Textarea
-            placeholder="Admission handover summary (required, min 10 chars)"
+            placeholder="Handover summary for the Admission Team (required)"
             value={handoverSummary}
-            disabled={!workspace.canEdit}
+            disabled={!workspace.canEdit || lifecycleBusy}
             onChange={(e) => setHandoverSummary(e.target.value)}
           />
           <Button
             size="sm"
             variant="navy"
-            disabled={!workspace.canEdit || handoverSummary.trim().length < 10}
+            disabled={
+              !workspace.canEdit || lifecycleBusy || handoverSummary.trim().length < 10
+            }
             onClick={async () => {
               try {
+                setLifecycleBusy(true);
                 setLifecycleMsg(null);
-                await handoverToAdmission({
+                const result = await handoverToAdmission({
                   studentId: s.id,
                   summary: handoverSummary,
                   checklist: { assessmentComplete: true, agreementRecorded: true },
                 });
-                setLifecycleMsg("Handed over to Admission Team queue.");
-                setHandoverSummary("");
-                await queryClient.invalidateQueries({
-                  queryKey: ["officer", "student-profile", s.id],
-                });
+                if (result && "alreadySubmitted" in result && result.alreadySubmitted) {
+                  setLifecycleMsg(
+                    result.message ?? "This student is already in the Admission Team queue.",
+                  );
+                } else {
+                  setLifecycleMsg("Student sent to the Admission Team queue.");
+                  setHandoverSummary("");
+                }
+                await invalidateProfile();
                 await queryClient.invalidateQueries({
                   queryKey: ["officer", "students-directory"],
                 });
+                await queryClient.invalidateQueries({
+                  queryKey: ["officer", "admission-handovers"],
+                });
               } catch (e) {
                 setLifecycleMsg(
-                  portalErrorMessage(e, "Handover blocked — check assessment/agreement."),
+                  portalErrorMessage(
+                    e,
+                    "Handover could not be completed. Save the assessment and record consent first.",
+                  ),
                 );
+              } finally {
+                setLifecycleBusy(false);
               }
             }}
           >
-            Hand over to Admission
+            {lifecycleBusy ? "Working…" : "Hand over to Admission"}
           </Button>
           {lifecycleMsg ? <p className="text-xs text-navy">{lifecycleMsg}</p> : null}
         </div>
@@ -317,12 +414,12 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
 
         <TabsContent value="assessment" className="space-y-5">
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <StatCard label="Eligibility" value={form.eligibility || "â€”"} />
+            <StatCard label="Eligibility" value={form.eligibility || "—"} />
             <StatCard
-              label="IELTS / Language"
-              value={form.languageScore || form.languageTest || "â€”"}
+              label="Language"
+              value={form.languageScore || form.languageTest || "—"}
             />
-            <StatCard label="Annual budget" value={form.annualBudget || "â€”"} />
+            <StatCard label="Annual budget" value={form.annualBudget || "—"} />
             <StatCard
               label="Apps submitted"
               value={`${workspace.appsSubmittedCount} of ${form.applicationTarget || 0} target`}
@@ -330,13 +427,16 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
           </div>
 
           <div className="grid gap-6 lg:grid-cols-2">
-            <Panel title="Profile and academic assessment">
+            <Panel title="Academic background">
               <div className="grid gap-3">
                 <Field label="Last qualification">
-                  <Input
+                  <CatalogOrCustom
                     value={form.lastQualification}
+                    other={qualificationOther}
+                    options={COUNSELLOR_QUALIFICATIONS}
                     disabled={!workspace.canEdit}
-                    onChange={(e) => setField("lastQualification", e.target.value)}
+                    onValue={(v) => setField("lastQualification", v)}
+                    onOther={setQualificationOther}
                   />
                 </Field>
                 <Field label="Marks / CGPA">
@@ -350,36 +450,41 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                   <Input
                     value={form.educationGap}
                     disabled={!workspace.canEdit}
+                    placeholder="e.g. 1 year"
                     onChange={(e) => setField("educationGap", e.target.value)}
                   />
                 </Field>
-                <Field label="Work experience">
+                <Field label="Work experience (years)">
                   <Input
                     value={form.workExperience}
                     disabled={!workspace.canEdit}
                     onChange={(e) => setField("workExperience", e.target.value)}
                   />
                 </Field>
-                <Field label="Preferred level">
-                  <Input
+                <Field label="Study level">
+                  <CatalogOrCustom
                     value={form.preferredLevel}
+                    other={levelOther}
+                    options={COUNSELLOR_STUDY_LEVELS}
                     disabled={!workspace.canEdit}
-                    onChange={(e) => setField("preferredLevel", e.target.value)}
+                    onValue={(v) => setField("preferredLevel", v)}
+                    onOther={setLevelOther}
                   />
                 </Field>
               </div>
             </Panel>
 
-            <Panel title="Study plan and strategy">
+            <Panel title="Eligibility and study plan">
               <div className="grid gap-3">
-                <Field label="Eligibility assessment">
+                <Field label="Eligibility outcome *">
                   <select
                     className="h-11 w-full rounded-md border border-input bg-white px-3 text-sm"
                     value={form.eligibility}
                     disabled={!workspace.canEdit}
                     onChange={(e) => setField("eligibility", e.target.value)}
                   >
-                    {ELIGIBILITY_OPTIONS.map((o) => (
+                    <option value="">Select outcome</option>
+                    {COUNSELLOR_ELIGIBILITY.map((o) => (
                       <option key={o} value={o}>
                         {o}
                       </option>
@@ -387,17 +492,21 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                   </select>
                 </Field>
                 <div className="grid grid-cols-2 gap-3">
-                  <Field label="Language test">
-                    <Input
+                  <Field label="English test">
+                    <CatalogOrCustom
                       value={form.languageTest}
+                      other={langOther}
+                      options={COUNSELLOR_LANGUAGE_TESTS}
                       disabled={!workspace.canEdit}
-                      onChange={(e) => setField("languageTest", e.target.value)}
+                      onValue={(v) => setField("languageTest", v)}
+                      onOther={setLangOther}
+                      searchable={false}
                     />
                   </Field>
-                  <Field label="Language score">
+                  <Field label="Test score">
                     <Input
                       value={form.languageScore}
-                      disabled={!workspace.canEdit}
+                      disabled={!workspace.canEdit || form.languageTest === "Not taken yet"}
                       onChange={(e) => setField("languageScore", e.target.value)}
                     />
                   </Field>
@@ -406,17 +515,22 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                   <Input
                     value={form.annualBudget}
                     disabled={!workspace.canEdit}
+                    placeholder="e.g. PKR 3–4 million"
                     onChange={(e) => setField("annualBudget", e.target.value)}
                   />
                 </Field>
                 <Field label="Funding source">
-                  <Input
+                  <CatalogOrCustom
                     value={form.fundingSource}
+                    other={fundingOther}
+                    options={COUNSELLOR_FUNDING_SOURCES}
                     disabled={!workspace.canEdit}
-                    onChange={(e) => setField("fundingSource", e.target.value)}
+                    onValue={(v) => setField("fundingSource", v)}
+                    onOther={setFundingOther}
+                    searchable={false}
                   />
                 </Field>
-                <Field label="Application target count">
+                <Field label="Application target">
                   <Input
                     type="number"
                     min={0}
@@ -426,21 +540,59 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                     onChange={(e) => setField("applicationTarget", Number(e.target.value) || 0)}
                   />
                 </Field>
-                <Field label="Target countries">
-                  <Input
+                <Field label="Preferred destination">
+                  <CatalogOrCustom
                     value={form.targetCountries}
+                    other={countryOther}
+                    options={COUNSELLOR_DESTINATIONS}
                     disabled={!workspace.canEdit}
-                    onChange={(e) => setField("targetCountries", e.target.value)}
+                    onValue={(v) => setField("targetCountries", v)}
+                    onOther={setCountryOther}
                   />
                 </Field>
-                <Field label="Target intake">
-                  <Input
-                    value={form.targetIntake}
-                    disabled={!workspace.canEdit}
-                    onChange={(e) => setField("targetIntake", e.target.value)}
-                  />
-                </Field>
-                <Field label="Study plan">
+                <div className="grid grid-cols-2 gap-3">
+                  <Field label="Intake season">
+                    <select
+                      className="h-11 w-full rounded-md border border-input bg-white px-3 text-sm"
+                      value={intakeSeason}
+                      disabled={!workspace.canEdit}
+                      onChange={(e) => setIntakeSeason(e.target.value as IntakeSeason | "")}
+                    >
+                      <option value="">Season</option>
+                      {COUNSELLOR_SEASONS.map((season) => (
+                        <option key={season} value={season}>
+                          {season}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                  <Field label="Intake year">
+                    <select
+                      className="h-11 w-full rounded-md border border-input bg-white px-3 text-sm"
+                      value={intakeYear === "" ? "" : String(intakeYear)}
+                      disabled={!workspace.canEdit}
+                      onChange={(e) =>
+                        setIntakeYear(e.target.value ? Number(e.target.value) : "")
+                      }
+                    >
+                      <option value="">Year</option>
+                      {intakeYearOptions().map((y) => (
+                        <option key={y} value={y}>
+                          {y}
+                        </option>
+                      ))}
+                    </select>
+                  </Field>
+                </div>
+                {(intakeSeason && intakeYear) || form.targetIntake ? (
+                  <p className="text-xs text-muted-foreground">
+                    Intake:{" "}
+                    <span className="font-medium text-navy">
+                      {formatIntakeLabel(intakeSeason, intakeYear) || form.targetIntake}
+                    </span>
+                  </p>
+                ) : null}
+                <Field label="Counsellor notes / study plan">
                   <Textarea
                     value={form.studyPlan}
                     disabled={!workspace.canEdit}
@@ -457,7 +609,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 <p className="text-xs text-muted-foreground">
                   Assessed by:{" "}
                   <span className="font-medium text-navy">
-                    {workspace.assessment.assessedByName || "â€”"}
+                    {workspace.assessment.assessedByName || "—"}
                   </span>
                   {workspace.assessment.assessedAt
                     ? ` (${fmtDate(workspace.assessment.assessedAt.slice(0, 10))})`
@@ -474,24 +626,35 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 disabled={saveM.isPending}
                 onClick={() => {
                   setSaveMsg(null);
-                  saveM.mutate();
+                  const payload = buildAssessmentPayload();
+                  if (!payload) return;
+                  const check = validateAssessmentForSave(payload);
+                  if (!check.ok) {
+                    setSaveMsg(check.message);
+                    return;
+                  }
+                  saveM.mutate(payload);
                 }}
               >
-                {saveM.isPending ? "Saving..." : "Save assessment"}
+                {saveM.isPending ? "Saving…" : "Save assessment"}
               </Button>
               {saveMsg ? (
                 <p
-                  className={cn("text-sm", saveM.isError ? "text-danger" : "text-muted-foreground")}
+                  className={cn(
+                    "text-sm",
+                    saveM.isError || saveMsg.toLowerCase().includes("missing")
+                      ? "text-danger"
+                      : "text-muted-foreground",
+                  )}
                 >
                   {saveMsg}
                 </p>
               ) : null}
-              {saveM.isError ? <ErrorState body={portalErrorMessage(saveM.error)} /> : null}
             </div>
           ) : null}
 
           <Panel
-            title="Counsellor shortlist"
+            title="University shortlist"
             action={
               workspace.canEdit ? (
                 <Button size="sm" variant="outline" onClick={() => setShortOpen(true)}>
@@ -502,8 +665,8 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
           >
             {!workspace.shortlist.length ? (
               <EmptyState
-                title="No shortlist items"
-                body="Document university/program options and suitability notes here. Notes are counsellor-authored, not auto-scored."
+                title="No shortlist items yet"
+                body="Add universities and programmes you are considering with this student."
               />
             ) : (
               <div className="grid gap-3 md:grid-cols-3">
@@ -511,7 +674,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                   <div key={item.id} className="border-b border-border pb-3">
                     <p className="font-semibold text-navy">{item.universityName}</p>
                     <p className="text-sm text-muted-foreground">{item.programName}</p>
-                    <p className="mt-2 text-xs text-navy">{item.suitabilityNote || "â€”"}</p>
+                    <p className="mt-2 text-xs text-navy">{item.suitabilityNote || "—"}</p>
                   </div>
                 ))}
               </div>
@@ -554,11 +717,11 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
               />
               <OverviewItem
                 label="Education gap"
-                value={workspace.assessment.educationGap || "â€”"}
+                value={workspace.assessment.educationGap || "—"}
               />
               <OverviewItem
                 label="Work experience"
-                value={workspace.assessment.workExperience || "â€”"}
+                value={workspace.assessment.workExperience || "—"}
               />
               <OverviewItem
                 label="Preferred level"
@@ -568,7 +731,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 label="Language"
                 value={workspace.assessment.languageScore || s.englishTest}
               />
-              <OverviewItem label="Funding" value={workspace.assessment.fundingSource || "â€”"} />
+              <OverviewItem label="Funding" value={workspace.assessment.fundingSource || "—"} />
             </dl>
           </Panel>
         </TabsContent>
@@ -576,7 +739,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
         <TabsContent value="documents">
           <Panel title="Documents">
             {!workspace.documents.length ? (
-              <EmptyState title="No documents uploaded" />
+              <EmptyState title="No documents uploaded yet" body="Documents appear here after upload." />
             ) : (
               <TableWrap>
                 <thead>
@@ -704,8 +867,8 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                   >
                     <div className="flex items-center justify-between gap-2">
                       <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                        {n.authorName} Â· {fmtDate(n.createdAt.slice(0, 10))}
-                        {n.pinned ? " Â· Pinned" : ""}
+                        {n.authorName} · {fmtDate(n.createdAt.slice(0, 10))}
+                        {n.pinned ? " · Pinned" : ""}
                       </p>
                     </div>
                     <p className="mt-1 text-sm text-navy whitespace-pre-wrap">{n.body}</p>
@@ -913,4 +1076,95 @@ function toForm(a: StudentProfileWorkspace["assessment"]): AssessmentSaveInput {
     studyPlan: a.studyPlan,
     immediateNextStep: a.immediateNextStep,
   };
+}
+
+function catalogOrKeep(
+  selected: string,
+  otherText: string,
+  catalog: readonly string[],
+): { ok: true; value: string } | { ok: false; error: string } {
+  const value = selected.trim();
+  if (!value) return { ok: true, value: "" };
+  if ((catalog as readonly string[]).includes(value)) {
+    if (value === "Other") return resolveCatalogOrOther("Other", otherText);
+    return { ok: true, value };
+  }
+  // Preserve legacy free-text that is not in the catalog.
+  return { ok: true, value };
+}
+
+function CatalogOrCustom({
+  value,
+  other,
+  options,
+  disabled,
+  onValue,
+  onOther,
+  searchable = true,
+}: {
+  value: string;
+  other: string;
+  options: readonly string[];
+  disabled?: boolean;
+  onValue: (v: string) => void;
+  onOther: (v: string) => void;
+  searchable?: boolean;
+}) {
+  const inCatalog = (options as readonly string[]).includes(value);
+  const selectValue = !value ? "" : inCatalog ? value : "Other";
+  const showOther = selectValue === "Other";
+
+  return (
+    <div>
+      {searchable ? (
+        <SearchableSelect
+          value={selectValue}
+          options={options}
+          disabled={Boolean(disabled)}
+          placeholder="Select"
+          onChange={(v) => {
+            if (v === "Other") {
+              onValue("Other");
+            } else {
+              onValue(v);
+              onOther("");
+            }
+          }}
+        />
+      ) : (
+        <select
+          className="h-11 w-full rounded-md border border-input bg-white px-3 text-sm"
+          value={selectValue}
+          disabled={disabled}
+          onChange={(e) => {
+            const v = e.target.value;
+            if (v === "Other") onValue("Other");
+            else {
+              onValue(v);
+              onOther("");
+            }
+          }}
+        >
+          <option value="">Select</option>
+          {options.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+      )}
+      {showOther ? (
+        <Input
+          className="mt-2"
+          value={inCatalog && value === "Other" ? other : inCatalog ? other : value}
+          placeholder="Enter value"
+          disabled={disabled}
+          onChange={(e) => {
+            onOther(e.target.value);
+            if (value !== "Other") onValue("Other");
+          }}
+        />
+      ) : null}
+    </div>
+  );
 }

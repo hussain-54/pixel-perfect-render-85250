@@ -686,7 +686,19 @@ export const portalHandoverToAdmission = createServerFn({ method: "POST" })
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       session.businessRole = await resolveSessionBusinessRole(session);
       denyFrontDeskConsultantWorkflows(session, "admission handover");
-      await requireModulePermission(session, "admissions", 2, "admission handover");
+      // Handover is a counselling action (counsellor has counselling Edit/Full; admissions is View-only).
+      const {
+        HANDOVER_INITIATE_MINIMUM,
+        HANDOVER_INITIATE_MODULE,
+        assessmentSatisfiesHandover,
+        handoverDuplicateMessage,
+      } = await import("@/lib/counsellor-handover-rules");
+      await requireModulePermission(
+        session,
+        HANDOVER_INITIATE_MODULE,
+        HANDOVER_INITIATE_MINIMUM,
+        "admission handover",
+      );
       const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb } =
         await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {
@@ -706,7 +718,30 @@ export const portalHandoverToAdmission = createServerFn({ method: "POST" })
 
       const summary = data.summary.trim();
       if (summary.length < 10) {
-        throw new AuthError("Handover summary must describe the case (min 10 characters).", 400);
+        throw new AuthError("Add a short handover summary (at least 10 characters).", 400);
+      }
+
+      const { data: existingSubmitted } = await client
+        .from("admission_handovers")
+        .select("id,status,summary,handed_over_at,student_id")
+        .eq("student_id", data.studentId)
+        .eq("status", "submitted")
+        .order("handed_over_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (existingSubmitted) {
+        return {
+          ok: true as const,
+          alreadySubmitted: true as const,
+          message: handoverDuplicateMessage(),
+          handover: {
+            id: existingSubmitted.id,
+            studentId: existingSubmitted.student_id,
+            status: existingSubmitted.status,
+            summary: existingSubmitted.summary,
+            handedOverAt: existingSubmitted.handed_over_at,
+          },
+        };
       }
 
       const { data: agreement } = await client
@@ -718,17 +753,22 @@ export const portalHandoverToAdmission = createServerFn({ method: "POST" })
         .limit(1)
         .maybeSingle();
       if (!agreement) {
-        throw new AuthError("Record counselling agreement/consent before handover.", 400);
+        throw new AuthError("Record counselling consent before handing this student over.", 400);
       }
 
       const { data: assessment } = await client
         .from("student_assessments")
-        .select("id")
+        .select("id,summary")
         .eq("student_id", data.studentId)
+        .order("assessed_at", { ascending: false })
         .limit(1)
         .maybeSingle();
-      if (!assessment) {
-        throw new AuthError("Complete a counsellor assessment before handover.", 400);
+      const assessmentGate = assessmentSatisfiesHandover({
+        hasAssessmentRow: Boolean(assessment?.id),
+        eligibilitySummary: assessment?.summary,
+      });
+      if (!assessmentGate.ok) {
+        throw new AuthError(assessmentGate.message, 400);
       }
 
       const { data: handover, error } = await client
@@ -768,6 +808,7 @@ export const portalHandoverToAdmission = createServerFn({ method: "POST" })
 
       return {
         ok: true as const,
+        alreadySubmitted: false as const,
         handover: {
           id: handover.id,
           studentId: handover.student_id,
@@ -873,6 +914,16 @@ export const portalListAdmissionHandovers = createServerFn({ method: "GET" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      session.businessRole = await resolveSessionBusinessRole(session);
+      const { HANDOVER_QUEUE_MODULE, HANDOVER_QUEUE_VIEW_MINIMUM } = await import(
+        "@/lib/counsellor-handover-rules"
+      );
+      await requireModulePermission(
+        session,
+        HANDOVER_QUEUE_MODULE,
+        HANDOVER_QUEUE_VIEW_MINIMUM,
+        "admission handover queue",
+      );
       const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {
         return { ok: true as const, handovers: [] as AdmissionHandoverView[] };
@@ -927,6 +978,16 @@ export const portalUpdateAdmissionHandover = createServerFn({ method: "POST" })
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
+      session.businessRole = await resolveSessionBusinessRole(session);
+      const { HANDOVER_QUEUE_MODULE, HANDOVER_QUEUE_MUTATE_MINIMUM } = await import(
+        "@/lib/counsellor-handover-rules"
+      );
+      await requireModulePermission(
+        session,
+        HANDOVER_QUEUE_MODULE,
+        HANDOVER_QUEUE_MUTATE_MINIMUM,
+        "admission handover queue",
+      );
       const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb } =
         await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {

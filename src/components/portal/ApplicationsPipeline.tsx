@@ -195,7 +195,7 @@ export function ApplicationsPipeline() {
       />
 
       {(handoversQ.data?.handovers?.length ?? 0) > 0 ? (
-        <Panel title="Admission handover queue" className="mb-4">
+        <Panel title="Admission Team handover queue" className="mb-4">
           <TableWrap>
             <thead>
               <tr>
