@@ -1,6 +1,5 @@
 /**
- * Public “Universities to Explore” catalogue for the homepage carousel.
- * Destinations for exploration — not a verified partnership inventory.
+ * Homepage carousel of partnered universities.
  * Local logos live under /public/universities/logos (brand marks from each
  * institution’s official domain). Missing marks use a text fallback card.
  */
@@ -22,9 +21,9 @@ export type ExploreUniversity = {
 };
 
 export const EXPLORE_UNIVERSITIES_SECTION = {
-  eyebrow: "University destinations",
-  title: "Universities to Explore",
-  body: "A curated set of institutions students commonly explore with Global Roots. Confirm current options, intakes, and any partnership arrangements with a consultant — this is not a live partnership inventory.",
+  eyebrow: "Partnered universities",
+  title: "Partnered Universities",
+  body: "These are partnered universities Global Roots works with. Confirm current programs, intakes, and application options with a consultant.",
 } as const;
 
 /** All 60 supplied institutions — names and accents preserved. */

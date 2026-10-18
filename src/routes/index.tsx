@@ -182,7 +182,7 @@ function Home() {
         </div>
       </section>
 
-      {/* Universities to explore — full curated list (not a verified partnership claim) */}
+      {/* Partnered universities carousel */}
       <UniversityLogoCarousel />
 
       {/* Programs */}

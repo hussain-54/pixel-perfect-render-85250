@@ -58,7 +58,7 @@ function MarqueeRow({
   return (
     <div
       className="relative overflow-hidden"
-      aria-label="Universities scrolling horizontally"
+      aria-label="Partnered universities scrolling horizontally"
     >
       <div
         className="pointer-events-none absolute inset-y-0 left-0 z-10 w-10 bg-gradient-to-r from-surface to-transparent sm:w-16"
@@ -83,7 +83,7 @@ function MarqueeRow({
   );
 }
 
-/** Single-row university destinations marquee with Explore more CTA. */
+/** Single-row partnered-universities marquee with Explore more CTA. */
 export function UniversityLogoCarousel() {
   const headingId = useId();
   const [paused, setPaused] = useState(false);
@@ -166,20 +166,20 @@ export function UniversityLogoCarousel() {
           <div className="flex flex-col items-start justify-between gap-5 md:flex-row md:items-center">
             <div className="max-w-xl">
               <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.14em] text-royal">
-                Explore more
+                More partnered universities
               </p>
               <h3 className="mt-1.5 font-display text-xl font-semibold text-navy md:text-2xl">
-                Looking for the right university fit?
+                Looking for the right partnered university?
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                Browse the full university catalogue, or book a free consultation and we will
-                shortlist options around your goals, budget, and destination.
+                Browse the full list of partnered universities, or book a free consultation and
+                we will shortlist options around your goals, budget, and destination.
               </p>
             </div>
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">
               <Button asChild variant="navy" size="lg">
                 <Link to="/universities">
-                  View all universities <ArrowRight className="h-4 w-4" />
+                  View all partnered universities <ArrowRight className="h-4 w-4" />
                 </Link>
               </Button>
               <Button asChild variant="outline" size="lg">
