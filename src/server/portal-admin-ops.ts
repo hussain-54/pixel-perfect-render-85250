@@ -111,81 +111,164 @@ export const portalGetAdminOpsOverview = createServerFn({ method: "GET" }).handl
       }
 
       const client = requireAoSupabaseClient();
-      const students = await listVisibleStudentsDb(client, session, { includeArchived: true });
-      const studentIds = students.map((s) => s.id);
-
       const nowIso = new Date().toISOString();
+      const isAdmin = rolesAtLeastAdmin(session.role);
 
-      const [
-        signupClaimed,
-        handovers,
-        docsPending,
-        appsAction,
-        offersAction,
-        uniFees,
-        visas,
-        overdueTasks,
-        apptsPending,
-        journeyRows,
-      ] = await Promise.all([
-        client
-          .from("signup_fee_payments")
-          .select("id", { count: "exact", head: true })
-          .in("status", ["claimed", "unpaid"]),
-        client
-          .from("admission_handovers")
-          .select("id", { count: "exact", head: true })
-          .eq("status", "submitted"),
-        includeDocs
-          ? client
-              .from("student_documents")
-              .select("id", { count: "exact", head: true })
-              .eq("status", "pending_review")
-          : Promise.resolve({ count: 0, error: null }),
-        client
-          .from("applications")
-          .select("id", { count: "exact", head: true })
-          .in("stage", ["docs_pending", "under_review", "ready_to_submit"]),
-        client
-          .from("offers")
-          .select("id", { count: "exact", head: true })
-          .in("status", ["awaiting_student", "conditions_pending"]),
-        includeFinance
-          ? client
-              .from("university_fee_obligations")
-              .select("id", { count: "exact", head: true })
-              .in("status", ["due", "claimed"])
-          : Promise.resolve({ count: 0, error: null }),
-        client
-          .from("visa_milestones")
-          .select("id", { count: "exact", head: true })
-          .eq("decision", "pending"),
-        client
-          .from("tasks")
-          .select("id", { count: "exact", head: true })
-          .in("status", ["open", "in_progress"])
-          .lt("due_at", nowIso),
-        client
-          .from("appointments")
-          .select("id", { count: "exact", head: true })
-          .in("status", ["requested", "confirmed"]),
-        // Never treat empty visible set as "load all" — firm-wide search is admin-only.
-        rolesAtLeastAdmin(session.role)
-          ? client
+      // Head counts do not depend on student rows. Run them with the student
+      // reads instead of waiting on a full select("*") first.
+      const loadHeads = () =>
+        Promise.all([
+          client
+            .from("signup_fee_payments")
+            .select("id", { count: "exact", head: true })
+            .in("status", ["claimed", "unpaid"]),
+          client
+            .from("admission_handovers")
+            .select("id", { count: "exact", head: true })
+            .eq("status", "submitted"),
+          includeDocs
+            ? client
+                .from("student_documents")
+                .select("id", { count: "exact", head: true })
+                .eq("status", "pending_review")
+            : Promise.resolve({ count: 0, error: null }),
+          client
+            .from("applications")
+            .select("id", { count: "exact", head: true })
+            .in("stage", ["docs_pending", "under_review", "ready_to_submit"]),
+          client
+            .from("offers")
+            .select("id", { count: "exact", head: true })
+            .in("status", ["awaiting_student", "conditions_pending"]),
+          includeFinance
+            ? client
+                .from("university_fee_obligations")
+                .select("id", { count: "exact", head: true })
+                .in("status", ["due", "claimed"])
+            : Promise.resolve({ count: 0, error: null }),
+          client
+            .from("visa_milestones")
+            .select("id", { count: "exact", head: true })
+            .eq("decision", "pending"),
+          client
+            .from("tasks")
+            .select("id", { count: "exact", head: true })
+            .in("status", ["open", "in_progress"])
+            .lt("due_at", nowIso),
+          client
+            .from("appointments")
+            .select("id", { count: "exact", head: true })
+            .in("status", ["requested", "confirmed"]),
+        ]);
+
+      const recentStudentSelect =
+        "id, full_name, case_id, journey_stage, archived_at, updated_at" as const;
+
+      let stageStudents: {
+        id: string;
+        name: string;
+        caseId: string;
+        journeyStage: string;
+        archived: boolean;
+        updatedAt: string;
+      }[];
+      let allForStages: typeof stageStudents;
+      let signupClaimed: { count: number | null; error: { message: string } | null };
+      let handovers: { count: number | null; error: { message: string } | null };
+      let docsPending: { count: number | null; error: { message: string } | null };
+      let appsAction: { count: number | null; error: { message: string } | null };
+      let offersAction: { count: number | null; error: { message: string } | null };
+      let uniFees: { count: number | null; error: { message: string } | null };
+      let visas: { count: number | null; error: { message: string } | null };
+      let overdueTasks: { count: number | null; error: { message: string } | null };
+      let apptsPending: { count: number | null; error: { message: string } | null };
+
+      if (isAdmin) {
+        const [heads, stageRows, recentRows] = await Promise.all([
+          loadHeads(),
+          client.from("students").select("journey_stage").is("archived_at", null),
+          client
+            .from("students")
+            .select(recentStudentSelect)
+            .is("archived_at", null)
+            .order("updated_at", { ascending: false })
+            .limit(40),
+        ]);
+        [
+          signupClaimed,
+          handovers,
+          docsPending,
+          appsAction,
+          offersAction,
+          uniFees,
+          visas,
+          overdueTasks,
+          apptsPending,
+        ] = heads;
+        if (stageRows.error) throw new Error(stageRows.error.message);
+        if (recentRows.error) throw new Error(recentRows.error.message);
+        allForStages = (stageRows.data ?? []).map((r) => ({
+          id: "",
+          name: "",
+          caseId: "",
+          journeyStage: r.journey_stage,
+          archived: false,
+          updatedAt: "",
+        }));
+        stageStudents = (recentRows.data ?? []).map((r) => ({
+          id: r.id,
+          name: r.full_name,
+          caseId: r.case_id,
+          journeyStage: r.journey_stage,
+          archived: Boolean(r.archived_at),
+          updatedAt: r.updated_at,
+        }));
+      } else {
+        // Manager desk: keep assignment scope. Counts run beside the visible-student read.
+        const [heads, students] = await Promise.all([
+          loadHeads(),
+          listVisibleStudentsDb(client, session, { includeArchived: true }),
+        ]);
+        [
+          signupClaimed,
+          handovers,
+          docsPending,
+          appsAction,
+          offersAction,
+          uniFees,
+          visas,
+          overdueTasks,
+          apptsPending,
+        ] = heads;
+        const studentIds = students.map((s) => s.id);
+        const journeyRows = studentIds.length
+          ? await client
               .from("students")
-              .select("id, full_name, case_id, journey_stage, archived_at, updated_at")
-              .is("archived_at", null)
+              .select(recentStudentSelect)
+              .in("id", studentIds)
               .order("updated_at", { ascending: false })
               .limit(40)
-          : studentIds.length
-            ? client
-                .from("students")
-                .select("id, full_name, case_id, journey_stage, archived_at, updated_at")
-                .in("id", studentIds)
-                .order("updated_at", { ascending: false })
-                .limit(40)
-            : Promise.resolve({ data: [], error: null }),
-      ]);
+          : { data: [], error: null };
+        if (journeyRows.error) throw new Error(journeyRows.error.message);
+        stageStudents =
+          journeyRows.data?.map((r) => ({
+            id: r.id,
+            name: r.full_name,
+            caseId: r.case_id,
+            journeyStage: r.journey_stage,
+            archived: Boolean(r.archived_at),
+            updatedAt: r.updated_at,
+          })) ??
+          students.slice(0, 40).map((s) => ({
+            id: s.id,
+            name: s.name,
+            caseId: s.caseId,
+            journeyStage: s.stage,
+            archived: Boolean(s.archived),
+            updatedAt: s.lastActivity,
+          }));
+        allForStages = stageStudents;
+      }
 
       for (const res of [
         signupClaimed,
@@ -197,46 +280,8 @@ export const portalGetAdminOpsOverview = createServerFn({ method: "GET" }).handl
         visas,
         overdueTasks,
         apptsPending,
-        journeyRows,
       ]) {
-        if ("error" in res && res.error) throw new Error(res.error.message);
-      }
-
-      const stageStudents =
-        journeyRows.data?.map((r) => ({
-          id: r.id,
-          name: r.full_name,
-          caseId: r.case_id,
-          journeyStage: r.journey_stage,
-          archived: Boolean(r.archived_at),
-          updatedAt: r.updated_at,
-        })) ??
-        students.map((s) => ({
-          id: s.id,
-          name: s.name,
-          caseId: s.caseId,
-          journeyStage: s.stage,
-          archived: Boolean(s.archived),
-          updatedAt: s.lastActivity,
-        }));
-
-      // Prefer full journey_stage counts for admin: re-query all non-archived when admin.
-      let allForStages = stageStudents;
-      if (rolesAtLeastAdmin(session.role)) {
-        const { data: allStudents, error: allErr } = await client
-          .from("students")
-          .select("id, full_name, case_id, journey_stage, archived_at, updated_at")
-          .is("archived_at", null);
-        if (allErr) throw new Error(allErr.message);
-        allForStages =
-          allStudents?.map((r) => ({
-            id: r.id,
-            name: r.full_name,
-            caseId: r.case_id,
-            journeyStage: r.journey_stage,
-            archived: Boolean(r.archived_at),
-            updatedAt: r.updated_at,
-          })) ?? stageStudents;
+        if (res.error) throw new Error(res.error.message);
       }
 
       const metrics = buildAdminOpsMetrics({

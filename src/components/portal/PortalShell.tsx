@@ -101,11 +101,22 @@ const roleMeta: Record<
   },
 };
 
-function SidebarNav({ items, onNavigate }: { items: PortalNavItem[]; onNavigate?: () => void }) {
+function SidebarNav({
+  items,
+  onNavigate,
+  id,
+}: {
+  items: PortalNavItem[];
+  onNavigate?: () => void;
+  id?: string;
+}) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   return (
-    <nav className="flex flex-1 flex-col gap-0.5 overflow-y-auto px-3 py-3">
+    <nav
+      id={id}
+      className="portal-nav-scroll flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto overscroll-contain px-3 py-3"
+    >
       {items.map((item) => {
         const active = pathname === item.to || pathname.startsWith(`${item.to}/`);
         const Icon = item.icon;
@@ -120,7 +131,7 @@ function SidebarNav({ items, onNavigate }: { items: PortalNavItem[]; onNavigate?
               to={item.to}
               onClick={onNavigate}
               className={cn(
-                "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[0.8125rem] font-medium transition-colors duration-150",
+                "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[0.8125rem] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
                 active
                   ? "bg-bright text-white shadow-sm shadow-black/15"
                   : "text-white/70 hover:bg-white/10 hover:text-white",
@@ -173,6 +184,8 @@ export function PortalShell({ role, nav, children, barTitle, session }: PortalSh
   const meta = roleMeta[role];
   const navigate = useNavigate();
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
   const [signingOut, setSigningOut] = useState(false);
   const [searchQ, setSearchQ] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
@@ -218,6 +231,11 @@ export function PortalShell({ role, nav, children, barTitle, session }: PortalSh
     else setSearchOpen(true);
   }, [searchQTrim]);
 
+  useEffect(() => {
+    setMobileOpen(false);
+    setMobileSearchOpen(false);
+  }, [pathname]);
+
   async function onSignOut() {
     if (signingOut) return;
     setSigningOut(true);
@@ -230,7 +248,7 @@ export function PortalShell({ role, nav, children, barTitle, session }: PortalSh
   }
 
   const brandBlock = (
-    <div className="border-b border-white/10 px-4 py-4">
+    <div className="shrink-0 border-b border-white/10 px-4 py-4">
       <Logo light to={meta.home} className="[&_img]:h-8 [&_img]:sm:h-9" />
       <div className="mt-3 space-y-0.5 text-[0.68rem] leading-snug text-white/55">
         {identityEmail ? (
@@ -246,10 +264,10 @@ export function PortalShell({ role, nav, children, barTitle, session }: PortalSh
   );
 
   const footerBlock = (compact = false) => (
-    <div className={cn("mt-auto space-y-1.5 border-t border-white/10 p-3", compact && "p-3")}>
+    <div className={cn("mt-auto shrink-0 space-y-1.5 border-t border-white/10 p-3", compact && "p-3")}>
       <button
         type="button"
-        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[0.8125rem] font-medium text-white/65 transition-colors hover:bg-white/10 hover:text-white"
+        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[0.8125rem] font-medium text-white/65 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
         onClick={() => {
           setMobileOpen(false);
           void navigate({ to: "/change-password" });
@@ -260,7 +278,7 @@ export function PortalShell({ role, nav, children, barTitle, session }: PortalSh
       </button>
       <button
         type="button"
-        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[0.8125rem] font-medium text-white/65 transition-colors hover:bg-white/10 hover:text-white disabled:opacity-50"
+        className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[0.8125rem] font-medium text-white/65 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80 disabled:opacity-50"
         onClick={onSignOut}
         disabled={signingOut}
       >
@@ -270,9 +288,46 @@ export function PortalShell({ role, nav, children, barTitle, session }: PortalSh
     </div>
   );
 
+  const searchPanel =
+    searchQTrim.length >= 2 && searchOpen ? (
+      <div className="rounded-md border border-border bg-white shadow-md">
+        {searchResults.isLoading ? (
+          <p className="px-3 py-2 text-xs text-muted-foreground">Searching…</p>
+        ) : searchResults.isError ? (
+          <p className="px-3 py-2 text-xs text-danger">Search unavailable</p>
+        ) : !searchResults.data?.length ? (
+          <p className="px-3 py-2 text-xs text-muted-foreground">No authorized matches</p>
+        ) : (
+          <ul className="max-h-64 overflow-auto py-1">
+            {searchResults.data.map((hit) => (
+              <li key={hit.id}>
+                <Link
+                  to="/staff/students/$studentId"
+                  params={{ studentId: hit.id }}
+                  search={{ tab: "assessment" }}
+                  className="block px-3 py-2 text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal/40"
+                  onMouseDown={(e) => e.preventDefault()}
+                  onClick={() => {
+                    setSearchQ("");
+                    setSearchOpen(false);
+                    setMobileSearchOpen(false);
+                  }}
+                >
+                  <span className="font-semibold text-navy">{hit.name}</span>
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {hit.caseId} · {hit.phone}
+                  </span>
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    ) : null;
+
   return (
-    <div className="flex min-h-svh bg-surface">
-      <aside className="hidden w-[15.5rem] shrink-0 flex-col bg-sidebar text-sidebar-foreground md:flex">
+    <div className="flex h-svh max-h-svh min-h-0 overflow-hidden bg-surface">
+      <aside className="hidden h-svh min-h-0 w-[15.5rem] shrink-0 flex-col overflow-hidden bg-sidebar text-sidebar-foreground lg:flex">
         {brandBlock}
         <SidebarNav items={nav} />
         {footerBlock()}
@@ -281,25 +336,27 @@ export function PortalShell({ role, nav, children, barTitle, session }: PortalSh
       <Sheet open={mobileOpen} onOpenChange={setMobileOpen}>
         <SheetContent
           side="left"
-          className="w-[17rem] border-0 bg-sidebar p-0 text-sidebar-foreground"
+          className="flex h-full w-[min(17rem,calc(100vw-2.5rem))] max-w-[17rem] flex-col gap-0 overflow-hidden border-0 bg-sidebar p-0 text-sidebar-foreground motion-reduce:animate-none motion-reduce:duration-0 [&>button]:rounded-md [&>button]:bg-white/10 [&>button]:p-1 [&>button]:text-white [&>button]:opacity-100 [&>button]:ring-offset-transparent [&>button]:focus:ring-white/80"
         >
           <SheetHeader className="sr-only">
             <SheetTitle>Workspace menu</SheetTitle>
           </SheetHeader>
-          {brandBlock}
-          <SidebarNav items={nav} onNavigate={() => setMobileOpen(false)} />
+          <div className="shrink-0 pr-10">{brandBlock}</div>
+          <SidebarNav id="portal-mobile-nav" items={nav} onNavigate={() => setMobileOpen(false)} />
           {footerBlock(true)}
         </SheetContent>
       </Sheet>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex h-12 items-center gap-3 border-b border-border bg-white px-4 md:h-14 md:px-6">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="z-20 flex h-12 shrink-0 items-center gap-2 border-b border-border bg-white px-3 sm:gap-3 sm:px-4 md:h-14 md:px-6">
           <Button
             type="button"
             variant="ghost"
             size="icon"
-            className="md:hidden"
+            className="lg:hidden"
             aria-label="Open menu"
+            aria-expanded={mobileOpen}
+            aria-controls="portal-mobile-nav"
             onClick={() => setMobileOpen(true)}
           >
             <Menu className="h-5 w-5" />
@@ -312,13 +369,13 @@ export function PortalShell({ role, nav, children, barTitle, session }: PortalSh
               <span
                 role="status"
                 aria-label="Demo session"
-                className="shrink-0 rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-amber-900"
+                className="hidden shrink-0 rounded border border-amber-300 bg-amber-50 px-2 py-0.5 text-[0.65rem] font-semibold uppercase tracking-wide text-amber-900 sm:inline"
               >
                 Demo session
               </span>
             ) : null}
             {showGlobalSearch ? (
-              <div className="relative ml-auto hidden min-w-0 max-w-md flex-1 md:block">
+              <div className="relative ml-auto hidden min-w-0 max-w-md flex-1 lg:block">
                 <Search className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   value={searchQ}
@@ -329,46 +386,26 @@ export function PortalShell({ role, nav, children, barTitle, session }: PortalSh
                   aria-label="Search students"
                   className="h-9 pl-8"
                 />
-                {searchOpen && searchQTrim.length >= 2 ? (
-                  <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-40 rounded-md border border-border bg-white shadow-md">
-                    {searchResults.isLoading ? (
-                      <p className="px-3 py-2 text-xs text-muted-foreground">Searching…</p>
-                    ) : searchResults.isError ? (
-                      <p className="px-3 py-2 text-xs text-danger">Search unavailable</p>
-                    ) : !searchResults.data?.length ? (
-                      <p className="px-3 py-2 text-xs text-muted-foreground">
-                        No authorized matches
-                      </p>
-                    ) : (
-                      <ul className="max-h-64 overflow-auto py-1">
-                        {searchResults.data.map((hit) => (
-                          <li key={hit.id}>
-                            <Link
-                              to="/staff/students/$studentId"
-                              params={{ studentId: hit.id }}
-                              search={{ tab: "assessment" }}
-                              className="block px-3 py-2 text-sm hover:bg-accent"
-                              onMouseDown={(e) => e.preventDefault()}
-                              onClick={() => {
-                                setSearchQ("");
-                                setSearchOpen(false);
-                              }}
-                            >
-                              <span className="font-semibold text-navy">{hit.name}</span>
-                              <span className="ml-2 text-xs text-muted-foreground">
-                                {hit.caseId} · {hit.phone}
-                              </span>
-                            </Link>
-                          </li>
-                        ))}
-                      </ul>
-                    )}
-                  </div>
+                {searchPanel ? (
+                  <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-40">{searchPanel}</div>
                 ) : null}
               </div>
             ) : null}
           </div>
-          <div className="hidden shrink-0 lg:block">
+          {showGlobalSearch ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="icon"
+              className="lg:hidden"
+              aria-label={mobileSearchOpen ? "Close search" : "Search students"}
+              aria-expanded={mobileSearchOpen}
+              onClick={() => setMobileSearchOpen((open) => !open)}
+            >
+              <Search className="h-5 w-5" />
+            </Button>
+          ) : null}
+          <div className="hidden shrink-0 xl:block">
             <Logo to={meta.home} />
           </div>
           {showDemoSwitcher ? <RoleSwitcher current={meta.switcherLabel} /> : null}
@@ -383,7 +420,23 @@ export function PortalShell({ role, nav, children, barTitle, session }: PortalSh
             Sign out
           </Button>
         </header>
-        <main className="flex-1 p-4 md:p-6 lg:p-7">{children ?? <Outlet />}</main>
+        {showGlobalSearch && mobileSearchOpen ? (
+          <div className="shrink-0 border-b border-border bg-white px-3 py-2 lg:hidden">
+            <Input
+              value={searchQ}
+              onChange={(e) => setSearchQ(e.target.value)}
+              onFocus={() => searchQTrim.length >= 2 && setSearchOpen(true)}
+              placeholder="Search student, ID, phone..."
+              aria-label="Search students"
+              className="h-10"
+              autoFocus
+            />
+            {searchPanel ? <div className="mt-2">{searchPanel}</div> : null}
+          </div>
+        ) : null}
+        <main className="min-h-0 min-w-0 flex-1 overflow-x-clip overflow-y-auto overscroll-contain p-4 md:p-6 lg:p-7">
+          {children ?? <Outlet />}
+        </main>
       </div>
     </div>
   );

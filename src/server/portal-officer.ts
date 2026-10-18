@@ -388,27 +388,35 @@ export const portalSearchStudents = createServerFn({ method: "GET" })
       const q = data.q.trim().toLowerCase();
       if (q.length < 2) return [];
 
-      const { usesSupabaseDataPlane, requireAoSupabaseClient, listVisibleStudentsDb } =
+      const { usesSupabaseDataPlane, requireAoSupabaseClient, resolveConsultantDeskId } =
         await import("@/server/ao-data");
+      const { sanitizeStudentSearchTerm, studentSearchOrClause, STUDENT_SEARCH_COLUMNS } =
+        await import("@/lib/student-search-query");
       if (usesSupabaseDataPlane(session)) {
+        const term = sanitizeStudentSearchTerm(data.q);
+        if (!term) return [];
         const client = requireAoSupabaseClient();
-        const students = await listVisibleStudentsDb(client, session);
-        return students
-          .filter(
-            (s) =>
-              s.name.toLowerCase().includes(q) ||
-              s.caseId.toLowerCase().includes(q) ||
-              s.phone.toLowerCase().includes(q) ||
-              s.id.toLowerCase() === q,
-          )
-          .slice(0, 8)
-          .map((s) => ({
-            id: s.id,
-            caseId: s.caseId,
-            name: s.name,
-            phone: s.phone,
-            destination: s.destination,
-          }));
+        let query = client
+          .from("students")
+          .select(STUDENT_SEARCH_COLUMNS)
+          .is("archived_at", null)
+          .or(studentSearchOrClause(term))
+          .order("updated_at", { ascending: false })
+          .limit(8);
+        if (session.role === "consultant") {
+          const desk = await resolveConsultantDeskId(client, session);
+          if (!desk) return [];
+          query = query.eq("assigned_consultant_id", desk);
+        }
+        const { data: rows, error } = await query;
+        if (error) throw new Error(error.message);
+        return (rows ?? []).map((s) => ({
+          id: s.id,
+          caseId: s.case_id,
+          name: s.full_name,
+          phone: s.phone ?? "",
+          destination: s.destination ?? "",
+        }));
       }
 
       return visibleStudents(session)
