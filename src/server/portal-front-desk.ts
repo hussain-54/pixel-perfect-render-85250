@@ -344,64 +344,114 @@ export const portalProvisionStudentPortalAccount = createServerFn({ method: "POS
         );
       }
 
+      const {
+        buildServiceRoleStudentProfilePatch,
+        canReuseExistingStudentProfileForLink,
+        provisionPartialFailureMessage,
+        STUDENT_PORTAL_BUSINESS_ROLE,
+      } = await import("@/lib/student-portal-provision-rules");
+
+      // Idempotent path: reuse an existing unlinked student login for this email.
       const { data: profileByEmail, error: profileErr } = await admin
         .from("profiles")
-        .select("id, email, role")
+        .select("id, email, role, business_role")
         .ilike("email", studentEmail)
         .maybeSingle();
       if (profileErr) throw new Error(profileErr.message);
+
+      let userId: string | null = null;
+      let newlyCreatedAuthUserId: string | null = null;
+      let reusedExistingAuth = false;
+
       if (profileByEmail) {
-        throw new AuthError(
-          "An account with this email already exists. Link or recovery must be handled carefully by an admin — this form only creates a new student login.",
-          409,
-        );
-      }
-
-      // Direct Auth Admin create — same pattern as staff accounts; no invite redirect.
-      const { data: created, error: createErr } = await admin.auth.admin.createUser({
-        email: studentEmail,
-        password: data.temporaryPassword,
-        email_confirm: true,
-        user_metadata: {
-          full_name: fullName || studentEmail,
-        },
-        app_metadata: {
-          role: "student",
-        },
-      });
-      if (createErr) {
-        const msg = createErr.message || "Could not create user.";
-        if (/already|registered|exists/i.test(msg)) {
-          throw new AuthError("An account with this email already exists.", 409);
+        const { data: linkedTo } = await admin
+          .from("students")
+          .select("id")
+          .eq("profile_id", profileByEmail.id)
+          .maybeSingle();
+        const reuse = canReuseExistingStudentProfileForLink({
+          role: profileByEmail.role,
+          businessRole: profileByEmail.business_role,
+          profileLinkedStudentId: linkedTo?.id ?? null,
+          targetStudentId: studentId,
+        });
+        if (!reuse.ok) {
+          throw new AuthError(
+            reuse.reason === "staff_role" || reuse.reason === "staff_business_role"
+              ? "That email already belongs to a staff account and cannot be used as a student login."
+              : "An account with this email is already linked to another student.",
+            409,
+          );
         }
-        throw new AuthError(msg, 400);
+        userId = profileByEmail.id;
+        reusedExistingAuth = true;
+        // Best-effort password sync for retry after a prior partial create.
+        const { error: pwErr } = await admin.auth.admin.updateUserById(userId, {
+          password: data.temporaryPassword,
+        });
+        if (pwErr) {
+          throw new AuthError(
+            `${provisionPartialFailureMessage("profile")} Could not refresh the password for the existing login.`,
+            409,
+          );
+        }
+      } else {
+        // Direct Auth Admin create — same pattern as staff accounts; no invite redirect.
+        const { data: created, error: createErr } = await admin.auth.admin.createUser({
+          email: studentEmail,
+          password: data.temporaryPassword,
+          email_confirm: true,
+          user_metadata: {
+            full_name: fullName || studentEmail,
+          },
+          app_metadata: {
+            role: "student",
+          },
+        });
+        if (createErr) {
+          const msg = createErr.message || "Could not create user.";
+          if (/already|registered|exists/i.test(msg)) {
+            throw new AuthError(
+              "An account with this email already exists. Retry after confirming the CRM email, or ask an admin to review the login.",
+              409,
+            );
+          }
+          throw new AuthError(`${provisionPartialFailureMessage("auth")} ${msg}`, 400);
+        }
+        userId = created.user?.id ?? null;
+        if (!userId) {
+          throw new AuthError("User creation did not return a user id.", 500);
+        }
+        newlyCreatedAuthUserId = userId;
       }
-
-      const userId = created.user?.id;
-      if (!userId) {
-        throw new AuthError("User creation did not return a user id.", 500);
-      }
-
-      let newlyCreatedAuthUserId: string | null = userId;
 
       try {
         const { data: existingProfile, error: existingErr } = await admin
           .from("profiles")
-          .select("id, role, email")
+          .select("id, role, email, business_role")
           .eq("id", userId)
           .maybeSingle();
         if (existingErr) throw new Error(existingErr.message);
 
+        const safePatch = buildServiceRoleStudentProfilePatch({
+          email: studentEmail,
+          fullName: fullName || studentEmail,
+        });
+
         if (!existingProfile) {
+          // INSERT is not subject to enforce_profile_role_guard (UPDATE-only).
           const { error: insertErr } = await admin.from("profiles").insert({
             id: userId,
-            email: studentEmail,
-            full_name: fullName || studentEmail,
+            email: safePatch.email,
+            full_name: safePatch.full_name,
             role: "student",
-            business_role: "student_portal",
+            business_role: STUDENT_PORTAL_BUSINESS_ROLE,
           });
           if (insertErr) {
-            throw new AuthError(`User created but profile insert failed: ${insertErr.message}.`, 500);
+            throw new AuthError(
+              `${provisionPartialFailureMessage("profile")} ${insertErr.message}`,
+              500,
+            );
           }
         } else {
           if (existingProfile.role && existingProfile.role !== "student") {
@@ -410,18 +460,16 @@ export const portalProvisionStudentPortalAccount = createServerFn({ method: "POS
               409,
             );
           }
+          // Never UPDATE role/business_role via service role — auth.uid() is null and
+          // enforce_profile_role_guard (…14030000) rejects business_role changes.
+          // handle_new_user / INSERT initialize student + student_portal; staff use admin JWT.
           const { error: profileUpdateErr } = await admin
             .from("profiles")
-            .update({
-              email: studentEmail,
-              full_name: fullName || studentEmail,
-              role: "student",
-              business_role: "student_portal",
-            })
+            .update(safePatch)
             .eq("id", userId);
           if (profileUpdateErr) {
             throw new AuthError(
-              `User created but profile update failed: ${profileUpdateErr.message}.`,
+              `${provisionPartialFailureMessage("profile")} ${profileUpdateErr.message}`,
               500,
             );
           }
@@ -429,11 +477,22 @@ export const portalProvisionStudentPortalAccount = createServerFn({ method: "POS
 
         const { data: account, error: accountErr } = await admin
           .from("profiles")
-          .select("id, email, role")
+          .select("id, email, role, business_role")
           .eq("id", userId)
           .maybeSingle();
         if (accountErr) throw new Error(accountErr.message);
-        if (!account) throw new AuthError("Profile was not created for the new login.", 500);
+        if (!account) {
+          throw new AuthError(
+            `${provisionPartialFailureMessage("profile")} Profile was not created for the new login.`,
+            500,
+          );
+        }
+        if (account.role && account.role !== "student") {
+          throw new AuthError(
+            "That email already belongs to a staff account and cannot be used as a student login.",
+            409,
+          );
+        }
 
         const { data: linkedElsewhere, error: linkedErr } = await admin
           .from("students")
@@ -475,7 +534,10 @@ export const portalProvisionStudentPortalAccount = createServerFn({ method: "POS
         if (linkErr) {
           const { mapStudentPortalLinkRpcError } = await import("@/lib/student-portal-account");
           const mapped = mapStudentPortalLinkRpcError(linkErr.message);
-          throw new AuthError(mapped.message, mapped.status);
+          throw new AuthError(
+            `${provisionPartialFailureMessage("link")} ${mapped.message}`,
+            mapped.status,
+          );
         }
 
         // Link succeeded — do not delete this Auth user on later steps.
@@ -494,7 +556,13 @@ export const portalProvisionStudentPortalAccount = createServerFn({ method: "POS
             entity_type: "students",
             entity_id: studentId,
             student_id: studentId,
-            metadata: { profileId: account.id, status, method: "password_create" },
+            metadata: {
+              profileId: account.id,
+              status,
+              method: "password_create",
+              reusedExistingAuth,
+              businessRole: account.business_role ?? STUDENT_PORTAL_BUSINESS_ROLE,
+            },
           });
         } catch {
           /* audit failure must not hide a successful link */
@@ -503,12 +571,15 @@ export const portalProvisionStudentPortalAccount = createServerFn({ method: "POS
         const message =
           status === "active"
             ? "Student portal account created and already active."
-            : "Student portal account created and linked. Share the password securely. The student can sign in, but CRM access stays closed until Accounts verifies the signup fee.";
+            : reusedExistingAuth
+              ? "Existing student login was linked to this CRM record. Share the password securely. CRM access stays closed until Accounts verifies the signup fee."
+              : "Student portal account created and linked. Share the password securely. The student can sign in, but CRM access stays closed until Accounts verifies the signup fee.";
 
         return { ok: true as const, status, message };
       } catch (inner) {
-        // Narrow cleanup: only a brand-new Auth user that never linked to any student.
-        if (newlyCreatedAuthUserId) {
+        // Narrow cleanup: only a brand-new Auth user from THIS attempt that never linked.
+        // Do not delete reused accounts or profiles created by handle_new_user on prior retries.
+        if (newlyCreatedAuthUserId && !reusedExistingAuth) {
           try {
             const { data: linkedAny } = await admin
               .from("students")
