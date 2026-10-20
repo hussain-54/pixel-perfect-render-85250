@@ -45,6 +45,13 @@ function toError(error: unknown): never {
   throw error instanceof Error ? error : new Error("Authorization failed.");
 }
 
+function logFeeRequestDiag(
+  event: string,
+  meta: Record<string, string | number | boolean | null>,
+) {
+  console.info(JSON.stringify({ scope: "fee_verification_request", event, ...meta }));
+}
+
 async function resolveSessionBusinessRole(session: TrustedSession): Promise<BusinessRole | null> {
   const fromSession = businessRoleFromSession(session);
   if (fromSession) return fromSession;
@@ -1191,6 +1198,14 @@ export const portalRequestFeeVerification = createServerFn({ method: "POST" })
       } catch {
         /* audit best-effort */
       }
+
+      logFeeRequestDiag("request_persisted", {
+        userId: session.userId ?? null,
+        requestId: created.id as string,
+        studentId: data.studentId,
+        status: String(created.status ?? "open"),
+        hasRegistrar: Boolean(created.registrar_id),
+      });
 
       return {
         ok: true as const,

@@ -262,6 +262,9 @@ export type Database = {
           registrar_id: string | null;
           summary: string;
           status: "open" | "in_progress" | "resolved" | "cancelled";
+          coordinator_note: string | null;
+          forwarded_at: string | null;
+          forwarded_by: string | null;
           resolved_at: string | null;
           resolved_by: string | null;
           created_at: string;
@@ -274,6 +277,9 @@ export type Database = {
           registrar_id?: string | null;
           summary: string;
           status?: "open" | "in_progress" | "resolved" | "cancelled";
+          coordinator_note?: string | null;
+          forwarded_at?: string | null;
+          forwarded_by?: string | null;
           resolved_at?: string | null;
           resolved_by?: string | null;
           created_at?: string;
@@ -1576,9 +1582,20 @@ export type Database = {
           fee_reference_receipt: string | null;
           requested_by: string | null;
           registrar_id: string | null;
+          coordinator_note: string | null;
+          forwarded_at: string | null;
+          forwarded_by: string | null;
           created_at: string;
           updated_at: string;
         }[];
+      };
+      forward_counselling_fee_verification: {
+        Args: { p_request_id: string; p_note?: string | null };
+        Returns: Database["public"]["Tables"]["counselling_fee_verification_requests"]["Row"];
+      };
+      return_counselling_fee_verification: {
+        Args: { p_request_id: string; p_reason: string };
+        Returns: Database["public"]["Tables"]["counselling_fee_verification_requests"]["Row"];
       };
       list_front_desk_intake_summaries: {
         Args: { p_include_archived?: boolean };

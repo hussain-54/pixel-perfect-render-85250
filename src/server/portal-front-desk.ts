@@ -844,67 +844,304 @@ export type FeeVerificationRequestRow = {
   feeReferenceReceipt: string | null;
   requestedBy: string | null;
   registrarId: string | null;
+  coordinatorNote: string | null;
+  forwardedAt: string | null;
+  forwardedBy: string | null;
   createdAt: string;
   updatedAt: string;
 };
 
+export type FeeVerificationQueuePayload = {
+  rows: FeeVerificationRequestRow[];
+  openCount: number;
+  awaitingFinanceCount: number;
+  needsCorrectionCount: number;
+  completedCount: number;
+  schemaReady: boolean;
+  fetchedAt: string;
+  includeResolved: boolean;
+};
+
+function mapFeeVerificationRow(r: Record<string, unknown>): FeeVerificationRequestRow {
+  const amountRaw = r["fee_amount"];
+  const feeAmount =
+    typeof amountRaw === "number"
+      ? amountRaw
+      : amountRaw != null && amountRaw !== ""
+        ? Number(amountRaw)
+        : null;
+  return {
+    id: str(r["id"]),
+    studentId: str(r["student_id"]),
+    caseId: str(r["case_id"]),
+    fullName: str(r["full_name"]),
+    counsellorName: strOrNull(r["counsellor_name"]),
+    summary: str(r["summary"]),
+    status: str(r["status"]),
+    signupFeeStatus: strOrNull(r["signup_fee_status"]),
+    feeAmount: feeAmount != null && !Number.isNaN(feeAmount) ? feeAmount : null,
+    feeCurrency: strOrNull(r["fee_currency"]),
+    feePaymentMethod: strOrNull(r["fee_payment_method"]),
+    feeReferenceReceipt: strOrNull(r["fee_reference_receipt"]),
+    requestedBy: strOrNull(r["requested_by"]),
+    registrarId: strOrNull(r["registrar_id"]),
+    coordinatorNote: strOrNull(r["coordinator_note"]),
+    forwardedAt: strOrNull(r["forwarded_at"]),
+    forwardedBy: strOrNull(r["forwarded_by"]),
+    createdAt: str(r["created_at"]),
+    updatedAt: str(r["updated_at"]),
+  };
+}
+
+function logFeeQueueDiag(event: string, meta: Record<string, string | number | boolean | null>) {
+  // Structured, non-sensitive diagnostics for production triage.
+  console.info(JSON.stringify({ scope: "fee_verification_queue", event, ...meta }));
+}
+
 /** Front Desk / Accounts / Admin queue of counsellor fee-verification requests. */
-export const portalListFeeVerificationRequests = createServerFn({ method: "GET" }).handler(
-  async () => {
+export const portalListFeeVerificationRequests = createServerFn({ method: "GET" })
+  .validator((data?: { includeResolved?: boolean }) => data ?? {})
+  .handler(async ({ data }) => {
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       assertFrontDeskOrAdmin(session);
 
+      const includeResolved = Boolean(data?.includeResolved);
       const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {
-        return { rows: [] as FeeVerificationRequestRow[] };
+        throw new AuthError("Fee verification queue requires the live data plane.", 400);
       }
       const client = requireAoSupabaseClient();
-      const { data, error } = await client.rpc("list_counselling_fee_verification_requests", {
-        p_include_resolved: false,
+
+      // Schema probe — never treat missing table as an empty queue.
+      const probe = await client
+        .from("counselling_fee_verification_requests")
+        .select("id", { count: "exact", head: true })
+        .limit(1);
+      if (probe.error) {
+        if (/does not exist|relation|PGRST205|42P01/i.test(probe.error.message)) {
+          logFeeQueueDiag("schema_missing", {
+            userId: session.userId ?? null,
+            message: "table_missing",
+          });
+          throw new AuthError(
+            "Fee verification requests are not installed on this database. Apply migrations 20261020150000, 20261020160000, and 20261020170000.",
+            503,
+          );
+        }
+        logFeeQueueDiag("probe_error", {
+          userId: session.userId ?? null,
+          code: "probe_failed",
+        });
+        throw new Error(probe.error.message);
+      }
+
+      const { data: rpcData, error } = await client.rpc("list_counselling_fee_verification_requests", {
+        p_include_resolved: includeResolved,
+      });
+      if (error) {
+        if (/does not exist|function|PGRST202/i.test(error.message)) {
+          logFeeQueueDiag("rpc_missing", {
+            userId: session.userId ?? null,
+            message: "list_rpc_missing",
+          });
+          throw new AuthError(
+            "Fee verification list RPC unavailable. Apply migration 20261020170000_fee_verification_fd_org_queue.sql.",
+            503,
+          );
+        }
+        logFeeQueueDiag("rpc_error", { userId: session.userId ?? null, message: "list_rpc_failed" });
+        throw new Error(error.message);
+      }
+
+      const { normalizeRpcRowList } = await import("@/lib/fee-verification-workflow");
+      const rows = normalizeRpcRowList(rpcData).map(mapFeeVerificationRow);
+      const openCount = rows.filter((r) => r.status === "open").length;
+      const awaitingFinanceCount = rows.filter((r) => r.status === "in_progress").length;
+      const needsCorrectionCount = rows.filter((r) => r.status === "cancelled").length;
+      const completedCount = rows.filter((r) => r.status === "resolved").length;
+
+      logFeeQueueDiag("list_ok", {
+        userId: session.userId ?? null,
+        rowCount: rows.length,
+        openCount,
+        awaitingFinanceCount,
+        includeResolved,
+        probeCount: probe.count ?? 0,
+      });
+
+      // Detect filter/visibility skew: table has open rows but list returned none.
+      if (!includeResolved && rows.length === 0 && (probe.count ?? 0) > 0) {
+        logFeeQueueDiag("visibility_skew", {
+          userId: session.userId ?? null,
+          probeCount: probe.count ?? 0,
+          rowCount: 0,
+        });
+      }
+
+      return {
+        rows,
+        openCount,
+        awaitingFinanceCount,
+        needsCorrectionCount,
+        completedCount,
+        schemaReady: true,
+        fetchedAt: new Date().toISOString(),
+        includeResolved,
+      } satisfies FeeVerificationQueuePayload;
+    } catch (error) {
+      toError(error);
+    }
+  });
+
+export const portalForwardFeeVerificationRequest = createServerFn({ method: "POST" })
+  .validator((data: { requestId: string; note?: string }) => data)
+  .handler(async ({ data }) => {
+    try {
+      const session = await requireTrustedSession();
+      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      assertFrontDeskOrAdmin(session);
+
+      const requestId = data.requestId?.trim();
+      if (!requestId) throw new AuthError("Request id is required.", 400);
+
+      const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
+      if (!usesSupabaseDataPlane(session)) {
+        throw new AuthError("Forwarding requires the live data plane.", 400);
+      }
+      const client = requireAoSupabaseClient();
+      const { data: row, error } = await client.rpc("forward_counselling_fee_verification", {
+        p_request_id: requestId,
+        p_note: data.note?.trim() || null,
       });
       if (error) {
         if (/does not exist|function|PGRST202/i.test(error.message)) {
           throw new AuthError(
-            "Fee verification request queue unavailable. Apply migration 20261020150000_counselling_fee_verification_requests.sql.",
+            "Forward action unavailable. Apply migration 20261020170000_fee_verification_fd_org_queue.sql.",
             503,
           );
         }
-        throw new Error(error.message);
+        throw new AuthError(error.message, 400);
       }
-      const rows: FeeVerificationRequestRow[] = ((data ?? []) as Record<string, unknown>[]).map(
-        (r) => {
-          const amountRaw = r["fee_amount"];
-          const feeAmount =
-            typeof amountRaw === "number"
-              ? amountRaw
-              : amountRaw != null && amountRaw !== ""
-                ? Number(amountRaw)
-                : null;
-          return {
-            id: str(r["id"]),
-            studentId: str(r["student_id"]),
-            caseId: str(r["case_id"]),
-            fullName: str(r["full_name"]),
-            counsellorName: strOrNull(r["counsellor_name"]),
-            summary: str(r["summary"]),
-            status: str(r["status"]),
-            signupFeeStatus: strOrNull(r["signup_fee_status"]),
-            feeAmount: feeAmount != null && !Number.isNaN(feeAmount) ? feeAmount : null,
-            feeCurrency: strOrNull(r["fee_currency"]),
-            feePaymentMethod: strOrNull(r["fee_payment_method"]),
-            feeReferenceReceipt: strOrNull(r["fee_reference_receipt"]),
-            requestedBy: strOrNull(r["requested_by"]),
-            registrarId: strOrNull(r["registrar_id"]),
-            createdAt: str(r["created_at"]),
-            updatedAt: str(r["updated_at"]),
-          };
-        },
-      );
-      return { rows };
+      const created = Array.isArray(row) ? row[0] : row;
+      if (!created?.id) throw new AuthError("Forward failed.", 500);
+
+      // Notify Accounts / Finance desks (durable).
+      try {
+        const { data: financeProfiles } = await client
+          .from("profiles")
+          .select("id")
+          .eq("business_role", "accounts_banking_finance")
+          .limit(25);
+        const studentId = created.student_id as string;
+        const body = "Front Desk forwarded a signup-fee verification request for Accounts review.";
+        if (financeProfiles?.length) {
+          await client.from("notifications").insert(
+            financeProfiles.map((p) => ({
+              user_id: p.id,
+              title: "Fee verification forwarded",
+              body,
+              link_path: "/staff/finance",
+              student_id: studentId,
+            })),
+          );
+        }
+      } catch {
+        /* best-effort */
+      }
+
+      try {
+        const { writeAudit } = await import("@/services/db");
+        await writeAudit(client, {
+          action: "student.fee_verification_forwarded",
+          entity_type: "counselling_fee_verification_requests",
+          entity_id: created.id,
+          student_id: created.student_id,
+          metadata: { status: created.status },
+        });
+      } catch {
+        /* best-effort */
+      }
+
+      logFeeQueueDiag("forward_ok", {
+        userId: session.userId ?? null,
+        requestId: created.id,
+      });
+
+      return {
+        ok: true as const,
+        requestId: created.id as string,
+        status: String(created.status),
+        forwardedAt: (created.forwarded_at as string | null) ?? null,
+        message: "Request forwarded to Accounts / Finance.",
+      };
     } catch (error) {
       toError(error);
     }
-  },
-);
+  });
+
+export const portalReturnFeeVerificationRequest = createServerFn({ method: "POST" })
+  .validator((data: { requestId: string; reason: string }) => data)
+  .handler(async ({ data }) => {
+    try {
+      const session = await requireTrustedSession();
+      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      assertFrontDeskOrAdmin(session);
+
+      const requestId = data.requestId?.trim();
+      const reason = data.reason?.trim() ?? "";
+      if (!requestId) throw new AuthError("Request id is required.", 400);
+      if (reason.length < 5) throw new AuthError("A return reason is required.", 400);
+
+      const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
+      if (!usesSupabaseDataPlane(session)) {
+        throw new AuthError("Return action requires the live data plane.", 400);
+      }
+      const client = requireAoSupabaseClient();
+      const { data: row, error } = await client.rpc("return_counselling_fee_verification", {
+        p_request_id: requestId,
+        p_reason: reason,
+      });
+      if (error) {
+        if (/does not exist|function|PGRST202/i.test(error.message)) {
+          throw new AuthError(
+            "Return action unavailable. Apply migration 20261020170000_fee_verification_fd_org_queue.sql.",
+            503,
+          );
+        }
+        throw new AuthError(error.message, 400);
+      }
+      const updated = Array.isArray(row) ? row[0] : row;
+      if (!updated?.id) throw new AuthError("Return failed.", 500);
+
+      try {
+        const counsellorId = updated.requested_by as string | null;
+        if (counsellorId) {
+          await client.from("notifications").insert({
+            user_id: counsellorId,
+            title: "Fee verification returned",
+            body: `Front Desk returned a fee-verification request: ${reason.slice(0, 180)}`,
+            link_path: "/staff/students",
+            student_id: updated.student_id,
+          });
+        }
+      } catch {
+        /* best-effort */
+      }
+
+      logFeeQueueDiag("return_ok", {
+        userId: session.userId ?? null,
+        requestId: updated.id,
+      });
+
+      return {
+        ok: true as const,
+        requestId: updated.id as string,
+        status: String(updated.status),
+        message: "Request returned to the counsellor.",
+      };
+    } catch (error) {
+      toError(error);
+    }
+  });

@@ -407,12 +407,21 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                     studentId: s.id,
                     summary: feeRequestSummary,
                   });
+                  if (!result?.ok || !result?.requestId) {
+                    setLifecycleMsg(
+                      "Request was not persisted. Confirm assessment, consent, and that fee-verification migrations are applied.",
+                    );
+                    return;
+                  }
                   setLifecycleMsg(
-                    result?.message ??
-                      "Case returned to Front Desk for fee verification.",
+                    result.message ||
+                      `Fee verification request saved (${result.requestId.slice(0, 8)}…). Front Desk queue should update shortly.`,
                   );
                   setFeeRequestSummary("");
                   await feeQ.refetch();
+                  await queryClient.invalidateQueries({
+                    queryKey: ["front-desk", "fee-verification-requests"],
+                  });
                 } catch (e) {
                   setLifecycleMsg(
                     portalErrorMessage(

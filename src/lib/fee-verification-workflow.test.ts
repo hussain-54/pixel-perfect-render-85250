@@ -3,8 +3,11 @@ import {
   admissionHandoverBlockedByFeeMessage,
   canRequestFeeVerification,
   feeStatusAllowsAdmissionHandover,
+  feeVerificationStatusesForTab,
+  feeVerificationTabForStatus,
   frontDeskCanSeeFeeVerificationRequest,
   normalizeAssessmentEligibilityForDraft,
+  normalizeRpcRowList,
   validateFeeVerificationRequestSummary,
 } from "./fee-verification-workflow";
 
@@ -53,7 +56,7 @@ describe("fee verification workflow", () => {
     expect(normalizeAssessmentEligibilityForDraft("Good Fit")).toBe("Good Fit");
   });
 
-  it("exposes Front Desk queue rows by registrar ownership or unowned intake", () => {
+  it("lets any Front Desk desk see the coordination queue (verify still separate)", () => {
     const fd = "fd-a";
     expect(
       frontDeskCanSeeFeeVerificationRequest({
@@ -61,39 +64,24 @@ describe("fee verification workflow", () => {
         canVerifySignupFee: false,
         isFrontDesk: true,
         viewerUserId: fd,
+        registrarId: "other-fd",
+        studentRegisteredBy: "other-fd",
+      }),
+    ).toBe(true);
+    expect(
+      frontDeskCanSeeFeeVerificationRequest({
+        isAdmin: false,
+        canVerifySignupFee: false,
+        isFrontDesk: false,
+        viewerUserId: fd,
         registrarId: fd,
         studentRegisteredBy: fd,
       }),
-    ).toBe(true);
-    expect(
-      frontDeskCanSeeFeeVerificationRequest({
-        isAdmin: false,
-        canVerifySignupFee: false,
-        isFrontDesk: true,
-        viewerUserId: fd,
-        registrarId: "other-fd",
-        studentRegisteredBy: "other-fd",
-      }),
     ).toBe(false);
-    expect(
-      frontDeskCanSeeFeeVerificationRequest({
-        isAdmin: false,
-        canVerifySignupFee: false,
-        isFrontDesk: true,
-        viewerUserId: fd,
-        registrarId: null,
-        studentRegisteredBy: null,
-      }),
-    ).toBe(true);
-    expect(
-      frontDeskCanSeeFeeVerificationRequest({
-        isAdmin: true,
-        canVerifySignupFee: false,
-        isFrontDesk: false,
-        viewerUserId: "admin",
-        registrarId: "other-fd",
-        studentRegisteredBy: "other-fd",
-      }),
-    ).toBe(true);
+    expect(feeVerificationTabForStatus("in_progress")).toBe("awaiting_finance");
+    expect(feeVerificationStatusesForTab("open")).toEqual(["open"]);
+    expect(normalizeRpcRowList(null)).toEqual([]);
+    expect(normalizeRpcRowList({ id: "1" })).toEqual([{ id: "1" }]);
+    expect(normalizeRpcRowList([{ id: "1" }, { id: "2" }])).toHaveLength(2);
   });
 });

@@ -187,12 +187,14 @@ import type { ActivityFilters } from "@/types/activity-ops";
 import { portalExportModuleReports, portalGetModuleReports } from "@/server/portal-module-reports";
 import {
   portalArchiveFrontDeskIntake,
+  portalForwardFeeVerificationRequest,
   portalGetFrontDeskDashboard,
   portalListCounsellorDesks,
   portalListFeeVerificationRequests,
   portalListFrontDeskArchivedIntake,
   portalListFrontDeskIntake,
   portalProvisionStudentPortalAccount,
+  portalReturnFeeVerificationRequest,
   portalUpdateFrontDeskIntake,
 } from "@/server/portal-front-desk";
 import {
@@ -664,8 +666,16 @@ export const handoverToAdmission = (data: AdmissionHandoverInput) =>
 export const requestFeeVerification = (data: { studentId: string; summary: string }) =>
   withAuth((opts) => portalRequestFeeVerification({ ...opts, data }));
 
-export const listFeeVerificationRequests = () =>
-  withAuth((opts) => portalListFeeVerificationRequests(opts));
+export const listFeeVerificationRequests = (filters?: { includeResolved?: boolean }) =>
+  withAuth((opts) =>
+    portalListFeeVerificationRequests({ ...opts, data: filters ?? {} }),
+  );
+
+export const forwardFeeVerificationRequest = (data: { requestId: string; note?: string }) =>
+  withAuth((opts) => portalForwardFeeVerificationRequest({ ...opts, data }));
+
+export const returnFeeVerificationRequest = (data: { requestId: string; reason: string }) =>
+  withAuth((opts) => portalReturnFeeVerificationRequest({ ...opts, data }));
 
 export const listAdmissionHandovers = (filters?: {
   status?: "submitted" | "accepted" | "returned";

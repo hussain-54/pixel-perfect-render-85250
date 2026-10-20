@@ -60,8 +60,9 @@ export function admissionHandoverBlockedByFeeMessage(): string {
 }
 
 /**
- * Mirrors list_counselling_fee_verification_requests visibility for Front Desk
- * (after migration 20261020160000). Admin / fee-verifiers see all open rows.
+ * Mirrors list_counselling_fee_verification_requests visibility after
+ * migration 20261020170000: any Front Desk desk sees the coordination queue.
+ * Fee VERIFY remains Accounts-only (separate permission).
  */
 export function frontDeskCanSeeFeeVerificationRequest(input: {
   isAdmin: boolean;
@@ -72,12 +73,37 @@ export function frontDeskCanSeeFeeVerificationRequest(input: {
   studentRegisteredBy: string | null;
 }): boolean {
   if (input.isAdmin || input.canVerifySignupFee) return true;
-  if (!input.isFrontDesk || !input.viewerUserId) return false;
-  if (input.registrarId === input.viewerUserId) return true;
-  if (input.studentRegisteredBy === input.viewerUserId) return true;
-  // Unowned intake: any Front Desk may coordinate.
-  if (input.registrarId == null && input.studentRegisteredBy == null) return true;
-  return false;
+  return Boolean(input.isFrontDesk && input.viewerUserId);
+}
+
+export type FeeVerificationQueueTab = "open" | "awaiting_finance" | "needs_correction" | "completed";
+
+export function feeVerificationTabForStatus(status: string): FeeVerificationQueueTab {
+  const s = status.trim().toLowerCase();
+  if (s === "in_progress") return "awaiting_finance";
+  if (s === "cancelled") return "needs_correction";
+  if (s === "resolved") return "completed";
+  return "open";
+}
+
+export function feeVerificationStatusesForTab(tab: FeeVerificationQueueTab): string[] {
+  switch (tab) {
+    case "awaiting_finance":
+      return ["in_progress"];
+    case "needs_correction":
+      return ["cancelled"];
+    case "completed":
+      return ["resolved"];
+    case "open":
+    default:
+      return ["open"];
+  }
+}
+
+export function normalizeRpcRowList(data: unknown): Record<string, unknown>[] {
+  if (Array.isArray(data)) return data as Record<string, unknown>[];
+  if (data && typeof data === "object") return [data as Record<string, unknown>];
+  return [];
 }
 
 /** Draft save: eligibility may be empty and will be stored as Pending Review. */
