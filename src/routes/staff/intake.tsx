@@ -15,7 +15,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { isFrontDeskBusinessRole } from "@/lib/staff-business-access";
-import { assignCounsellor, listCounsellorDesks, listFrontDeskIntake } from "@/services";
+import {
+  intakePortalStatusFromRow,
+  studentPortalAccountStatusLabel,
+} from "@/lib/student-portal-account";
+import {
+  assignCounsellor,
+  listCounsellorDesks,
+  listFrontDeskIntake,
+  provisionStudentPortalAccount,
+} from "@/services";
 
 export const Route = createFileRoute("/staff/intake")({
   beforeLoad: ({ context }) => {
@@ -32,6 +41,7 @@ function FrontDeskIntakeListPage() {
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [assigningId, setAssigningId] = useState<string | null>(null);
+  const [provisioningId, setProvisioningId] = useState<string | null>(null);
 
   const listQ = useQuery({
     queryKey: ["front-desk", "intake"],
@@ -41,6 +51,21 @@ function FrontDeskIntakeListPage() {
     queryKey: ["front-desk", "counsellor-desks"],
     queryFn: listCounsellorDesks,
     staleTime: 60_000,
+  });
+
+  const provisionM = useMutation({
+    mutationFn: (studentId: string) => provisionStudentPortalAccount(studentId),
+    onSuccess: async (result) => {
+      setMsg(result?.message ?? "Student portal account updated.");
+      setErr(null);
+      setProvisioningId(null);
+      await queryClient.invalidateQueries({ queryKey: ["front-desk"] });
+    },
+    onError: (e) => {
+      setMsg(null);
+      setProvisioningId(null);
+      setErr(portalErrorMessage(e, "Could not create the student portal account."));
+    },
   });
 
   const assignM = useMutation({
@@ -103,6 +128,7 @@ function FrontDeskIntakeListPage() {
                   <th className="px-3 py-2">Student</th>
                   <th className="px-3 py-2">Destination</th>
                   <th className="px-3 py-2">Fee</th>
+                  <th className="px-3 py-2">Portal</th>
                   <th className="px-3 py-2">Counsellor</th>
                   <th className="px-3 py-2">Registered</th>
                 </tr>
@@ -122,6 +148,36 @@ function FrontDeskIntakeListPage() {
                     </td>
                     <td className="px-3 py-2 capitalize">
                       {row.signupFeeStatus?.replaceAll("_", " ") || "—"}
+                    </td>
+                    <td className="px-3 py-2">
+                      <div className="text-xs font-medium text-navy">
+                        {studentPortalAccountStatusLabel(
+                          intakePortalStatusFromRow({
+                            profileId: row.profileId,
+                            portalActivatedAt: row.portalActivatedAt,
+                          }),
+                        )}
+                      </div>
+                      {row.portalActivatedAt ? null : (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="mt-1.5"
+                          disabled={provisionM.isPending}
+                          onClick={() => {
+                            if (provisionM.isPending) return;
+                            setProvisioningId(row.id);
+                            provisionM.mutate(row.id);
+                          }}
+                        >
+                          {provisioningId === row.id && provisionM.isPending
+                            ? "Sending…"
+                            : row.profileId
+                              ? "Resend setup link"
+                              : "Create Student Portal Account"}
+                        </Button>
+                      )}
                     </td>
                     <td className="px-3 py-2">
                       {row.assignmentStatus === "assigned" ? (

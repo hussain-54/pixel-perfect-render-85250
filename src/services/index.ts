@@ -188,6 +188,7 @@ import {
   portalGetFrontDeskDashboard,
   portalListCounsellorDesks,
   portalListFrontDeskIntake,
+  portalProvisionStudentPortalAccount,
 } from "@/server/portal-front-desk";
 import {
   portalDeleteProgram,
@@ -595,6 +596,8 @@ export const intakeRegisterStudent = (data: IntakeRegisterInput) =>
 export const getFrontDeskDashboard = () => withAuth((opts) => portalGetFrontDeskDashboard(opts));
 
 export const listFrontDeskIntake = () => withAuth((opts) => portalListFrontDeskIntake(opts));
+export const provisionStudentPortalAccount = (studentId: string) =>
+  withAuth((opts) => portalProvisionStudentPortalAccount({ ...opts, data: { studentId } }));
 
 export const listCounsellorDesks = () => withAuth((opts) => portalListCounsellorDesks(opts));
 

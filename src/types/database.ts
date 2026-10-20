@@ -1449,6 +1449,14 @@ export type Database = {
         Args: Record<string, never>;
         Returns: Database["public"]["Tables"]["students"]["Row"];
       };
+      front_desk_link_student_portal_profile: {
+        Args: { p_student_id: string; p_profile_id: string };
+        Returns: {
+          student_id: string;
+          profile_id: string | null;
+          portal_activated_at: string | null;
+        }[];
+      };
       is_front_desk: {
         Args: Record<string, never>;
         Returns: boolean;
@@ -1536,6 +1544,7 @@ export type Database = {
           registered_by: string | null;
           journey_stage: JourneyStage;
           portal_activated_at: string | null;
+          profile_id: string | null;
           created_at: string;
           updated_at: string;
           signup_fee_status: SignupFeeStatusDb | null;

@@ -5,12 +5,14 @@ import { StatusBadge } from "@/components/StatusBadge";
 import { ActionRequiredBanner, filterActionRequired } from "@/components/portal/ActionRequiredDocs";
 import { PageHeader, Panel, StatCard, fmtDate, ErrorState, LoadingRows } from "@/components/common";
 import { useData } from "@/lib/useData";
+import { studentFacingFeeLabel, studentProfileCompletion } from "@/lib/student-portal-account";
 import {
   getCurrentStudent,
   getAppointments,
   getDocuments,
   getApplications,
   getStudentJourneyTimeline,
+  getSignupFeeStatus,
   lookupConsultant,
 } from "@/services";
 
@@ -35,12 +37,17 @@ function StudentDashboard() {
   const timelineQ = useData(["student", sid, "timeline"], () =>
     sid ? getStudentJourneyTimeline() : Promise.resolve(null),
   );
+  const feeQ = useData(["student", sid, "signup-fee"], () =>
+    sid ? getSignupFeeStatus(sid) : Promise.resolve(null),
+  );
 
   if (studentQ.isLoading) return <LoadingRows rows={6} />;
   if (studentQ.isError || !studentQ.data)
     return <ErrorState body="Could not load your student profile." />;
 
   const student = studentQ.data;
+  const profile = studentProfileCompletion(student);
+  const feeLabel = studentFacingFeeLabel(feeQ.data?.fee?.status);
   const consultantName =
     student.consultantName ?? lookupConsultant(student.consultantId)?.name ?? null;
   const consultantRole = lookupConsultant(student.consultantId)?.role;
@@ -56,8 +63,31 @@ function StudentDashboard() {
     <div>
       <PageHeader
         title={`Welcome, ${student.name.split(" ")[0]}`}
-        subtitle={`Case ${student.caseId} · ${student.destination} · ${student.program}`}
+        subtitle={`CRM / Student ID ${student.caseId} · ${student.destination || "Destination not set"} · ${student.program || "Programme not set"}`}
       />
+
+      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="CRM / Student ID" value={student.caseId} hint={student.name} />
+        <StatCard
+          label="Profile"
+          value={`${profile.percent}%`}
+          hint={`${profile.done} of ${profile.total} details filled`}
+        />
+        <StatCard
+          label="Signup fee"
+          value={feeQ.isLoading ? "…" : feeQ.isError ? "Unavailable" : feeLabel}
+          hint={
+            feeQ.data?.fee?.portalActivatedAt
+              ? "Portal access is active"
+              : "Portal opens after Accounts verification"
+          }
+        />
+        <StatCard
+          label="Counsellor"
+          value={consultantName?.split(" ")[0] ?? "—"}
+          {...(consultantRole ? { hint: consultantRole } : {})}
+        />
+      </div>
 
       <div className="mb-6">
         <JourneyTracker
