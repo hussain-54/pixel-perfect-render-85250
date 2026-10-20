@@ -449,6 +449,144 @@ export const portalRecordSignupFee = createServerFn({ method: "POST" })
     }
   });
 
+export type SignupFeeQueueRow = {
+  feeId: string;
+  studentId: string;
+  studentName: string | null;
+  caseId: string | null;
+  status: string;
+  amount: number;
+  currency: string;
+  paymentMethod: string | null;
+  referenceReceipt: string | null;
+  notes: string | null;
+  verifiedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  openRequestId: string | null;
+  openRequestStatus: string | null;
+  openRequestSummary: string | null;
+};
+
+/** Accounts/Finance queue: unpaid/claimed signup fees (separate from university_fee_obligations). */
+export const portalListSignupFeeQueue = createServerFn({ method: "GET" }).handler(async () => {
+  try {
+    const session = await requireTrustedSession();
+    requireRoles(session, ["admin", "super_admin", "consultant"]);
+    session.businessRole = await resolveSessionBusinessRole(session);
+    denyFrontDeskConsultantWorkflows(session, "signup fee verification queue");
+    requireSignupFeeVerifyPermission(session);
+    const canVerify =
+      rolesAtLeastAdmin(session.role) ||
+      canFullyApproveModule(session.businessRole, "fees_payments") ||
+      session.businessRole === "accounts_banking_finance" ||
+      session.businessRole === "manager";
+    if (!canVerify) {
+      throw new AuthError("Only Accounts/Finance or Admin may view the signup fee queue.", 403);
+    }
+
+    const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
+    if (!usesSupabaseDataPlane(session)) {
+      throw new AuthError("Signup fee queue requires the live data plane.", 400);
+    }
+    const client = requireAoSupabaseClient();
+
+    const { data: fees, error } = await client
+      .from("signup_fee_payments")
+      .select(
+        "id, student_id, status, amount, currency, payment_method, reference_receipt, notes, verified_at, created_at, updated_at",
+      )
+      .in("status", ["unpaid", "claimed"])
+      .order("updated_at", { ascending: false })
+      .limit(200);
+    if (error) {
+      if (/does not exist|relation|PGRST205|42P01/i.test(error.message)) {
+        throw new AuthError("Signup fee table unavailable. Apply signup-fee migrations.", 503);
+      }
+      throw new Error(error.message);
+    }
+
+    const studentIds = [...new Set((fees ?? []).map((f) => f.student_id))];
+    const nameById = new Map<string, { full_name: string; case_id: string }>();
+    if (studentIds.length) {
+      const { data: students, error: stuErr } = await client
+        .from("students")
+        .select("id, full_name, case_id")
+        .in("id", studentIds);
+      if (stuErr) throw new Error(stuErr.message);
+      for (const s of students ?? []) {
+        nameById.set(s.id, { full_name: s.full_name, case_id: s.case_id });
+      }
+    }
+
+    const requestByStudent = new Map<
+      string,
+      { id: string; status: string; summary: string }
+    >();
+    if (studentIds.length) {
+      try {
+        const { data: reqs } = await client
+          .from("counselling_fee_verification_requests")
+          .select("id, student_id, status, summary")
+          .in("student_id", studentIds)
+          .in("status", ["open", "in_progress"])
+          .order("created_at", { ascending: false });
+        for (const r of reqs ?? []) {
+          if (!requestByStudent.has(r.student_id)) {
+            requestByStudent.set(r.student_id, {
+              id: r.id,
+              status: r.status,
+              summary: r.summary,
+            });
+          }
+        }
+      } catch {
+        /* coordination table may be unavailable until migration applied */
+      }
+    }
+
+    const rows: SignupFeeQueueRow[] = (fees ?? []).map((f) => {
+      const stu = nameById.get(f.student_id);
+      const req = requestByStudent.get(f.student_id);
+      return {
+        feeId: f.id,
+        studentId: f.student_id,
+        studentName: stu?.full_name ?? null,
+        caseId: stu?.case_id ?? null,
+        status: f.status,
+        amount: Number(f.amount),
+        currency: f.currency,
+        paymentMethod: f.payment_method,
+        referenceReceipt: f.reference_receipt,
+        notes: f.notes,
+        verifiedAt: f.verified_at,
+        createdAt: f.created_at,
+        updatedAt: f.updated_at,
+        openRequestId: req?.id ?? null,
+        openRequestStatus: req?.status ?? null,
+        openRequestSummary: req?.summary ?? null,
+      };
+    });
+
+    console.info(
+      JSON.stringify({
+        scope: "signup_fee_queue",
+        event: "list_ok",
+        userId: session.userId ?? null,
+        rowCount: rows.length,
+      }),
+    );
+
+    return {
+      ok: true as const,
+      rows,
+      fetchedAt: new Date().toISOString(),
+    };
+  } catch (error) {
+    toError(error);
+  }
+});
+
 export const portalVerifySignupFee = createServerFn({ method: "POST" })
   .validator((data: VerifySignupFeeInput) => data)
   .handler(async ({ data }) => {
@@ -544,6 +682,34 @@ export const portalVerifySignupFee = createServerFn({ method: "POST" })
           .in("status", ["open", "in_progress"]);
       } catch {
         /* queue table may be unavailable until migration is applied */
+      }
+
+      // Notify Front Desk registrar + assigned counsellor (durable).
+      try {
+        const { data: stu } = await client
+          .from("students")
+          .select("registered_by, assigned_consultant_id, full_name, case_id")
+          .eq("id", data.studentId)
+          .maybeSingle();
+        const outcome = String(rpcRow.status ?? data.action);
+        const body = `Signup fee ${outcome} for ${stu?.full_name || "student"} (${stu?.case_id || data.studentId}).`;
+        const recipients = new Set<string>();
+        if (stu?.registered_by) recipients.add(stu.registered_by);
+        if (stu?.assigned_consultant_id) recipients.add(stu.assigned_consultant_id);
+        if (recipients.size) {
+          await client.from("notifications").insert(
+            [...recipients].map((userId) => ({
+              user_id: userId,
+              title: `Signup fee ${outcome}`,
+              body,
+              link_path:
+                userId === stu?.registered_by ? "/staff/front-desk" : "/staff/students",
+              student_id: data.studentId,
+            })),
+          );
+        }
+      } catch {
+        /* best-effort */
       }
 
       return {

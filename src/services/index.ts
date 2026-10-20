@@ -82,6 +82,7 @@ import {
   portalHandoverToAdmission,
   portalIntakeRegisterStudent,
   portalListAdmissionHandovers,
+  portalListSignupFeeQueue,
   portalRecordCounsellingAgreement,
   portalRecordSignupFee,
   portalRequestFeeVerification,
@@ -653,6 +654,9 @@ export const recordSignupFee = (data: SignupFeeRecordInput) =>
 
 export const verifySignupFee = (data: VerifySignupFeeInput) =>
   withAuth((opts) => portalVerifySignupFee({ ...opts, data }));
+
+export const listSignupFeeQueue = () =>
+  withAuth((opts) => portalListSignupFeeQueue(opts));
 
 export const assignCounsellor = (data: AssignCounsellorInput) =>
   withAuth((opts) => portalAssignCounsellor({ ...opts, data }));

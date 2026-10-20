@@ -110,6 +110,25 @@ export function assertFrontDeskOrAdmin(session: TrustedSession): void {
 }
 
 /**
+ * Front Desk coordination queue + Accounts/Finance fee verifiers (and admin).
+ * Does not grant fee VERIFY — that remains requireSignupFeeVerifyPermission.
+ */
+export function assertFrontDeskOrFeeVerifierOrAdmin(session: TrustedSession): void {
+  if (rolesAtLeastAdmin(session.role)) return;
+  const businessRole = businessRoleFromSession(session);
+  if (isFrontDeskBusinessRole(businessRole)) return;
+  if (
+    canVerifySignupFeeAction({
+      appRole: session.role,
+      businessRole,
+    })
+  ) {
+    return;
+  }
+  throw new AuthError("Front Desk or Accounts/Finance access required.", 403);
+}
+
+/**
  * Synchronous matrix check (unit tests + callers with a resolved matrix).
  * Technical admin/super_admin bypass. Never trusts client-supplied roles.
  */

@@ -4,7 +4,11 @@
  */
 import { createServerFn } from "@tanstack/react-start";
 import { AuthError, requireRoles, requireTrustedSession } from "@/server/portal-auth";
-import { assertFrontDeskOrAdmin, businessRoleFromSession } from "@/server/staff-access";
+import {
+  assertFrontDeskOrAdmin,
+  assertFrontDeskOrFeeVerifierOrAdmin,
+  businessRoleFromSession,
+} from "@/server/staff-access";
 import { canListCounsellorDesksForSession } from "@/lib/staff-business-access";
 import { validatePasswordConfirmation } from "@/lib/password-policy";
 
@@ -905,7 +909,8 @@ export const portalListFeeVerificationRequests = createServerFn({ method: "GET" 
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
-      assertFrontDeskOrAdmin(session);
+      // Front Desk coordinates; Accounts may list (SQL can_verify_signup_fee) to act on forwards.
+      assertFrontDeskOrFeeVerifierOrAdmin(session);
 
       const includeResolved = Boolean(data?.includeResolved);
       const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
