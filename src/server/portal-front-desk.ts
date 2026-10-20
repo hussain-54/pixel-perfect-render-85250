@@ -828,3 +828,66 @@ export const portalArchiveFrontDeskIntake = createServerFn({ method: "POST" })
       toError(error);
     }
   });
+
+export type FeeVerificationRequestRow = {
+  id: string;
+  studentId: string;
+  caseId: string;
+  fullName: string;
+  counsellorName: string | null;
+  summary: string;
+  status: string;
+  signupFeeStatus: string | null;
+  requestedBy: string | null;
+  registrarId: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
+/** Front Desk / Accounts / Admin queue of counsellor fee-verification requests. */
+export const portalListFeeVerificationRequests = createServerFn({ method: "GET" }).handler(
+  async () => {
+    try {
+      const session = await requireTrustedSession();
+      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      assertFrontDeskOrAdmin(session);
+
+      const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
+      if (!usesSupabaseDataPlane(session)) {
+        return { rows: [] as FeeVerificationRequestRow[] };
+      }
+      const client = requireAoSupabaseClient();
+      const { data, error } = await client.rpc("list_counselling_fee_verification_requests", {
+        p_include_resolved: false,
+      });
+      if (error) {
+        if (/does not exist|function|PGRST202/i.test(error.message)) {
+          throw new AuthError(
+            "Fee verification request queue unavailable. Apply migration 20261020150000_counselling_fee_verification_requests.sql.",
+            503,
+          );
+        }
+        throw new Error(error.message);
+      }
+      const rows: FeeVerificationRequestRow[] = ((data ?? []) as Record<string, unknown>[]).map(
+        (r) => ({
+          id: str(r["id"]),
+          studentId: str(r["student_id"]),
+          caseId: str(r["case_id"]),
+          fullName: str(r["full_name"]),
+          counsellorName: strOrNull(r["counsellor_name"]),
+          summary: str(r["summary"]),
+          status: str(r["status"]),
+          signupFeeStatus: strOrNull(r["signup_fee_status"]),
+          requestedBy: strOrNull(r["requested_by"]),
+          registrarId: strOrNull(r["registrar_id"]),
+          createdAt: str(r["created_at"]),
+          updatedAt: str(r["updated_at"]),
+        }),
+      );
+      return { rows };
+    } catch (error) {
+      toError(error);
+    }
+  },
+);

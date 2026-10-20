@@ -628,7 +628,47 @@ export async function saveStudentAssessmentDb(
   session: TrustedSession,
   studentId: string,
   assessment: AssessmentSaveInput,
+  options?: { expectedUpdatedAt?: string | null },
 ): Promise<void> {
+  const { data: existingAcademic, error: academicLoadErr } = await client
+    .from("student_academic_profiles")
+    .select("updated_at")
+    .eq("student_id", studentId)
+    .maybeSingle();
+  if (academicLoadErr) throw new Error(academicLoadErr.message);
+
+  const expected = options?.expectedUpdatedAt?.trim() || null;
+  if (existingAcademic?.updated_at) {
+    if (!expected) {
+      throw new AuthError(
+        "This assessment was updated elsewhere. Reload before saving to avoid overwriting newer changes.",
+        409,
+      );
+    }
+    if (expected !== existingAcademic.updated_at) {
+      throw new AuthError(
+        "This assessment was updated elsewhere. Reload before saving to avoid overwriting newer changes.",
+        409,
+      );
+    }
+  }
+
+  // Assigned-counsellor guard: consultants may only edit their own cases.
+  if (session.role === "consultant" && session.userId && !rolesAtLeastAdmin(session.role)) {
+    const { data: studentRow, error: studentErr } = await client
+      .from("students")
+      .select("assigned_consultant_id")
+      .eq("id", studentId)
+      .maybeSingle();
+    if (studentErr) throw new Error(studentErr.message);
+    if (
+      studentRow?.assigned_consultant_id &&
+      studentRow.assigned_consultant_id !== session.userId
+    ) {
+      throw new AuthError("You may only edit assessments for students assigned to you.", 403);
+    }
+  }
+
   const extras: AssessmentExtras = {
     fundingSource: assessment.fundingSource,
     applicationTarget: assessment.applicationTarget,
@@ -656,6 +696,7 @@ export async function saveStudentAssessmentDb(
     notes: JSON.stringify(extras),
   });
 
+  // Each save inserts a new student_assessments row (version history).
   await dbSvc.createAssessment(client, {
     student_id: studentId,
     assessed_by: session.userId ?? null,
@@ -768,7 +809,12 @@ export async function buildStudentWorkspaceFromDb(
     if (data?.full_name) consultantName = data.full_name;
   }
 
-  const canEdit = session.role === "consultant" || rolesAtLeastAdmin(session.role);
+  const isAssignedCounsellor =
+    session.role === "consultant" &&
+    Boolean(session.userId) &&
+    Boolean(student.consultantId) &&
+    student.consultantId === session.userId;
+  const canEdit = rolesAtLeastAdmin(session.role) || isAssignedCounsellor;
 
   return {
     student: {

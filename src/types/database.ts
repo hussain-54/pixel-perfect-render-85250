@@ -254,6 +254,36 @@ export type Database = {
         Update: Partial<Database["public"]["Tables"]["counselling_agreements"]["Insert"]>;
         Relationships: [];
       };
+      counselling_fee_verification_requests: {
+        Row: {
+          id: string;
+          student_id: string;
+          requested_by: string;
+          registrar_id: string | null;
+          summary: string;
+          status: "open" | "in_progress" | "resolved" | "cancelled";
+          resolved_at: string | null;
+          resolved_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          student_id: string;
+          requested_by: string;
+          registrar_id?: string | null;
+          summary: string;
+          status?: "open" | "in_progress" | "resolved" | "cancelled";
+          resolved_at?: string | null;
+          resolved_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<
+          Database["public"]["Tables"]["counselling_fee_verification_requests"]["Insert"]
+        >;
+        Relationships: [];
+      };
       admission_handovers: {
         Row: {
           id: string;
@@ -1525,6 +1555,27 @@ export type Database = {
           portal_activated_at: string | null;
         }[];
       };
+      request_counselling_fee_verification: {
+        Args: { p_student_id: string; p_summary: string };
+        Returns: Database["public"]["Tables"]["counselling_fee_verification_requests"]["Row"];
+      };
+      list_counselling_fee_verification_requests: {
+        Args: { p_include_resolved?: boolean };
+        Returns: {
+          id: string;
+          student_id: string;
+          case_id: string;
+          full_name: string;
+          counsellor_name: string | null;
+          summary: string;
+          status: string;
+          signup_fee_status: SignupFeeStatusDb | null;
+          requested_by: string | null;
+          registrar_id: string | null;
+          created_at: string;
+          updated_at: string;
+        }[];
+      };
       list_front_desk_intake_summaries: {
         Args: { p_include_archived?: boolean };
         Returns: {
@@ -1709,6 +1760,8 @@ export type TaskRow = Tables<"tasks">;
 export type AppointmentRow = Tables<"appointments">;
 export type SignupFeePaymentRow = Tables<"signup_fee_payments">;
 export type CounsellingAgreementRow = Tables<"counselling_agreements">;
+export type CounsellingFeeVerificationRequestRow =
+  Tables<"counselling_fee_verification_requests">;
 export type AdmissionHandoverRow = Tables<"admission_handovers">;
 export type UniversityFeeObligationRow = Tables<"university_fee_obligations">;
 export type InternalNoteRow = Tables<"internal_notes">;

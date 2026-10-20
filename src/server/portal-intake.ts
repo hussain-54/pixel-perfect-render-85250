@@ -524,6 +524,21 @@ export const portalVerifySignupFee = createServerFn({ method: "POST" })
         },
       });
 
+      // Close open counsellor fee-verification requests for this student.
+      try {
+        await client
+          .from("counselling_fee_verification_requests")
+          .update({
+            status: "resolved",
+            resolved_at: new Date().toISOString(),
+            resolved_by: session.userId ?? null,
+          })
+          .eq("student_id", data.studentId)
+          .in("status", ["open", "in_progress"]);
+      } catch {
+        /* queue table may be unavailable until migration is applied */
+      }
+
       return {
         ok: true as const,
         fee: {
@@ -769,6 +784,20 @@ export const portalHandoverToAdmission = createServerFn({ method: "POST" })
       });
       if (!assessmentGate.ok) {
         throw new AuthError(assessmentGate.message, 400);
+      }
+
+      // Authoritative fee gate — claimed/unpaid/rejected cannot proceed to Admission.
+      const { data: feeRow } = await client
+        .from("signup_fee_payments")
+        .select("status")
+        .eq("student_id", data.studentId)
+        .maybeSingle();
+      const {
+        feeStatusAllowsAdmissionHandover,
+        admissionHandoverBlockedByFeeMessage,
+      } = await import("@/lib/fee-verification-workflow");
+      if (!feeStatusAllowsAdmissionHandover(feeRow?.status)) {
+        throw new AuthError(admissionHandoverBlockedByFeeMessage(), 400);
       }
 
       const { data: handover, error } = await client
@@ -1055,6 +1084,105 @@ export const portalUpdateAdmissionHandover = createServerFn({ method: "POST" })
           summary: row.summary,
           handedOverAt: row.handed_over_at,
         },
+      };
+    } catch (error) {
+      toError(error);
+    }
+  });
+
+/** Counsellor returns case to Front Desk for signup-fee verification (not Admission handover). */
+export const portalRequestFeeVerification = createServerFn({ method: "POST" })
+  .validator((data: { studentId: string; summary: string }) => data)
+  .handler(async ({ data }) => {
+    try {
+      const session = await requireTrustedSession();
+      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      session.businessRole = await resolveSessionBusinessRole(session);
+      denyFrontDeskConsultantWorkflows(session, "fee verification request");
+      const { HANDOVER_INITIATE_MINIMUM, HANDOVER_INITIATE_MODULE } = await import(
+        "@/lib/counsellor-handover-rules"
+      );
+      await requireModulePermission(
+        session,
+        HANDOVER_INITIATE_MODULE,
+        HANDOVER_INITIATE_MINIMUM,
+        "fee verification request",
+      );
+
+      const { validateFeeVerificationRequestSummary } = await import(
+        "@/lib/fee-verification-workflow"
+      );
+      const summaryCheck = validateFeeVerificationRequestSummary(data.summary);
+      if (!summaryCheck.ok) throw new AuthError(summaryCheck.message, 400);
+
+      const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb } =
+        await import("@/server/ao-data");
+      if (!usesSupabaseDataPlane(session)) {
+        throw new AuthError("Fee verification request requires the live data plane.", 400);
+      }
+      const client = requireAoSupabaseClient();
+      const student = await assertStudentVisibleDb(client, session, data.studentId);
+      if (
+        session.role === "consultant" &&
+        session.userId &&
+        student.consultantId &&
+        student.consultantId !== session.userId &&
+        !rolesAtLeastAdmin(session.role)
+      ) {
+        throw new AuthError("You may only request verification for your assigned students.", 403);
+      }
+
+      const { data: row, error } = await client.rpc("request_counselling_fee_verification", {
+        p_student_id: data.studentId,
+        p_summary: data.summary.trim(),
+      });
+      if (error) {
+        if (/does not exist|function|PGRST202/i.test(error.message)) {
+          throw new AuthError(
+            "Fee verification requests unavailable. Apply migration 20261020150000_counselling_fee_verification_requests.sql.",
+            503,
+          );
+        }
+        throw new AuthError(error.message, 400);
+      }
+      const created = Array.isArray(row) ? row[0] : row;
+      if (!created?.id) throw new AuthError("Request was not created.", 500);
+
+      // Notify Front Desk registrar when known (durable notification).
+      const registrarId = created.registrar_id as string | null;
+      if (registrarId) {
+        try {
+          await client.from("notifications").insert({
+            user_id: registrarId,
+            title: "Fee verification requested",
+            body: `Counsellor requested signup-fee verification for ${student.name || "a student"} (${student.caseId || data.studentId}).`,
+            link_path: "/staff/front-desk",
+            student_id: data.studentId,
+          });
+        } catch {
+          /* notification best-effort */
+        }
+      }
+
+      try {
+        const { writeAudit } = await import("@/services/db");
+        await writeAudit(client, {
+          action: "student.fee_verification_requested",
+          entity_type: "counselling_fee_verification_requests",
+          entity_id: created.id,
+          student_id: data.studentId,
+          metadata: { status: created.status },
+        });
+      } catch {
+        /* audit best-effort */
+      }
+
+      return {
+        ok: true as const,
+        requestId: created.id as string,
+        status: String(created.status ?? "open"),
+        message:
+          "Case returned to Front Desk for fee verification. Accounts must verify or waive before Admission handover.",
       };
     } catch (error) {
       toError(error);

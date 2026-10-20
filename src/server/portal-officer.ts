@@ -550,7 +550,13 @@ export const portalGetStudentProfile = createServerFn({ method: "GET" })
   });
 
 export const portalSaveStudentAssessment = createServerFn({ method: "POST" })
-  .validator((data: { studentId: string; assessment: AssessmentSaveInput }) => data)
+  .validator(
+    (data: {
+      studentId: string;
+      assessment: AssessmentSaveInput;
+      expectedUpdatedAt?: string | null;
+    }) => data,
+  )
   .handler(async ({ data }) => {
     try {
       const session = await requireTrustedSession();
@@ -565,6 +571,7 @@ export const portalSaveStudentAssessment = createServerFn({ method: "POST" })
       if (!validated.ok) {
         throw new AuthError(validated.message, 400);
       }
+      const assessmentToSave = { ...a, eligibility: validated.eligibility };
 
       const {
         usesSupabaseDataPlane,
@@ -576,7 +583,27 @@ export const portalSaveStudentAssessment = createServerFn({ method: "POST" })
       if (usesSupabaseDataPlane(session)) {
         const client = requireAoSupabaseClient();
         await assertStudentVisibleDb(client, session, data.studentId);
-        await saveStudentAssessmentDb(client, session, data.studentId, a);
+        await saveStudentAssessmentDb(
+          client,
+          session,
+          data.studentId,
+          assessmentToSave,
+          data.expectedUpdatedAt != null
+            ? { expectedUpdatedAt: data.expectedUpdatedAt }
+            : undefined,
+        );
+        try {
+          const { writeAudit } = await import("@/services/db");
+          await writeAudit(client, {
+            action: "student.assessment_saved",
+            entity_type: "student_assessments",
+            entity_id: data.studentId,
+            student_id: data.studentId,
+            metadata: { eligibility: validated.eligibility },
+          });
+        } catch {
+          /* audit best-effort */
+        }
         return await buildStudentWorkspaceFromDb(session, data.studentId);
       }
 
@@ -589,7 +616,7 @@ export const portalSaveStudentAssessment = createServerFn({ method: "POST" })
       const now = new Date().toISOString();
       const saved = workspace.upsertAssessment({
         studentId: data.studentId,
-        eligibility: a.eligibility.trim(),
+        eligibility: validated.eligibility,
         languageTest: a.languageTest.trim(),
         languageScore: a.languageScore.trim(),
         annualBudget: a.annualBudget.trim(),

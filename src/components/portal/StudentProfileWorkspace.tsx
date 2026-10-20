@@ -29,9 +29,9 @@ import {
   getStudentJourneyTimeline,
   handoverToAdmission,
   recordCounsellingAgreement,
+  requestFeeVerification,
   saveShortlistItem,
   saveStudentAssessment,
-  verifySignupFee,
 } from "@/services";
 import type { StudentProfileWorkspace } from "@/types/student-profile";
 import {
@@ -41,7 +41,9 @@ import {
 } from "@/types/student-profile";
 import { cn } from "@/lib/utils";
 import { SearchableSelect } from "@/components/portal/SearchableSelect";
+import { CounsellingAssessmentFormA4 } from "@/components/portal/CounsellingAssessmentFormA4";
 import { validateAssessmentForSave } from "@/lib/counsellor-handover-rules";
+import { feeStatusAllowsAdmissionHandover } from "@/lib/fee-verification-workflow";
 import {
   COUNSELLOR_DESTINATIONS,
   COUNSELLOR_ELIGIBILITY,
@@ -63,13 +65,22 @@ type Props = {
   onTabChange: (tab: ProfileTabId) => void;
 };
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
+function Field({
+  label,
+  children,
+  error,
+}: {
+  label: string;
+  children: ReactNode;
+  error?: string | null | undefined;
+}) {
   return (
     <label className="block text-sm">
       <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
         {label}
       </span>
       {children}
+      {error ? <span className="mt-1 block text-xs text-danger">{error}</span> : null}
     </label>
   );
 }
@@ -91,8 +102,16 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
     deadline: "",
   });
   const [handoverSummary, setHandoverSummary] = useState("");
+  const [feeRequestSummary, setFeeRequestSummary] = useState("");
   const [lifecycleMsg, setLifecycleMsg] = useState<string | null>(null);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const [editingAssessment, setEditingAssessment] = useState(
+    () => workspace.canEdit && !workspace.assessment.assessedAt,
+  );
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<keyof AssessmentSaveInput, string>>>(
+    {},
+  );
+  const [showPrintAssessment, setShowPrintAssessment] = useState(false);
   const parsedIntake = parseIntakeSeasonYear(workspace.assessment.targetIntake);
   const [intakeSeason, setIntakeSeason] = useState<IntakeSeason | "">(parsedIntake.season);
   const [intakeYear, setIntakeYear] = useState<number | "">(parsedIntake.year);
@@ -113,12 +132,40 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
     suitabilityNote: "",
   });
 
+  const baselineForm = useMemo(() => toForm(workspace.assessment), [workspace.assessment]);
+  const assessmentDirty = useMemo(() => {
+    if (!editingAssessment) return false;
+    const intakeLabel = formatIntakeLabel(intakeSeason, intakeYear) || form.targetIntake;
+    return (
+      JSON.stringify({ ...form, targetIntake: intakeLabel }) !==
+      JSON.stringify({ ...baselineForm, targetIntake: workspace.assessment.targetIntake })
+    );
+  }, [
+    editingAssessment,
+    form,
+    intakeSeason,
+    intakeYear,
+    baselineForm,
+    workspace.assessment.targetIntake,
+  ]);
+
   useEffect(() => {
     setForm(toForm(workspace.assessment));
     const parsed = parseIntakeSeasonYear(workspace.assessment.targetIntake);
     setIntakeSeason(parsed.season);
     setIntakeYear(parsed.year);
+    setFieldErrors({});
   }, [workspace.assessment]);
+
+  useEffect(() => {
+    if (!assessmentDirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [assessmentDirty]);
 
   const invalidateProfile = async () => {
     await queryClient.invalidateQueries({ queryKey: ["officer", "student-profile", s.id] });
@@ -171,13 +218,30 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
   };
 
   const saveM = useMutation({
-    mutationFn: (payload: AssessmentSaveInput) => saveStudentAssessment(s.id, payload),
+    mutationFn: (payload: AssessmentSaveInput) =>
+      saveStudentAssessment(s.id, payload, workspace.assessment.updatedAt),
     onSuccess: async () => {
       setSaveMsg("Assessment saved.");
+      setEditingAssessment(false);
+      setFieldErrors({});
       await invalidateProfile();
     },
     onError: (err) => setSaveMsg(portalErrorMessage(err, "Could not save assessment.")),
   });
+
+  const feeStatus = feeQ.data?.fee?.status ?? null;
+  const feeReadyForHandover = feeStatusAllowsAdmissionHandover(feeStatus);
+  const hasSavedAssessment = Boolean(workspace.assessment.assessedAt);
+  const fieldsEditable = workspace.canEdit && editingAssessment;
+
+  const printAssessment = () => {
+    if (!hasSavedAssessment) {
+      setSaveMsg("Save the assessment before printing or downloading.");
+      return;
+    }
+    setShowPrintAssessment(true);
+    window.setTimeout(() => window.print(), 80);
+  };
 
   const noteM = useMutation({
     mutationFn: () => addStudentNote(s.id, noteBody),
@@ -239,7 +303,8 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
     setForm((f) => ({ ...f, [key]: value }));
 
   return (
-    <div>
+    <>
+    <div className="student-profile-no-print">
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
@@ -275,15 +340,21 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
       </div>
 
       <Panel title="Counselling lifecycle">
-        <div className="space-y-3 text-sm">
-          <p className="text-muted-foreground">
-            Signup fee:{" "}
-            <span className="font-medium text-navy">{feeQ.data?.fee?.status ?? "Loading…"}</span>
-            {feeQ.data?.fee?.portalActivatedAt ? " · Portal activated" : " · Portal not activated"}
-          </p>
-          <p className="text-xs text-muted-foreground">
-            Before handover: save the eligibility assessment, record consent, then add a short summary.
-          </p>
+        <div className="space-y-4 text-sm">
+          <div className="rounded-md border border-border/70 bg-accent/30 px-3 py-2">
+            <p className="text-muted-foreground">
+              Signup fee:{" "}
+              <span className="font-medium capitalize text-navy">
+                {(feeStatus ?? "Loading…").replaceAll("_", " ")}
+              </span>
+              {feeQ.data?.fee?.portalActivatedAt ? " · Portal activated" : " · Portal not activated"}
+            </p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Next: save assessment → record consent → return to Front Desk for fee verification →
+              after Accounts verifies/waives, forward to Admission.
+            </p>
+          </div>
+
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
@@ -297,7 +368,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                     studentId: s.id,
                     consented: true,
                     summary: "Counselling session consent recorded in portal.",
-                    outcome: "Proceed to assessment and handover",
+                    outcome: "Proceed to assessment and fee verification",
                   });
                   setLifecycleMsg("Counselling consent recorded.");
                   await invalidateProfile();
@@ -310,26 +381,43 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
             >
               Record counselling consent
             </Button>
+          </div>
+
+          <div className="space-y-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Return to Front Desk — fee verification
+            </p>
+            <Textarea
+              placeholder="Short verification request for Front Desk (required, min 10 characters)"
+              value={feeRequestSummary}
+              disabled={!workspace.canEdit || lifecycleBusy}
+              onChange={(e) => setFeeRequestSummary(e.target.value)}
+            />
             <Button
               size="sm"
               variant="outline"
-              disabled={lifecycleBusy}
+              disabled={
+                !workspace.canEdit || lifecycleBusy || feeRequestSummary.trim().length < 10
+              }
               onClick={async () => {
                 try {
                   setLifecycleBusy(true);
                   setLifecycleMsg(null);
-                  await verifySignupFee({
+                  const result = await requestFeeVerification({
                     studentId: s.id,
-                    action: "verify",
-                    activatePortal: true,
+                    summary: feeRequestSummary,
                   });
-                  setLifecycleMsg("Signup fee verified.");
+                  setLifecycleMsg(
+                    result?.message ??
+                      "Case returned to Front Desk for fee verification.",
+                  );
+                  setFeeRequestSummary("");
                   await feeQ.refetch();
                 } catch (e) {
                   setLifecycleMsg(
                     portalErrorMessage(
                       e,
-                      "Fee verification is limited to Accounts and Admin.",
+                      "Could not return case for fee verification. Save assessment and consent first.",
                     ),
                   );
                 } finally {
@@ -337,59 +425,79 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 }
               }}
             >
-              Verify signup fee
+              Return to Front Desk — Fee Verification Required
             </Button>
           </div>
-          <Textarea
-            placeholder="Handover summary for the Admission Team (required)"
-            value={handoverSummary}
-            disabled={!workspace.canEdit || lifecycleBusy}
-            onChange={(e) => setHandoverSummary(e.target.value)}
-          />
-          <Button
-            size="sm"
-            variant="navy"
-            disabled={
-              !workspace.canEdit || lifecycleBusy || handoverSummary.trim().length < 10
-            }
-            onClick={async () => {
-              try {
-                setLifecycleBusy(true);
-                setLifecycleMsg(null);
-                const result = await handoverToAdmission({
-                  studentId: s.id,
-                  summary: handoverSummary,
-                  checklist: { assessmentComplete: true, agreementRecorded: true },
-                });
-                if (result && "alreadySubmitted" in result && result.alreadySubmitted) {
-                  setLifecycleMsg(
-                    result.message ?? "This student is already in the Admission Team queue.",
-                  );
-                } else {
-                  setLifecycleMsg("Student sent to the Admission Team queue.");
-                  setHandoverSummary("");
-                }
-                await invalidateProfile();
-                await queryClient.invalidateQueries({
-                  queryKey: ["officer", "students-directory"],
-                });
-                await queryClient.invalidateQueries({
-                  queryKey: ["officer", "admission-handovers"],
-                });
-              } catch (e) {
-                setLifecycleMsg(
-                  portalErrorMessage(
-                    e,
-                    "Handover could not be completed. Save the assessment and record consent first.",
-                  ),
-                );
-              } finally {
-                setLifecycleBusy(false);
+
+          <div className="space-y-2 border-t border-border/60 pt-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+              Admission handover
+            </p>
+            {!feeReadyForHandover ? (
+              <p className="text-xs text-muted-foreground">
+                Admission handover unlocks after Accounts verifies or waives the signup fee
+                (claimed is not verified).
+              </p>
+            ) : (
+              <p className="text-xs text-navy">
+                Fee authorized — ready for Admission handover when assessment and consent are in
+                place.
+              </p>
+            )}
+            <Textarea
+              placeholder="Handover summary for the Admission Team (required)"
+              value={handoverSummary}
+              disabled={!workspace.canEdit || lifecycleBusy || !feeReadyForHandover}
+              onChange={(e) => setHandoverSummary(e.target.value)}
+            />
+            <Button
+              size="sm"
+              variant="navy"
+              disabled={
+                !workspace.canEdit ||
+                lifecycleBusy ||
+                !feeReadyForHandover ||
+                handoverSummary.trim().length < 10
               }
-            }}
-          >
-            {lifecycleBusy ? "Working…" : "Hand over to Admission"}
-          </Button>
+              onClick={async () => {
+                try {
+                  setLifecycleBusy(true);
+                  setLifecycleMsg(null);
+                  const result = await handoverToAdmission({
+                    studentId: s.id,
+                    summary: handoverSummary,
+                    checklist: { assessmentComplete: true, agreementRecorded: true },
+                  });
+                  if (result && "alreadySubmitted" in result && result.alreadySubmitted) {
+                    setLifecycleMsg(
+                      result.message ?? "This student is already in the Admission Team queue.",
+                    );
+                  } else {
+                    setLifecycleMsg("Student sent to the Admission Team queue.");
+                    setHandoverSummary("");
+                  }
+                  await invalidateProfile();
+                  await queryClient.invalidateQueries({
+                    queryKey: ["officer", "students-directory"],
+                  });
+                  await queryClient.invalidateQueries({
+                    queryKey: ["officer", "admission-handovers"],
+                  });
+                } catch (e) {
+                  setLifecycleMsg(
+                    portalErrorMessage(
+                      e,
+                      "Handover could not be completed. Confirm fee authorization, assessment, and consent.",
+                    ),
+                  );
+                } finally {
+                  setLifecycleBusy(false);
+                }
+              }}
+            >
+              {lifecycleBusy ? "Working…" : "Forward to Admission Team"}
+            </Button>
+          </div>
           {lifecycleMsg ? <p className="text-xs text-navy">{lifecycleMsg}</p> : null}
         </div>
       </Panel>
@@ -434,7 +542,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                     value={form.lastQualification}
                     other={qualificationOther}
                     options={COUNSELLOR_QUALIFICATIONS}
-                    disabled={!workspace.canEdit}
+                    disabled={!fieldsEditable}
                     onValue={(v) => setField("lastQualification", v)}
                     onOther={setQualificationOther}
                   />
@@ -442,14 +550,14 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 <Field label="Marks / CGPA">
                   <Input
                     value={form.marksCgpa}
-                    disabled={!workspace.canEdit}
+                    disabled={!fieldsEditable}
                     onChange={(e) => setField("marksCgpa", e.target.value)}
                   />
                 </Field>
                 <Field label="Education gap">
                   <Input
                     value={form.educationGap}
-                    disabled={!workspace.canEdit}
+                    disabled={!fieldsEditable}
                     placeholder="e.g. 1 year"
                     onChange={(e) => setField("educationGap", e.target.value)}
                   />
@@ -457,7 +565,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 <Field label="Work experience (years)">
                   <Input
                     value={form.workExperience}
-                    disabled={!workspace.canEdit}
+                    disabled={!fieldsEditable}
                     onChange={(e) => setField("workExperience", e.target.value)}
                   />
                 </Field>
@@ -466,7 +574,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                     value={form.preferredLevel}
                     other={levelOther}
                     options={COUNSELLOR_STUDY_LEVELS}
-                    disabled={!workspace.canEdit}
+                    disabled={!fieldsEditable}
                     onValue={(v) => setField("preferredLevel", v)}
                     onOther={setLevelOther}
                   />
@@ -476,14 +584,21 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
 
             <Panel title="Eligibility and study plan">
               <div className="grid gap-3">
-                <Field label="Eligibility outcome *">
+                <Field label="Eligibility outcome *" error={fieldErrors.eligibility ?? null}>
                   <select
                     className="h-11 w-full rounded-md border border-input bg-white px-3 text-sm"
                     value={form.eligibility}
-                    disabled={!workspace.canEdit}
-                    onChange={(e) => setField("eligibility", e.target.value)}
+                    disabled={!fieldsEditable}
+                    onChange={(e) => {
+                      setField("eligibility", e.target.value);
+                      setFieldErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.eligibility;
+                        return next;
+                      });
+                    }}
                   >
-                    <option value="">Select outcome</option>
+                    <option value="">Select outcome (blank saves as Pending Review)</option>
                     {COUNSELLOR_ELIGIBILITY.map((o) => (
                       <option key={o} value={o}>
                         {o}
@@ -497,7 +612,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                       value={form.languageTest}
                       other={langOther}
                       options={COUNSELLOR_LANGUAGE_TESTS}
-                      disabled={!workspace.canEdit}
+                      disabled={!fieldsEditable}
                       onValue={(v) => setField("languageTest", v)}
                       onOther={setLangOther}
                       searchable={false}
@@ -506,7 +621,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                   <Field label="Test score">
                     <Input
                       value={form.languageScore}
-                      disabled={!workspace.canEdit || form.languageTest === "Not taken yet"}
+                      disabled={!fieldsEditable || form.languageTest === "Not taken yet"}
                       onChange={(e) => setField("languageScore", e.target.value)}
                     />
                   </Field>
@@ -514,7 +629,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 <Field label="Annual budget">
                   <Input
                     value={form.annualBudget}
-                    disabled={!workspace.canEdit}
+                    disabled={!fieldsEditable}
                     placeholder="e.g. PKR 3–4 million"
                     onChange={(e) => setField("annualBudget", e.target.value)}
                   />
@@ -524,20 +639,27 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                     value={form.fundingSource}
                     other={fundingOther}
                     options={COUNSELLOR_FUNDING_SOURCES}
-                    disabled={!workspace.canEdit}
+                    disabled={!fieldsEditable}
                     onValue={(v) => setField("fundingSource", v)}
                     onOther={setFundingOther}
                     searchable={false}
                   />
                 </Field>
-                <Field label="Application target">
+                <Field label="Application target" error={fieldErrors.applicationTarget ?? null}>
                   <Input
                     type="number"
                     min={0}
                     max={50}
                     value={form.applicationTarget}
-                    disabled={!workspace.canEdit}
-                    onChange={(e) => setField("applicationTarget", Number(e.target.value) || 0)}
+                    disabled={!fieldsEditable}
+                    onChange={(e) => {
+                      setField("applicationTarget", Number(e.target.value) || 0);
+                      setFieldErrors((prev) => {
+                        const next = { ...prev };
+                        delete next.applicationTarget;
+                        return next;
+                      });
+                    }}
                   />
                 </Field>
                 <Field label="Preferred destination">
@@ -545,7 +667,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                     value={form.targetCountries}
                     other={countryOther}
                     options={COUNSELLOR_DESTINATIONS}
-                    disabled={!workspace.canEdit}
+                    disabled={!fieldsEditable}
                     onValue={(v) => setField("targetCountries", v)}
                     onOther={setCountryOther}
                   />
@@ -555,7 +677,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                     <select
                       className="h-11 w-full rounded-md border border-input bg-white px-3 text-sm"
                       value={intakeSeason}
-                      disabled={!workspace.canEdit}
+                      disabled={!fieldsEditable}
                       onChange={(e) => setIntakeSeason(e.target.value as IntakeSeason | "")}
                     >
                       <option value="">Season</option>
@@ -570,7 +692,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                     <select
                       className="h-11 w-full rounded-md border border-input bg-white px-3 text-sm"
                       value={intakeYear === "" ? "" : String(intakeYear)}
-                      disabled={!workspace.canEdit}
+                      disabled={!fieldsEditable}
                       onChange={(e) =>
                         setIntakeYear(e.target.value ? Number(e.target.value) : "")
                       }
@@ -595,14 +717,14 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 <Field label="Counsellor notes / study plan">
                   <Textarea
                     value={form.studyPlan}
-                    disabled={!workspace.canEdit}
+                    disabled={!fieldsEditable}
                     onChange={(e) => setField("studyPlan", e.target.value)}
                   />
                 </Field>
                 <Field label="Immediate next step">
                   <Input
                     value={form.immediateNextStep}
-                    disabled={!workspace.canEdit}
+                    disabled={!fieldsEditable}
                     onChange={(e) => setField("immediateNextStep", e.target.value)}
                   />
                 </Field>
@@ -619,39 +741,86 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
             </Panel>
           </div>
 
-          {workspace.canEdit ? (
-            <div className="flex flex-wrap items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            {workspace.canEdit && editingAssessment ? (
               <Button
                 variant="navy"
                 disabled={saveM.isPending}
                 onClick={() => {
                   setSaveMsg(null);
+                  setFieldErrors({});
                   const payload = buildAssessmentPayload();
                   if (!payload) return;
                   const check = validateAssessmentForSave(payload);
                   if (!check.ok) {
                     setSaveMsg(check.message);
+                    const next: Partial<Record<keyof AssessmentSaveInput, string>> = {};
+                    for (const key of check.missing) {
+                      if (key.includes("eligibility")) next.eligibility = check.message;
+                      if (key.includes("application")) next.applicationTarget = check.message;
+                    }
+                    if (!check.missing.length && check.message.toLowerCase().includes("eligibility")) {
+                      next.eligibility = check.message;
+                    }
+                    if (check.message.toLowerCase().includes("application target")) {
+                      next.applicationTarget = check.message;
+                    }
+                    setFieldErrors(next);
                     return;
                   }
-                  saveM.mutate(payload);
+                  saveM.mutate({ ...payload, eligibility: check.eligibility });
                 }}
               >
-                {saveM.isPending ? "Saving…" : "Save assessment"}
+                {saveM.isPending ? "Saving…" : "Save Assessment"}
               </Button>
-              {saveMsg ? (
-                <p
-                  className={cn(
-                    "text-sm",
-                    saveM.isError || saveMsg.toLowerCase().includes("missing")
-                      ? "text-danger"
-                      : "text-muted-foreground",
-                  )}
-                >
-                  {saveMsg}
-                </p>
-              ) : null}
-            </div>
-          ) : null}
+            ) : null}
+            {workspace.canEdit && !editingAssessment ? (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setEditingAssessment(true);
+                  setSaveMsg(null);
+                }}
+              >
+                Edit Assessment
+              </Button>
+            ) : null}
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!hasSavedAssessment}
+              onClick={printAssessment}
+            >
+              Download PDF
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={!hasSavedAssessment}
+              onClick={printAssessment}
+            >
+              Print Assessment
+            </Button>
+            {assessmentDirty ? (
+              <p className="text-xs text-amber-700">You have unsaved assessment changes.</p>
+            ) : null}
+            {saveMsg ? (
+              <p
+                className={cn(
+                  "text-sm",
+                  saveM.isError ||
+                    saveMsg.toLowerCase().includes("missing") ||
+                    saveMsg.toLowerCase().includes("overwrite") ||
+                    saveMsg.toLowerCase().includes("before")
+                    ? "text-danger"
+                    : "text-muted-foreground",
+                )}
+              >
+                {saveMsg}
+              </p>
+            ) : null}
+          </div>
 
           <Panel
             title="University shortlist"
@@ -999,6 +1168,37 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
         </DialogContent>
       </Dialog>
     </div>
+
+    {hasSavedAssessment ? (
+      <div
+        id="counselling-assessment-print-host"
+        className={cn(showPrintAssessment ? "mt-2" : "hidden")}
+        aria-hidden={!showPrintAssessment}
+      >
+        <CounsellingAssessmentFormA4
+          studentName={s.name}
+          caseId={s.caseId}
+          assessment={workspace.assessment}
+        />
+      </div>
+    ) : null}
+
+    <style>{`
+      @media print {
+        body * { visibility: hidden !important; }
+        #counselling-assessment-print-host,
+        #counselling-assessment-print-host * { visibility: visible !important; }
+        .student-profile-no-print { display: none !important; }
+        #counselling-assessment-print-host {
+          display: block !important;
+          position: absolute !important;
+          left: 0 !important;
+          top: 0 !important;
+          width: 100% !important;
+        }
+      }
+    `}</style>
+    </>
   );
 }
 

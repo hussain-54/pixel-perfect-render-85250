@@ -81,18 +81,17 @@ describe("counsellor admission handover authorization", () => {
 });
 
 describe("eligibility assessment validation", () => {
-  it("requires eligibility outcome and rejects blank save", () => {
-    const blank = validateAssessmentForSave({ eligibility: "  ", applicationTarget: 3 });
-    expect(blank.ok).toBe(false);
-    if (!blank.ok) {
-      expect(blank.message).toMatch(/eligibility/i);
-      expect(blank.missing).toContain("eligibility outcome");
-    }
+  it("treats blank eligibility as Pending Review for draft saves", () => {
+    expect(validateAssessmentForSave({ eligibility: "  ", applicationTarget: 3 })).toEqual({
+      ok: true,
+      eligibility: "Pending Review",
+    });
   });
 
   it("accepts a valid outcome", () => {
     expect(validateAssessmentForSave({ eligibility: "Good Fit", applicationTarget: 5 })).toEqual({
       ok: true,
+      eligibility: "Good Fit",
     });
   });
 

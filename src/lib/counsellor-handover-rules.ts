@@ -35,12 +35,13 @@ export function isEligibilityOutcome(value: string): value is EligibilityOutcome
  */
 export function validateAssessmentForSave(input: Pick<AssessmentSaveInput, "eligibility" | "applicationTarget">): {
   ok: true;
+  eligibility: EligibilityOutcome;
 } | { ok: false; message: string; missing: string[] } {
   const missing: string[] = [];
-  const eligibility = input.eligibility?.trim() ?? "";
-  if (!eligibility) {
-    missing.push("eligibility outcome");
-  } else if (!isEligibilityOutcome(eligibility)) {
+  // Draft-friendly: blank eligibility becomes Pending Review (still a valid outcome).
+  const raw = input.eligibility?.trim() ?? "";
+  const eligibility = (raw || "Pending Review") as string;
+  if (!isEligibilityOutcome(eligibility)) {
     return {
       ok: false,
       message: `Select a valid eligibility outcome (${ELIGIBILITY_OUTCOMES.join(", ")}).`,
@@ -65,7 +66,7 @@ export function validateAssessmentForSave(input: Pick<AssessmentSaveInput, "elig
       missing,
     };
   }
-  return { ok: true };
+  return { ok: true, eligibility };
 }
 
 /** Handover requires a saved assessment with a real eligibility outcome (not blank). */

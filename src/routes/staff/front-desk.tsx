@@ -1,5 +1,5 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
-import { UserPlus, Users, Clock3, UserCheck } from "lucide-react";
+import { UserPlus, Users, Clock3, UserCheck, BadgeDollarSign } from "lucide-react";
 import {
   EmptyState,
   ErrorState,
@@ -15,9 +15,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useData } from "@/lib/useData";
-import { getFrontDeskDashboard } from "@/services";
+import { getFrontDeskDashboard, listFeeVerificationRequests } from "@/services";
 import { isFrontDeskBusinessRole } from "@/lib/staff-business-access";
 import { workspaceTitleForSession } from "@/lib/workspace-branding";
+import { feeStatusAllowsAdmissionHandover } from "@/lib/fee-verification-workflow";
 
 export const Route = createFileRoute("/staff/front-desk")({
   beforeLoad: ({ context }) => {
@@ -31,6 +32,7 @@ export const Route = createFileRoute("/staff/front-desk")({
 
 function FrontDeskDashboardPage() {
   const dashQ = useData(["front-desk", "dashboard"], getFrontDeskDashboard);
+  const feeReqQ = useData(["front-desk", "fee-verification-requests"], listFeeVerificationRequests);
 
   if (dashQ.isLoading) return <LoadingRows rows={6} />;
   if (dashQ.isError) {
@@ -45,6 +47,8 @@ function FrontDeskDashboardPage() {
   if (!data) {
     return <EmptyState title="No intake data" body="No registrations are available yet." />;
   }
+
+  const feeRows = feeReqQ.data?.rows ?? [];
 
   return (
     <div className="space-y-8">
@@ -61,7 +65,7 @@ function FrontDeskDashboardPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-3">
+      <div className="grid gap-4 sm:grid-cols-4">
         <StatCard label="My registrations" value={String(data.myRegistrations)} icon={<Users />} />
         <StatCard
           label="Awaiting counsellor"
@@ -73,7 +77,91 @@ function FrontDeskDashboardPage() {
           value={String(data.recentAssigned.length)}
           icon={<UserCheck />}
         />
+        <StatCard
+          label="Fee verification queue"
+          value={String(feeRows.length)}
+          icon={<BadgeDollarSign />}
+        />
       </div>
+
+      <Panel
+        title="Counsellor fee-verification requests"
+        action={
+          <Button asChild variant="outline" size="sm">
+            <Link to="/staff/finance">Accounts / Finance</Link>
+          </Button>
+        }
+      >
+        {feeReqQ.isLoading ? (
+          <p className="text-sm text-muted-foreground">Loading fee-verification requests…</p>
+        ) : feeReqQ.isError ? (
+          <p className="text-sm text-muted-foreground">
+            {portalErrorMessage(
+              feeReqQ.error,
+              "Fee verification queue unavailable. Apply the counselling fee-verification migration if needed.",
+            )}
+          </p>
+        ) : feeRows.length === 0 ? (
+          <EmptyState
+            title="No open fee-verification requests"
+            body="When a counsellor returns a case for signup-fee verification, it appears here for Front Desk coordination. Accounts verifies or waives fees."
+          />
+        ) : (
+          <TableWrap>
+            <table className="w-full text-left text-sm">
+              <thead>
+                <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
+                  <th className="px-3 py-2">Student</th>
+                  <th className="px-3 py-2">Counsellor</th>
+                  <th className="px-3 py-2">Request</th>
+                  <th className="px-3 py-2">Fee status</th>
+                  <th className="px-3 py-2">Request status</th>
+                  <th className="px-3 py-2">Updated</th>
+                  <th className="px-3 py-2">Next action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {feeRows.map((row) => {
+                  const feeOk = feeStatusAllowsAdmissionHandover(row.signupFeeStatus);
+                  return (
+                    <tr key={row.id} className="border-b border-border/60 align-top">
+                      <td className="px-3 py-2">
+                        <Link
+                          to="/staff/students/$studentId"
+                          params={{ studentId: row.studentId }}
+                          search={{ tab: "assessment" }}
+                          className="font-medium text-navy underline-offset-2 hover:underline"
+                        >
+                          {row.fullName}
+                        </Link>
+                        <div className="text-xs text-muted-foreground">{row.caseId}</div>
+                      </td>
+                      <td className="px-3 py-2">{row.counsellorName || "—"}</td>
+                      <td className="max-w-[16rem] px-3 py-2 text-xs text-muted-foreground">
+                        {row.summary}
+                      </td>
+                      <td className="px-3 py-2 capitalize">
+                        {(row.signupFeeStatus || "—").replaceAll("_", " ")}
+                      </td>
+                      <td className="px-3 py-2">
+                        <StatusBadge status={row.status} />
+                      </td>
+                      <td className="px-3 py-2 text-muted-foreground">
+                        {fmtDate(row.updatedAt.slice(0, 10))}
+                      </td>
+                      <td className="px-3 py-2 text-xs text-muted-foreground">
+                        {feeOk
+                          ? "Fee authorized — ready for Admission handover (counsellor)"
+                          : "Coordinate claim/receipt; Accounts must verify or waive"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </TableWrap>
+        )}
+      </Panel>
 
       <Panel
         title="Recent registrations"

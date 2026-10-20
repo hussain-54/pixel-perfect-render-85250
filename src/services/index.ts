@@ -84,6 +84,7 @@ import {
   portalListAdmissionHandovers,
   portalRecordCounsellingAgreement,
   portalRecordSignupFee,
+  portalRequestFeeVerification,
   portalUpdateAdmissionHandover,
   portalVerifySignupFee,
 } from "@/server/portal-intake";
@@ -188,6 +189,7 @@ import {
   portalArchiveFrontDeskIntake,
   portalGetFrontDeskDashboard,
   portalListCounsellorDesks,
+  portalListFeeVerificationRequests,
   portalListFrontDeskArchivedIntake,
   portalListFrontDeskIntake,
   portalProvisionStudentPortalAccount,
@@ -436,8 +438,21 @@ export const reviewStudentDocument = (documentId: string, action: "Approved" | "
 export const getStudentProfile = (id: string) =>
   withAuth((opts) => portalGetStudentProfile({ ...opts, data: { id } }));
 
-export const saveStudentAssessment = (studentId: string, assessment: AssessmentSaveInput) =>
-  withAuth((opts) => portalSaveStudentAssessment({ ...opts, data: { studentId, assessment } }));
+export const saveStudentAssessment = (
+  studentId: string,
+  assessment: AssessmentSaveInput,
+  expectedUpdatedAt?: string | null,
+) =>
+  withAuth((opts) =>
+    portalSaveStudentAssessment({
+      ...opts,
+      data: {
+        studentId,
+        assessment,
+        ...(expectedUpdatedAt != null ? { expectedUpdatedAt } : {}),
+      },
+    }),
+  );
 
 export const addStudentNote = (studentId: string, body: string, pinned?: boolean) =>
   withAuth((opts) =>
@@ -645,6 +660,12 @@ export const recordCounsellingAgreement = (data: CounsellingAgreementInput) =>
 
 export const handoverToAdmission = (data: AdmissionHandoverInput) =>
   withAuth((opts) => portalHandoverToAdmission({ ...opts, data }));
+
+export const requestFeeVerification = (data: { studentId: string; summary: string }) =>
+  withAuth((opts) => portalRequestFeeVerification({ ...opts, data }));
+
+export const listFeeVerificationRequests = () =>
+  withAuth((opts) => portalListFeeVerificationRequests(opts));
 
 export const listAdmissionHandovers = (filters?: {
   status?: "submitted" | "accepted" | "returned";
