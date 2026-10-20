@@ -214,6 +214,7 @@ function FrontDeskIntakeListPage() {
 
   return (
     <div className="space-y-6">
+      <div className="fd-intake-no-print space-y-6">
       <PageHeader
         title="My registrations"
         subtitle="Intake records you registered. Edit permitted fields, archive safely, or download the A4 form. Confidential counsellor files are not shown here."
@@ -371,7 +372,7 @@ function FrontDeskIntakeListPage() {
         <Panel
           title={`Registration form — ${viewRow.caseId}`}
           action={
-            <div className="flex flex-wrap gap-2 print:hidden">
+            <div className="flex flex-wrap gap-2">
               <Button type="button" size="sm" variant="outline" onClick={() => window.print()}>
                 Print Form
               </Button>
@@ -384,20 +385,21 @@ function FrontDeskIntakeListPage() {
             </div>
           }
         >
-          <p className="mb-3 text-xs text-muted-foreground print:hidden">
-            Print or choose “Save as PDF” in the browser print dialog. Shows saved CRM data; claimed
-            fees are not verified payments.
+          <p className="mb-0 text-xs text-muted-foreground">
+            Print or choose “Save as PDF” in the browser print dialog. Only the registration form is
+            included — not search filters or the portal menu.
           </p>
-          <FrontDeskRegistrationFormA4 row={viewRow} mode="print" />
-          <style>{`
-            @media print {
-              @page { size: A4 portrait; margin: 12mm; }
-              .print\\:hidden { display: none !important; }
-            }
-          `}</style>
         </Panel>
       ) : null}
+      </div>
 
+      {viewRow ? (
+        <div id="fd-registration-print-root" className="mt-2">
+          <FrontDeskRegistrationFormA4 row={viewRow} mode="print" />
+        </div>
+      ) : null}
+
+      <div className="fd-intake-no-print space-y-6">
       {archiveRow ? (
         <Panel title="Archive registration">
           <div className="grid max-w-lg gap-3 text-sm">
@@ -615,6 +617,34 @@ function FrontDeskIntakeListPage() {
           </>
         )}
       </Panel>
+      </div>
+
+      {viewRow ? (
+        <style>{`
+          @media print {
+            @page { size: A4 portrait; margin: 10mm; }
+            html, body {
+              background: #fff !important;
+              height: auto !important;
+              overflow: visible !important;
+            }
+            body * { visibility: hidden !important; }
+            #fd-registration-print-root,
+            #fd-registration-print-root * { visibility: visible !important; }
+            .fd-intake-no-print { display: none !important; }
+            aside, nav, header { display: none !important; }
+            #fd-registration-print-root {
+              position: absolute !important;
+              left: 0 !important;
+              top: 0 !important;
+              width: 100% !important;
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #fff !important;
+            }
+          }
+        `}</style>
+      ) : null}
     </div>
   );
 }
