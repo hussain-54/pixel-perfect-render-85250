@@ -59,6 +59,27 @@ export function admissionHandoverBlockedByFeeMessage(): string {
   return "Signup fee must be verified or waived by Accounts before handover to Admission.";
 }
 
+/**
+ * Mirrors list_counselling_fee_verification_requests visibility for Front Desk
+ * (after migration 20261020160000). Admin / fee-verifiers see all open rows.
+ */
+export function frontDeskCanSeeFeeVerificationRequest(input: {
+  isAdmin: boolean;
+  canVerifySignupFee: boolean;
+  isFrontDesk: boolean;
+  viewerUserId: string | null;
+  registrarId: string | null;
+  studentRegisteredBy: string | null;
+}): boolean {
+  if (input.isAdmin || input.canVerifySignupFee) return true;
+  if (!input.isFrontDesk || !input.viewerUserId) return false;
+  if (input.registrarId === input.viewerUserId) return true;
+  if (input.studentRegisteredBy === input.viewerUserId) return true;
+  // Unowned intake: any Front Desk may coordinate.
+  if (input.registrarId == null && input.studentRegisteredBy == null) return true;
+  return false;
+}
+
 /** Draft save: eligibility may be empty and will be stored as Pending Review. */
 export function normalizeAssessmentEligibilityForDraft(
   eligibility: string | null | undefined,

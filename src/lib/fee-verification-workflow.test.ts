@@ -3,6 +3,7 @@ import {
   admissionHandoverBlockedByFeeMessage,
   canRequestFeeVerification,
   feeStatusAllowsAdmissionHandover,
+  frontDeskCanSeeFeeVerificationRequest,
   normalizeAssessmentEligibilityForDraft,
   validateFeeVerificationRequestSummary,
 } from "./fee-verification-workflow";
@@ -50,5 +51,49 @@ describe("fee verification workflow", () => {
     );
     expect(normalizeAssessmentEligibilityForDraft("")).toBe("Pending Review");
     expect(normalizeAssessmentEligibilityForDraft("Good Fit")).toBe("Good Fit");
+  });
+
+  it("exposes Front Desk queue rows by registrar ownership or unowned intake", () => {
+    const fd = "fd-a";
+    expect(
+      frontDeskCanSeeFeeVerificationRequest({
+        isAdmin: false,
+        canVerifySignupFee: false,
+        isFrontDesk: true,
+        viewerUserId: fd,
+        registrarId: fd,
+        studentRegisteredBy: fd,
+      }),
+    ).toBe(true);
+    expect(
+      frontDeskCanSeeFeeVerificationRequest({
+        isAdmin: false,
+        canVerifySignupFee: false,
+        isFrontDesk: true,
+        viewerUserId: fd,
+        registrarId: "other-fd",
+        studentRegisteredBy: "other-fd",
+      }),
+    ).toBe(false);
+    expect(
+      frontDeskCanSeeFeeVerificationRequest({
+        isAdmin: false,
+        canVerifySignupFee: false,
+        isFrontDesk: true,
+        viewerUserId: fd,
+        registrarId: null,
+        studentRegisteredBy: null,
+      }),
+    ).toBe(true);
+    expect(
+      frontDeskCanSeeFeeVerificationRequest({
+        isAdmin: true,
+        canVerifySignupFee: false,
+        isFrontDesk: false,
+        viewerUserId: "admin",
+        registrarId: "other-fd",
+        studentRegisteredBy: "other-fd",
+      }),
+    ).toBe(true);
   });
 });

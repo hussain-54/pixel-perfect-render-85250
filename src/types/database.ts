@@ -1570,6 +1570,10 @@ export type Database = {
           summary: string;
           status: string;
           signup_fee_status: SignupFeeStatusDb | null;
+          fee_amount: number | null;
+          fee_currency: string | null;
+          fee_payment_method: string | null;
+          fee_reference_receipt: string | null;
           requested_by: string | null;
           registrar_id: string | null;
           created_at: string;

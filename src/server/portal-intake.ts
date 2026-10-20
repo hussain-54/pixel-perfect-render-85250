@@ -1148,20 +1148,35 @@ export const portalRequestFeeVerification = createServerFn({ method: "POST" })
       const created = Array.isArray(row) ? row[0] : row;
       if (!created?.id) throw new AuthError("Request was not created.", 500);
 
-      // Notify Front Desk registrar when known (durable notification).
-      const registrarId = created.registrar_id as string | null;
-      if (registrarId) {
-        try {
-          await client.from("notifications").insert({
-            user_id: registrarId,
-            title: "Fee verification requested",
-            body: `Counsellor requested signup-fee verification for ${student.name || "a student"} (${student.caseId || data.studentId}).`,
-            link_path: "/staff/front-desk",
-            student_id: data.studentId,
-          });
-        } catch {
-          /* notification best-effort */
+      // Durable notifications: registrar when known; otherwise Front Desk desks (unowned intake).
+      try {
+        const registrarId = (created.registrar_id as string | null) ?? null;
+        const body = `Counsellor requested signup-fee verification for ${student.name || "a student"} (${student.caseId || data.studentId}).`;
+        const recipientIds = new Set<string>();
+        if (registrarId) recipientIds.add(registrarId);
+        if (!registrarId) {
+          const { data: fdProfiles } = await client
+            .from("profiles")
+            .select("id")
+            .eq("business_role", "front_desk_student_affairs")
+            .limit(25);
+          for (const p of fdProfiles ?? []) {
+            if (p.id) recipientIds.add(p.id);
+          }
         }
+        if (recipientIds.size) {
+          await client.from("notifications").insert(
+            [...recipientIds].map((userId) => ({
+              user_id: userId,
+              title: "Fee verification requested",
+              body,
+              link_path: "/staff/front-desk",
+              student_id: data.studentId,
+            })),
+          );
+        }
+      } catch {
+        /* notification best-effort — request row is already persisted */
       }
 
       try {

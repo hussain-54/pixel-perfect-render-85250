@@ -838,6 +838,10 @@ export type FeeVerificationRequestRow = {
   summary: string;
   status: string;
   signupFeeStatus: string | null;
+  feeAmount: number | null;
+  feeCurrency: string | null;
+  feePaymentMethod: string | null;
+  feeReferenceReceipt: string | null;
   requestedBy: string | null;
   registrarId: string | null;
   createdAt: string;
@@ -870,20 +874,33 @@ export const portalListFeeVerificationRequests = createServerFn({ method: "GET" 
         throw new Error(error.message);
       }
       const rows: FeeVerificationRequestRow[] = ((data ?? []) as Record<string, unknown>[]).map(
-        (r) => ({
-          id: str(r["id"]),
-          studentId: str(r["student_id"]),
-          caseId: str(r["case_id"]),
-          fullName: str(r["full_name"]),
-          counsellorName: strOrNull(r["counsellor_name"]),
-          summary: str(r["summary"]),
-          status: str(r["status"]),
-          signupFeeStatus: strOrNull(r["signup_fee_status"]),
-          requestedBy: strOrNull(r["requested_by"]),
-          registrarId: strOrNull(r["registrar_id"]),
-          createdAt: str(r["created_at"]),
-          updatedAt: str(r["updated_at"]),
-        }),
+        (r) => {
+          const amountRaw = r["fee_amount"];
+          const feeAmount =
+            typeof amountRaw === "number"
+              ? amountRaw
+              : amountRaw != null && amountRaw !== ""
+                ? Number(amountRaw)
+                : null;
+          return {
+            id: str(r["id"]),
+            studentId: str(r["student_id"]),
+            caseId: str(r["case_id"]),
+            fullName: str(r["full_name"]),
+            counsellorName: strOrNull(r["counsellor_name"]),
+            summary: str(r["summary"]),
+            status: str(r["status"]),
+            signupFeeStatus: strOrNull(r["signup_fee_status"]),
+            feeAmount: feeAmount != null && !Number.isNaN(feeAmount) ? feeAmount : null,
+            feeCurrency: strOrNull(r["fee_currency"]),
+            feePaymentMethod: strOrNull(r["fee_payment_method"]),
+            feeReferenceReceipt: strOrNull(r["fee_reference_receipt"]),
+            requestedBy: strOrNull(r["requested_by"]),
+            registrarId: strOrNull(r["registrar_id"]),
+            createdAt: str(r["created_at"]),
+            updatedAt: str(r["updated_at"]),
+          };
+        },
       );
       return { rows };
     } catch (error) {

@@ -1,4 +1,5 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
 import { UserPlus, Users, Clock3, UserCheck, BadgeDollarSign } from "lucide-react";
 import {
   EmptyState,
@@ -19,6 +20,10 @@ import { getFrontDeskDashboard, listFeeVerificationRequests } from "@/services";
 import { isFrontDeskBusinessRole } from "@/lib/staff-business-access";
 import { workspaceTitleForSession } from "@/lib/workspace-branding";
 import { feeStatusAllowsAdmissionHandover } from "@/lib/fee-verification-workflow";
+import {
+  FEE_QUEUE_KEY,
+  useFeeVerificationQueueRealtime,
+} from "@/lib/use-fee-verification-queue-realtime";
 
 export const Route = createFileRoute("/staff/front-desk")({
   beforeLoad: ({ context }) => {
@@ -32,7 +37,15 @@ export const Route = createFileRoute("/staff/front-desk")({
 
 function FrontDeskDashboardPage() {
   const dashQ = useData(["front-desk", "dashboard"], getFrontDeskDashboard);
-  const feeReqQ = useData(["front-desk", "fee-verification-requests"], listFeeVerificationRequests);
+  const feeReqQ = useQuery({
+    queryKey: [...FEE_QUEUE_KEY],
+    queryFn: listFeeVerificationRequests,
+    staleTime: 10_000,
+    refetchOnWindowFocus: true,
+    refetchInterval: 30_000,
+  });
+
+  useFeeVerificationQueueRealtime(true);
 
   if (dashQ.isLoading) return <LoadingRows rows={6} />;
   if (dashQ.isError) {
@@ -49,6 +62,7 @@ function FrontDeskDashboardPage() {
   }
 
   const feeRows = feeReqQ.data?.rows ?? [];
+  const queueCount = feeRows.length;
 
   return (
     <div className="space-y-8">
@@ -79,7 +93,7 @@ function FrontDeskDashboardPage() {
         />
         <StatCard
           label="Fee verification queue"
-          value={String(feeRows.length)}
+          value={feeReqQ.isLoading && !feeReqQ.data ? "…" : String(queueCount)}
           icon={<BadgeDollarSign />}
         />
       </div>
@@ -87,24 +101,40 @@ function FrontDeskDashboardPage() {
       <Panel
         title="Counsellor fee-verification requests"
         action={
-          <Button asChild variant="outline" size="sm">
-            <Link to="/staff/finance">Accounts / Finance</Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={feeReqQ.isFetching}
+              onClick={() => void feeReqQ.refetch()}
+            >
+              {feeReqQ.isFetching ? "Refreshing…" : "Refresh"}
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link to="/staff/finance">Accounts / Finance</Link>
+            </Button>
+          </div>
         }
       >
-        {feeReqQ.isLoading ? (
+        {feeReqQ.isLoading && !feeReqQ.data ? (
           <p className="text-sm text-muted-foreground">Loading fee-verification requests…</p>
         ) : feeReqQ.isError ? (
-          <p className="text-sm text-muted-foreground">
-            {portalErrorMessage(
-              feeReqQ.error,
-              "Fee verification queue unavailable. Apply the counselling fee-verification migration if needed.",
-            )}
-          </p>
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">
+              {portalErrorMessage(
+                feeReqQ.error,
+                "Fee verification queue unavailable. Apply migrations 20261020150000 and 20261020160000 if needed.",
+              )}
+            </p>
+            <Button type="button" size="sm" variant="outline" onClick={() => void feeReqQ.refetch()}>
+              Retry
+            </Button>
+          </div>
         ) : feeRows.length === 0 ? (
           <EmptyState
             title="No open fee-verification requests"
-            body="When a counsellor returns a case for signup-fee verification, it appears here for Front Desk coordination. Accounts verifies or waives fees."
+            body="When a counsellor returns a case for signup-fee verification, it appears here for Front Desk coordination. Accounts verifies or waives fees. Queue count matches this list."
           />
         ) : (
           <TableWrap>
@@ -114,6 +144,7 @@ function FrontDeskDashboardPage() {
                   <th className="px-3 py-2">Student</th>
                   <th className="px-3 py-2">Counsellor</th>
                   <th className="px-3 py-2">Request</th>
+                  <th className="px-3 py-2">Fee claim</th>
                   <th className="px-3 py-2">Fee status</th>
                   <th className="px-3 py-2">Request status</th>
                   <th className="px-3 py-2">Updated</th>
@@ -123,6 +154,13 @@ function FrontDeskDashboardPage() {
               <tbody>
                 {feeRows.map((row) => {
                   const feeOk = feeStatusAllowsAdmissionHandover(row.signupFeeStatus);
+                  const claimBits = [
+                    row.feeAmount != null
+                      ? `${row.feeCurrency || ""} ${row.feeAmount}`.trim()
+                      : null,
+                    row.feePaymentMethod,
+                    row.feeReferenceReceipt ? `Ref: ${row.feeReferenceReceipt}` : null,
+                  ].filter(Boolean);
                   return (
                     <tr key={row.id} className="border-b border-border/60 align-top">
                       <td className="px-3 py-2">
@@ -135,10 +173,16 @@ function FrontDeskDashboardPage() {
                           {row.fullName}
                         </Link>
                         <div className="text-xs text-muted-foreground">{row.caseId}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          Requested {fmtDate(row.createdAt.slice(0, 10))}
+                        </div>
                       </td>
                       <td className="px-3 py-2">{row.counsellorName || "—"}</td>
-                      <td className="max-w-[16rem] px-3 py-2 text-xs text-muted-foreground">
+                      <td className="max-w-[14rem] px-3 py-2 text-xs text-muted-foreground">
                         {row.summary}
+                      </td>
+                      <td className="max-w-[10rem] px-3 py-2 text-xs text-muted-foreground">
+                        {claimBits.length ? claimBits.join(" · ") : "No claim recorded"}
                       </td>
                       <td className="px-3 py-2 capitalize">
                         {(row.signupFeeStatus || "—").replaceAll("_", " ")}
