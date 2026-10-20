@@ -104,18 +104,21 @@ export function studentFacingFeeLabel(status: string | null | undefined): string
 }
 
 /**
- * Intake list has profile_id + portal_activated_at only (no Auth last_sign_in).
- * Linked-but-not-activated is shown as pending setup until fee activation.
+ * Intake list has profile_id + portal_activated_at only.
+ * Linked-but-not-activated means the login exists; fee activation is still pending.
  */
 export function intakePortalStatusFromRow(input: {
   profileId: string | null | undefined;
   portalActivatedAt: string | null | undefined;
 }): StudentPortalAccountStatus {
-  return studentPortalAccountStatus({
-    profileId: input.profileId,
-    hasSignedIn: false,
-    portalActivatedAt: input.portalActivatedAt,
-  });
+  if (input.portalActivatedAt?.trim()) return "active";
+  if (!input.profileId) return "not_provisioned";
+  return "pending_activation";
+}
+
+/** True when this Front Desk path must not send Auth invite/recovery emails. */
+export function frontDeskProvisionUsesPasswordCreateOnly(): boolean {
+  return true;
 }
 
 /** Safe RPC/error mapping — never forwards invite tokens or passwords. */

@@ -3,11 +3,10 @@
  * Uses security-definer RPCs + trusted business_role; never trusts client ownership.
  */
 import { createServerFn } from "@tanstack/react-start";
-import { getRequestHeader } from "@tanstack/react-start/server";
 import { AuthError, requireRoles, requireTrustedSession } from "@/server/portal-auth";
 import { assertFrontDeskOrAdmin, businessRoleFromSession } from "@/server/staff-access";
 import { canListCounsellorDesksForSession } from "@/lib/staff-business-access";
-import { passwordRecoveryRedirectUrl, resolveAuthAppOrigin } from "@/lib/auth-redirects";
+import { validatePasswordConfirmation } from "@/lib/password-policy";
 
 function toError(error: unknown): never {
   if (error instanceof AuthError) {
@@ -215,30 +214,19 @@ export const portalListCounsellorDesks = createServerFn({ method: "GET" }).handl
   }
 });
 
-function recoveryRedirect(): string {
-  const fromEnv =
-    process.env["APP_ORIGIN"]?.trim() ||
-    process.env["SITE_URL"]?.trim() ||
-    process.env["VITE_APP_ORIGIN"]?.trim() ||
-    "";
-  const origin = getRequestHeader("origin");
-  const host = getRequestHeader("x-forwarded-host") || getRequestHeader("host");
-  const proto = getRequestHeader("x-forwarded-proto") || "http";
-  const requestOrigin = origin || (host ? `${proto}://${host}` : "");
-  const isProduction =
-    process.env["VERCEL_ENV"] === "production" || process.env["NODE_ENV"] === "production";
-  return passwordRecoveryRedirectUrl(
-    resolveAuthAppOrigin({ envOrigin: fromEnv, requestOrigin, isProduction }),
-  );
-}
+export type ProvisionStudentPortalInput = {
+  studentId: string;
+  temporaryPassword: string;
+  confirmPassword: string;
+};
 
 /**
- * Create or reuse a student Auth user for an intake row this Front Desk user registered.
- * Sends Supabase's setup or recovery email. Never returns a password or link.
- * Does not set portal_activated_at.
+ * Create a student Auth login (staff-style password create) and link it to an owned intake row.
+ * No invite or recovery email — avoids localhost redirect targets.
+ * Never returns the password. Does not set portal_activated_at.
  */
 export const portalProvisionStudentPortalAccount = createServerFn({ method: "POST" })
-  .validator((data: { studentId: string }) => data)
+  .validator((data: ProvisionStudentPortalInput) => data)
   .handler(async ({ data }) => {
     try {
       const session = await requireTrustedSession();
@@ -249,6 +237,12 @@ export const portalProvisionStudentPortalAccount = createServerFn({ method: "POS
       }
       const studentId = data.studentId?.trim();
       if (!studentId) throw new AuthError("Student id is required.", 400);
+
+      const passwordCheck = validatePasswordConfirmation(
+        data.temporaryPassword,
+        data.confirmPassword,
+      );
+      if (!passwordCheck.ok) throw new AuthError(passwordCheck.error, 400);
 
       const { isAdminSupabaseConfigured, requireAdminSupabase, adminConfigErrorMessage } =
         await import("@/server/supabase-admin");
@@ -269,7 +263,7 @@ export const portalProvisionStudentPortalAccount = createServerFn({ method: "POS
       const studentEmail = str(row["email"]).trim().toLowerCase();
       const fullName = str(row["full_name"]).trim();
       if (!studentEmail || !studentEmail.includes("@")) {
-        throw new AuthError("This student record has no email address to send a setup link.", 400);
+        throw new AuthError("This student record has no email address for a portal login.", 400);
       }
 
       const admin = requireAdminSupabase();
@@ -283,6 +277,12 @@ export const portalProvisionStudentPortalAccount = createServerFn({ method: "POS
       if (studentRow.email.trim().toLowerCase() !== studentEmail) {
         throw new AuthError("Student email could not be confirmed.", 409);
       }
+      if (studentRow.profile_id) {
+        throw new AuthError(
+          "This student already has a linked portal account. Share credentials securely or use password reset from Admin if needed.",
+          409,
+        );
+      }
 
       const { data: profileByEmail, error: profileErr } = await admin
         .from("profiles")
@@ -290,118 +290,180 @@ export const portalProvisionStudentPortalAccount = createServerFn({ method: "POS
         .ilike("email", studentEmail)
         .maybeSingle();
       if (profileErr) throw new Error(profileErr.message);
-
-      let account = profileByEmail;
-      let invitedNow = false;
-      if (!account) {
-        const { error: inviteErr } = await admin.auth.admin.inviteUserByEmail(studentEmail, {
-          redirectTo: recoveryRedirect(),
-          data: { full_name: fullName || studentEmail },
-        });
-        if (inviteErr && !/already|registered|exists/i.test(inviteErr.message)) {
-          const { inviteEmailFailureMessage } = await import("@/lib/student-portal-account");
-          throw new AuthError(inviteEmailFailureMessage(inviteErr.message), 400);
-        }
-        invitedNow = !inviteErr;
-        const { data: createdProfile, error: createdErr } = await admin
-          .from("profiles")
-          .select("id, email, role")
-          .ilike("email", studentEmail)
-          .maybeSingle();
-        if (createdErr) throw new Error(createdErr.message);
-        if (!createdProfile) {
-          throw new AuthError(
-            "The setup email was requested, but the account profile is not ready yet. Try again in a moment.",
-            503,
-          );
-        }
-        account = createdProfile;
+      if (profileByEmail) {
+        throw new AuthError(
+          "An account with this email already exists. Link or recovery must be handled carefully by an admin — this form only creates a new student login.",
+          409,
+        );
       }
 
-      const { data: linkedElsewhere, error: linkedErr } = await admin
-        .from("students")
-        .select("id")
-        .eq("profile_id", account.id)
-        .neq("id", studentId)
-        .maybeSingle();
-      if (linkedErr) throw new Error(linkedErr.message);
-
-      const { decideStudentPortalLink, studentPortalAccountStatus } = await import(
-        "@/lib/student-portal-account"
-      );
-      const decision = decideStudentPortalLink({
-        studentId,
-        studentEmail,
-        studentProfileId: studentRow.profile_id,
-        accountUserId: account.id,
-        accountEmail: account.email,
-        accountRole: account.role || "student",
-        accountLinkedStudentId: linkedElsewhere?.id ?? null,
+      // Direct Auth Admin create — same pattern as staff accounts; no invite redirect.
+      const { data: created, error: createErr } = await admin.auth.admin.createUser({
+        email: studentEmail,
+        password: data.temporaryPassword,
+        email_confirm: true,
+        user_metadata: {
+          full_name: fullName || studentEmail,
+        },
+        app_metadata: {
+          role: "student",
+        },
       });
-      if (!decision.ok) {
-        const message =
-          decision.reason === "email_mismatch"
-            ? "The existing account email does not match this student record."
-            : decision.reason === "not_student_role"
-              ? "That email already belongs to a staff account and cannot be used as a student login."
-              : decision.reason === "linked_other_student" || decision.reason === "linked_other_profile"
-                ? "This record is already linked to a different account. Use account recovery instead of creating another login."
-                : "This student record has no email address.";
-        throw new AuthError(message, 409);
-      }
-
-      const { error: linkErr } = await userClient.rpc("front_desk_link_student_portal_profile", {
-        p_student_id: studentId,
-        p_profile_id: account.id,
-      });
-      if (linkErr) {
-        const { mapStudentPortalLinkRpcError } = await import("@/lib/student-portal-account");
-        const mapped = mapStudentPortalLinkRpcError(linkErr.message);
-        throw new AuthError(mapped.message, mapped.status);
-      }
-
-      const { data: authUser, error: authErr } = await admin.auth.admin.getUserById(account.id);
-      if (authErr) throw new AuthError(authErr.message, 400);
-      const hasSignedIn = Boolean(authUser.user?.last_sign_in_at);
-      const status = studentPortalAccountStatus({
-        profileId: account.id,
-        hasSignedIn,
-        portalActivatedAt: studentRow.portal_activated_at,
-      });
-
-      if (status === "pending_setup" && !invitedNow) {
-        const { error: resetErr } = await admin.auth.resetPasswordForEmail(studentEmail, {
-          redirectTo: recoveryRedirect(),
-        });
-        if (resetErr) {
-          const { inviteEmailFailureMessage } = await import("@/lib/student-portal-account");
-          throw new AuthError(inviteEmailFailureMessage(resetErr.message), 400);
+      if (createErr) {
+        const msg = createErr.message || "Could not create user.";
+        if (/already|registered|exists/i.test(msg)) {
+          throw new AuthError("An account with this email already exists.", 409);
         }
+        throw new AuthError(msg, 400);
       }
+
+      const userId = created.user?.id;
+      if (!userId) {
+        throw new AuthError("User creation did not return a user id.", 500);
+      }
+
+      let newlyCreatedAuthUserId: string | null = userId;
 
       try {
-        const { writeAudit } = await import("@/services/db");
-        await writeAudit(userClient, {
-          action: "student.portal_account_provisioned",
-          entity_type: "students",
-          entity_id: studentId,
-          student_id: studentId,
-          metadata: { profileId: account.id, status, invitedNow },
+        const { data: existingProfile, error: existingErr } = await admin
+          .from("profiles")
+          .select("id, role, email")
+          .eq("id", userId)
+          .maybeSingle();
+        if (existingErr) throw new Error(existingErr.message);
+
+        if (!existingProfile) {
+          const { error: insertErr } = await admin.from("profiles").insert({
+            id: userId,
+            email: studentEmail,
+            full_name: fullName || studentEmail,
+            role: "student",
+            business_role: "student_portal",
+          });
+          if (insertErr) {
+            throw new AuthError(`User created but profile insert failed: ${insertErr.message}.`, 500);
+          }
+        } else {
+          if (existingProfile.role && existingProfile.role !== "student") {
+            throw new AuthError(
+              "That email already belongs to a staff account and cannot be used as a student login.",
+              409,
+            );
+          }
+          const { error: profileUpdateErr } = await admin
+            .from("profiles")
+            .update({
+              email: studentEmail,
+              full_name: fullName || studentEmail,
+              role: "student",
+              business_role: "student_portal",
+            })
+            .eq("id", userId);
+          if (profileUpdateErr) {
+            throw new AuthError(
+              `User created but profile update failed: ${profileUpdateErr.message}.`,
+              500,
+            );
+          }
+        }
+
+        const { data: account, error: accountErr } = await admin
+          .from("profiles")
+          .select("id, email, role")
+          .eq("id", userId)
+          .maybeSingle();
+        if (accountErr) throw new Error(accountErr.message);
+        if (!account) throw new AuthError("Profile was not created for the new login.", 500);
+
+        const { data: linkedElsewhere, error: linkedErr } = await admin
+          .from("students")
+          .select("id")
+          .eq("profile_id", account.id)
+          .neq("id", studentId)
+          .maybeSingle();
+        if (linkedErr) throw new Error(linkedErr.message);
+
+        const { decideStudentPortalLink, studentPortalAccountStatus } = await import(
+          "@/lib/student-portal-account"
+        );
+        const decision = decideStudentPortalLink({
+          studentId,
+          studentEmail,
+          studentProfileId: studentRow.profile_id,
+          accountUserId: account.id,
+          accountEmail: account.email,
+          accountRole: account.role || "student",
+          accountLinkedStudentId: linkedElsewhere?.id ?? null,
         });
-      } catch {
-        /* audit failure must not hide a successful link */
+        if (!decision.ok) {
+          const message =
+            decision.reason === "email_mismatch"
+              ? "The existing account email does not match this student record."
+              : decision.reason === "not_student_role"
+                ? "That email already belongs to a staff account and cannot be used as a student login."
+                : decision.reason === "linked_other_student" ||
+                    decision.reason === "linked_other_profile"
+                  ? "This record is already linked to a different account."
+                  : "This student record has no email address.";
+          throw new AuthError(message, 409);
+        }
+
+        const { error: linkErr } = await userClient.rpc("front_desk_link_student_portal_profile", {
+          p_student_id: studentId,
+          p_profile_id: account.id,
+        });
+        if (linkErr) {
+          const { mapStudentPortalLinkRpcError } = await import("@/lib/student-portal-account");
+          const mapped = mapStudentPortalLinkRpcError(linkErr.message);
+          throw new AuthError(mapped.message, mapped.status);
+        }
+
+        // Link succeeded — do not delete this Auth user on later steps.
+        newlyCreatedAuthUserId = null;
+
+        const status = studentPortalAccountStatus({
+          profileId: account.id,
+          hasSignedIn: true,
+          portalActivatedAt: studentRow.portal_activated_at,
+        });
+
+        try {
+          const { writeAudit } = await import("@/services/db");
+          await writeAudit(userClient, {
+            action: "student.portal_account_provisioned",
+            entity_type: "students",
+            entity_id: studentId,
+            student_id: studentId,
+            metadata: { profileId: account.id, status, method: "password_create" },
+          });
+        } catch {
+          /* audit failure must not hide a successful link */
+        }
+
+        const message =
+          status === "active"
+            ? "Student portal account created and already active."
+            : "Student portal account created and linked. Share the password securely. The student can sign in, but CRM access stays closed until Accounts verifies the signup fee.";
+
+        return { ok: true as const, status, message };
+      } catch (inner) {
+        // Narrow cleanup: only a brand-new Auth user that never linked to any student.
+        if (newlyCreatedAuthUserId) {
+          try {
+            const { data: linkedAny } = await admin
+              .from("students")
+              .select("id")
+              .eq("profile_id", newlyCreatedAuthUserId)
+              .maybeSingle();
+            if (!linkedAny) {
+              await admin.auth.admin.deleteUser(newlyCreatedAuthUserId);
+            }
+          } catch {
+            /* leave orphan for admin review rather than risk deleting a linked account */
+          }
+        }
+        throw inner;
       }
-
-      const message =
-        status === "active"
-          ? "This student portal account is already active."
-          : status === "pending_activation"
-            ? "The login is linked. The portal stays closed until Accounts verifies the signup fee."
-            : invitedNow
-              ? "Setup email sent. The student sets a password from that link. The portal still opens only after signup-fee verification."
-              : "Setup email sent again. The portal still opens only after signup-fee verification.";
-
-      return { ok: true as const, status, message };
     } catch (error) {
       toError(error);
     }

@@ -596,8 +596,11 @@ export const intakeRegisterStudent = (data: IntakeRegisterInput) =>
 export const getFrontDeskDashboard = () => withAuth((opts) => portalGetFrontDeskDashboard(opts));
 
 export const listFrontDeskIntake = () => withAuth((opts) => portalListFrontDeskIntake(opts));
-export const provisionStudentPortalAccount = (studentId: string) =>
-  withAuth((opts) => portalProvisionStudentPortalAccount({ ...opts, data: { studentId } }));
+export const provisionStudentPortalAccount = (data: {
+  studentId: string;
+  temporaryPassword: string;
+  confirmPassword: string;
+}) => withAuth((opts) => portalProvisionStudentPortalAccount({ ...opts, data }));
 
 export const listCounsellorDesks = () => withAuth((opts) => portalListCounsellorDesks(opts));
 

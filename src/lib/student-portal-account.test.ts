@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   decideStudentPortalLink,
+  frontDeskProvisionUsesPasswordCreateOnly,
   intakePortalStatusFromRow,
   inviteEmailFailureMessage,
   mapStudentPortalLinkRpcError,
@@ -11,6 +12,7 @@ import {
   studentPortalAccountStatusLabel,
   studentProfileCompletion,
 } from "./student-portal-account";
+import { validatePasswordConfirmation } from "./password-policy";
 
 describe("student portal account status", () => {
   it("stays inactive until portal_activated_at even after sign-in", () => {
@@ -37,7 +39,7 @@ describe("student portal account status", () => {
     ).toBe("active");
   });
 
-  it("maps intake rows to Not created / Pending setup / Active", () => {
+  it("maps intake rows to Not created / Pending activation / Active after password create", () => {
     expect(
       studentPortalAccountStatusLabel(
         intakePortalStatusFromRow({ profileId: null, portalActivatedAt: null }),
@@ -47,7 +49,7 @@ describe("student portal account status", () => {
       studentPortalAccountStatusLabel(
         intakePortalStatusFromRow({ profileId: "user-1", portalActivatedAt: null }),
       ),
-    ).toBe("Pending setup");
+    ).toBe("Pending activation");
     expect(
       studentPortalAccountStatusLabel(
         intakePortalStatusFromRow({
@@ -56,6 +58,27 @@ describe("student portal account status", () => {
         }),
       ),
     ).toBe("Active");
+  });
+});
+
+describe("front desk password create (no invite email)", () => {
+  it("uses password create only — no invite or recovery redirect in this path", () => {
+    expect(frontDeskProvisionUsesPasswordCreateOnly()).toBe(true);
+  });
+
+  it("rejects mismatched and weak passwords with the shared policy", () => {
+    expect(validatePasswordConfirmation("short", "short").ok).toBe(false);
+    expect(validatePasswordConfirmation("ValidPass123!", "OtherPass123!").ok).toBe(false);
+    expect(validatePasswordConfirmation("ValidPass123!", "ValidPass123!").ok).toBe(true);
+  });
+
+  it("never surfaces passwords or service-role keys in sanitized errors", () => {
+    const msg = sanitizeProvisionErrorMessage(
+      "failed password: SuperSecret123! service_role=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.abc123def456.ghi789jkl012",
+    );
+    expect(msg.toLowerCase()).not.toContain("supersecret123");
+    expect(msg).not.toMatch(/eyJ/);
+    expect(msg).toMatch(/password=\[omitted\]/i);
   });
 });
 
@@ -143,7 +166,7 @@ describe("RPC and invite error mapping", () => {
     expect(mapped.message).toContain("already linked to another student");
   });
 
-  it("returns a safe invite-email failure message", () => {
+  it("returns a safe invite-email failure message for legacy paths", () => {
     const msg = inviteEmailFailureMessage(
       "SMTP failed https://example.com/invite?token=supersecrettokenvalue123",
     );
