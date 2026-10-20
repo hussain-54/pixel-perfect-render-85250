@@ -154,6 +154,7 @@ export type Database = {
           inquiry_channel: InquiryChannelDb | null;
           intake_date: string | null;
           registration_notes: string | null;
+          next_follow_up_at: string | null;
           portal_activated_at: string | null;
           registered_by: string | null;
           created_at: string;
@@ -180,6 +181,7 @@ export type Database = {
           inquiry_channel?: InquiryChannelDb | null;
           intake_date?: string | null;
           registration_notes?: string | null;
+          next_follow_up_at?: string | null;
           portal_activated_at?: string | null;
           registered_by?: string | null;
           created_at?: string;
@@ -1524,7 +1526,7 @@ export type Database = {
         }[];
       };
       list_front_desk_intake_summaries: {
-        Args: Record<string, never>;
+        Args: { p_include_archived?: boolean };
         Returns: {
           id: string;
           case_id: string;
@@ -1540,15 +1542,58 @@ export type Database = {
           inquiry_channel: InquiryChannelDb | null;
           intake_date: string | null;
           registration_notes: string | null;
+          next_follow_up_at: string | null;
           assigned_consultant_id: string | null;
           registered_by: string | null;
           journey_stage: JourneyStage;
           portal_activated_at: string | null;
           profile_id: string | null;
+          archived_at: string | null;
           created_at: string;
           updated_at: string;
           signup_fee_status: SignupFeeStatusDb | null;
+          signup_fee_amount: number | null;
+          signup_fee_currency: string | null;
+          signup_fee_method: string | null;
+          signup_fee_reference: string | null;
           counsellor_name: string | null;
+          registrar_name: string | null;
+        }[];
+      };
+      front_desk_update_intake_registration: {
+        Args: {
+          p_student_id: string;
+          p_expected_updated_at: string;
+          p_full_name: string;
+          p_email: string;
+          p_phone?: string | null;
+          p_whatsapp?: string | null;
+          p_city?: string | null;
+          p_destination?: string | null;
+          p_program?: string | null;
+          p_study_level?: string | null;
+          p_inquiry_source?: string | null;
+          p_inquiry_channel?: InquiryChannelDb | null;
+          p_intake_date?: string | null;
+          p_registration_notes?: string | null;
+          p_next_follow_up_at?: string | null;
+        };
+        Returns: {
+          id: string;
+          case_id: string;
+          updated_at: string;
+        }[];
+      };
+      front_desk_archive_registration: {
+        Args: {
+          p_student_id: string;
+          p_archive: boolean;
+          p_reason?: string | null;
+        };
+        Returns: {
+          id: string;
+          case_id: string;
+          archived_at: string | null;
         }[];
       };
       front_desk_assign_counsellor: {

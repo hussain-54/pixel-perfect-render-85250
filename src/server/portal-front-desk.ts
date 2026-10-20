@@ -30,14 +30,22 @@ export type FrontDeskIntakeRow = {
   inquiryChannel: string | null;
   intakeDate: string | null;
   registrationNotes: string | null;
+  nextFollowUpAt: string | null;
   assignedConsultantId: string | null;
   counsellorName: string | null;
+  registrarName: string | null;
   registeredBy: string | null;
   journeyStage: string;
   portalActivatedAt: string | null;
   profileId: string | null;
+  archivedAt: string | null;
   createdAt: string;
+  updatedAt: string;
   signupFeeStatus: string | null;
+  signupFeeAmount: number | null;
+  signupFeeCurrency: string | null;
+  signupFeeMethod: string | null;
+  signupFeeReference: string | null;
   assignmentStatus: "pending" | "assigned";
 };
 
@@ -67,6 +75,7 @@ function strOrNull(v: unknown): string | null {
 
 function mapIntakeRow(row: Record<string, unknown>): FrontDeskIntakeRow {
   const assigned = strOrNull(row["assigned_consultant_id"]);
+  const amountRaw = row["signup_fee_amount"];
   return {
     id: str(row["id"]),
     caseId: str(row["case_id"]),
@@ -82,16 +91,64 @@ function mapIntakeRow(row: Record<string, unknown>): FrontDeskIntakeRow {
     inquiryChannel: strOrNull(row["inquiry_channel"]),
     intakeDate: strOrNull(row["intake_date"]),
     registrationNotes: strOrNull(row["registration_notes"]),
+    nextFollowUpAt: strOrNull(row["next_follow_up_at"]),
     assignedConsultantId: assigned,
     counsellorName: strOrNull(row["counsellor_name"]),
+    registrarName: strOrNull(row["registrar_name"]),
     registeredBy: strOrNull(row["registered_by"]),
     journeyStage: str(row["journey_stage"]),
     portalActivatedAt: strOrNull(row["portal_activated_at"]),
     profileId: strOrNull(row["profile_id"]),
+    archivedAt: strOrNull(row["archived_at"]),
     createdAt: str(row["created_at"]),
+    updatedAt: str(row["updated_at"]),
     signupFeeStatus: strOrNull(row["signup_fee_status"]),
+    signupFeeAmount:
+      typeof amountRaw === "number"
+        ? amountRaw
+        : amountRaw != null && amountRaw !== ""
+          ? Number(amountRaw)
+          : null,
+    signupFeeCurrency: strOrNull(row["signup_fee_currency"]),
+    signupFeeMethod: strOrNull(row["signup_fee_method"]),
+    signupFeeReference: strOrNull(row["signup_fee_reference"]),
     assignmentStatus: assigned ? "assigned" : "pending",
   };
+}
+
+async function listFrontDeskIntakeRows(
+  // AoDb RPC returns a thenable builder; keep loose for migration drift.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  client: any,
+  includeArchived = false,
+) {
+  const { data, error } = await client.rpc("list_front_desk_intake_summaries", {
+    p_include_archived: includeArchived,
+  });
+  if (error) {
+    // Backward-compatible call if older zero-arg RPC is still deployed.
+    if (/p_include_archived|function.*does not exist|Could not find/i.test(error.message)) {
+      const legacy = await client.rpc("list_front_desk_intake_summaries");
+      if (legacy.error) {
+        if (/does not exist|function/i.test(legacy.error.message)) {
+          throw new AuthError(
+            "Front Desk intake RPC unavailable. Apply migration 20261020130000_front_desk_intake_manage.sql.",
+            503,
+          );
+        }
+        throw new Error(legacy.error.message);
+      }
+      return ((legacy.data ?? []) as Record<string, unknown>[]).map(mapIntakeRow);
+    }
+    if (/does not exist|function/i.test(error.message)) {
+      throw new AuthError(
+        "Front Desk intake RPC unavailable. Apply migration 20261020130000_front_desk_intake_manage.sql.",
+        503,
+      );
+    }
+    throw new Error(error.message);
+  }
+  return ((data ?? []) as Record<string, unknown>[]).map(mapIntakeRow);
 }
 
 export const portalGetFrontDeskDashboard = createServerFn({ method: "GET" }).handler(async () => {
@@ -105,17 +162,7 @@ export const portalGetFrontDeskDashboard = createServerFn({ method: "GET" }).han
       throw new AuthError("Front Desk dashboard requires the live data plane.", 400);
     }
     const client = requireAoSupabaseClient();
-    const { data, error } = await client.rpc("list_front_desk_intake_summaries");
-    if (error) {
-      if (/does not exist|function/i.test(error.message)) {
-        throw new AuthError(
-          "Front Desk intake RPC unavailable. Apply migration 20261014020000_front_desk_intake_ownership.sql.",
-          503,
-        );
-      }
-      throw new Error(error.message);
-    }
-    const rows = ((data ?? []) as Record<string, unknown>[]).map(mapIntakeRow);
+    const rows = await listFrontDeskIntakeRows(client, false);
     const awaiting = rows.filter((r) => r.assignmentStatus === "pending");
     const assigned = rows.filter((r) => r.assignmentStatus === "assigned");
 
@@ -152,23 +199,36 @@ export const portalListFrontDeskIntake = createServerFn({ method: "GET" }).handl
       throw new AuthError("Intake list requires the live data plane.", 400);
     }
     const client = requireAoSupabaseClient();
-    const { data, error } = await client.rpc("list_front_desk_intake_summaries");
-    if (error) {
-      if (/does not exist|function/i.test(error.message)) {
-        throw new AuthError(
-          "Front Desk intake RPC unavailable. Apply migration 20261014020000_front_desk_intake_ownership.sql.",
-          503,
-        );
-      }
-      throw new Error(error.message);
-    }
     return {
-      rows: ((data ?? []) as Record<string, unknown>[]).map(mapIntakeRow),
+      rows: await listFrontDeskIntakeRows(client, false),
+      includeArchived: false as const,
     };
   } catch (error) {
     toError(error);
   }
 });
+
+/** Admin-only archived intake review. */
+export const portalListFrontDeskArchivedIntake = createServerFn({ method: "GET" }).handler(
+  async () => {
+    try {
+      const session = await requireTrustedSession();
+      requireRoles(session, ["admin", "super_admin"]);
+
+      const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
+      if (!usesSupabaseDataPlane(session)) {
+        throw new AuthError("Archived intake list requires the live data plane.", 400);
+      }
+      const client = requireAoSupabaseClient();
+      return {
+        rows: await listFrontDeskIntakeRows(client, true),
+        includeArchived: true as const,
+      };
+    } catch (error) {
+      toError(error);
+    }
+  },
+);
 
 export const portalListCounsellorDesks = createServerFn({ method: "GET" }).handler(async () => {
   try {
@@ -464,6 +524,235 @@ export const portalProvisionStudentPortalAccount = createServerFn({ method: "POS
         }
         throw inner;
       }
+    } catch (error) {
+      toError(error);
+    }
+  });
+
+export type UpdateFrontDeskIntakeInput = {
+  studentId: string;
+  expectedUpdatedAt: string;
+  fullName: string;
+  email: string;
+  phone?: string;
+  whatsapp?: string;
+  city?: string;
+  destination?: string;
+  program?: string;
+  studyLevel?: string;
+  inquirySource?: string;
+  inquiryChannel?: string | null;
+  intakeDate?: string | null;
+  registrationNotes?: string;
+  nextFollowUpAt?: string | null;
+};
+
+export const portalUpdateFrontDeskIntake = createServerFn({ method: "POST" })
+  .validator((data: UpdateFrontDeskIntakeInput) => data)
+  .handler(async ({ data }) => {
+    try {
+      const session = await requireTrustedSession();
+      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      assertFrontDeskOrAdmin(session);
+
+      const studentId = data.studentId?.trim();
+      if (!studentId) throw new AuthError("Student id is required.", 400);
+      if (!data.expectedUpdatedAt?.trim()) {
+        throw new AuthError("expectedUpdatedAt is required for concurrency control.", 400);
+      }
+
+      const {
+        emailChangeAllowedForIntake,
+        mapFrontDeskIntakeManageRpcError,
+        diffIntakeRegistrationFields,
+      } = await import("@/lib/front-desk-intake-manage");
+      const { isValidIntakeEmail, isValidIntakePhone } = await import("@/lib/intake-form-options");
+
+      const fullName = data.fullName?.trim() ?? "";
+      const email = data.email?.trim().toLowerCase() ?? "";
+      if (!fullName) throw new AuthError("Full name is required.", 400);
+      if (!isValidIntakeEmail(email)) throw new AuthError("A valid email is required.", 400);
+      if (data.phone?.trim() && !isValidIntakePhone(data.phone)) {
+        throw new AuthError("Enter a valid phone number.", 400);
+      }
+
+      const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
+      if (!usesSupabaseDataPlane(session)) {
+        throw new AuthError("Intake update requires the live data plane.", 400);
+      }
+      const client = requireAoSupabaseClient();
+
+      const owned = await listFrontDeskIntakeRows(client, false);
+      const before = owned.find((r) => r.id === studentId);
+      if (!before) throw new AuthError("Student record not found.", 404);
+
+      const emailOk = emailChangeAllowedForIntake({
+        profileId: before.profileId,
+        previousEmail: before.email,
+        nextEmail: email,
+      });
+      if (!emailOk.ok) throw new AuthError(emailOk.error, 400);
+
+      const { data: rpcRows, error: rpcErr } = await client.rpc(
+        "front_desk_update_intake_registration",
+        {
+          p_student_id: studentId,
+          p_expected_updated_at: data.expectedUpdatedAt,
+          p_full_name: fullName,
+          p_email: email,
+          p_phone: data.phone?.trim() || null,
+          p_whatsapp: data.whatsapp?.trim() || null,
+          p_city: data.city?.trim() || null,
+          p_destination: data.destination?.trim() || null,
+          p_program: data.program?.trim() || null,
+          p_study_level: data.studyLevel?.trim() || null,
+          p_inquiry_source: data.inquirySource?.trim() || null,
+          p_inquiry_channel: (data.inquiryChannel?.trim() || null) as never,
+          p_intake_date: data.intakeDate?.trim() || null,
+          p_registration_notes: data.registrationNotes?.trim() || null,
+          p_next_follow_up_at: data.nextFollowUpAt?.trim() || null,
+        },
+      );
+      if (rpcErr) {
+        const mapped = mapFrontDeskIntakeManageRpcError(rpcErr.message);
+        throw new AuthError(mapped.message, mapped.status);
+      }
+      const updated = (rpcRows as { id: string; case_id: string; updated_at: string }[] | null)?.[0];
+      if (!updated) throw new AuthError("Update did not return a row.", 500);
+
+      const afterSnapshot = {
+        full_name: fullName,
+        email,
+        phone: data.phone?.trim() || null,
+        whatsapp: data.whatsapp?.trim() || null,
+        city: data.city?.trim() || null,
+        destination: data.destination?.trim() || null,
+        program: data.program?.trim() || null,
+        study_level: data.studyLevel?.trim() || null,
+        inquiry_source: data.inquirySource?.trim() || null,
+        inquiry_channel: data.inquiryChannel?.trim() || null,
+        intake_date: data.intakeDate?.trim() || null,
+        registration_notes: data.registrationNotes?.trim() || null,
+        next_follow_up_at: data.nextFollowUpAt?.trim() || null,
+      };
+      const beforeSnapshot = {
+        full_name: before.fullName,
+        email: before.email,
+        phone: before.phone,
+        whatsapp: before.whatsapp,
+        city: before.city,
+        destination: before.destination,
+        program: before.program,
+        study_level: before.studyLevel,
+        inquiry_source: before.inquirySource,
+        inquiry_channel: before.inquiryChannel,
+        intake_date: before.intakeDate,
+        registration_notes: before.registrationNotes,
+        next_follow_up_at: before.nextFollowUpAt,
+      };
+      const changes = diffIntakeRegistrationFields(beforeSnapshot, afterSnapshot);
+
+      try {
+        const { writeAudit } = await import("@/services/db");
+        await writeAudit(client, {
+          action: "student.intake_registration_updated",
+          entity_type: "students",
+          entity_id: studentId,
+          student_id: studentId,
+          metadata: { changes, caseId: before.caseId },
+        });
+      } catch {
+        /* audit best-effort */
+      }
+
+      return {
+        ok: true as const,
+        studentId: updated.id,
+        caseId: updated.case_id,
+        updatedAt: updated.updated_at,
+        message: changes.length
+          ? `Registration updated (${changes.length} field${changes.length === 1 ? "" : "s"}).`
+          : "Registration saved (no field changes).",
+      };
+    } catch (error) {
+      toError(error);
+    }
+  });
+
+export type ArchiveFrontDeskIntakeInput = {
+  studentId: string;
+  archive: boolean;
+  reason?: string;
+};
+
+export const portalArchiveFrontDeskIntake = createServerFn({ method: "POST" })
+  .validator((data: ArchiveFrontDeskIntakeInput) => data)
+  .handler(async ({ data }) => {
+    try {
+      const session = await requireTrustedSession();
+      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      assertFrontDeskOrAdmin(session);
+
+      const studentId = data.studentId?.trim();
+      if (!studentId) throw new AuthError("Student id is required.", 400);
+
+      const { validateArchiveReason, mapFrontDeskIntakeManageRpcError, canRestoreArchivedRegistration } =
+        await import("@/lib/front-desk-intake-manage");
+      const { rolesAtLeastAdmin } = await import("@/lib/roles");
+
+      if (data.archive) {
+        const reasonCheck = validateArchiveReason(data.reason ?? "");
+        if (!reasonCheck.ok) throw new AuthError(reasonCheck.error, 400);
+      } else if (
+        !canRestoreArchivedRegistration({ isAdmin: rolesAtLeastAdmin(session.role) })
+      ) {
+        throw new AuthError("Only an administrator can restore an archived registration.", 403);
+      }
+
+      const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
+      if (!usesSupabaseDataPlane(session)) {
+        throw new AuthError("Archive requires the live data plane.", 400);
+      }
+      const client = requireAoSupabaseClient();
+
+      const { data: rpcRows, error: rpcErr } = await client.rpc("front_desk_archive_registration", {
+        p_student_id: studentId,
+        p_archive: Boolean(data.archive),
+        p_reason: data.reason?.trim() || null,
+      });
+      if (rpcErr) {
+        const mapped = mapFrontDeskIntakeManageRpcError(rpcErr.message);
+        throw new AuthError(mapped.message, mapped.status);
+      }
+      const row = (rpcRows as { id: string; case_id: string; archived_at: string | null }[] | null)?.[0];
+      if (!row) throw new AuthError("Archive action did not return a row.", 500);
+
+      try {
+        const { writeAudit } = await import("@/services/db");
+        await writeAudit(client, {
+          action: data.archive ? "student.intake_registration_archived" : "student.intake_registration_restored",
+          entity_type: "students",
+          entity_id: studentId,
+          student_id: studentId,
+          metadata: {
+            caseId: row.case_id,
+            reason: data.archive ? data.reason?.trim() : undefined,
+            archivedAt: row.archived_at,
+          },
+        });
+      } catch {
+        /* audit best-effort */
+      }
+
+      return {
+        ok: true as const,
+        studentId: row.id,
+        caseId: row.case_id,
+        archivedAt: row.archived_at,
+        message: data.archive
+          ? "Registration archived. Linked documents, fees, and portal accounts are retained."
+          : "Registration restored to the active intake list.",
+      };
     } catch (error) {
       toError(error);
     }

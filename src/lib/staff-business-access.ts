@@ -72,6 +72,7 @@ export function staffHomeForBusinessRole(
 
 export function frontDeskNavAllowed(path: string): boolean {
   const allowed = ["/staff/front-desk", "/staff/register", "/staff/intake", "/change-password"];
+  // `/staff/intake/:id` is covered by the `/staff/intake` prefix check below.
   if (allowed.some((p) => path === p || path.startsWith(`${p}/`))) return true;
   return false;
 }
@@ -148,10 +149,12 @@ export const FRONT_DESK_INTAKE_SELECT_COLUMNS = [
   "inquiry_channel",
   "intake_date",
   "registration_notes",
+  "next_follow_up_at",
   "assigned_consultant_id",
   "registered_by",
   "journey_stage",
   "portal_activated_at",
+  "archived_at",
   "created_at",
   "updated_at",
 ] as const;

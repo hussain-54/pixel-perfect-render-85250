@@ -1,6 +1,6 @@
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   EmptyState,
   ErrorState,
@@ -14,7 +14,9 @@ import {
 } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/StatusBadge";
+import { FrontDeskRegistrationFormA4 } from "@/components/portal/FrontDeskRegistrationFormA4";
 import { isFrontDeskBusinessRole } from "@/lib/staff-business-access";
 import { PASSWORD_MIN_LENGTH, validatePasswordConfirmation } from "@/lib/password-policy";
 import {
@@ -22,10 +24,26 @@ import {
   studentPortalAccountStatusLabel,
 } from "@/lib/student-portal-account";
 import {
+  INTAKE_DESTINATIONS,
+  INTAKE_INQUIRY_CHANNELS,
+  INTAKE_INQUIRY_SOURCES,
+  INTAKE_PAKISTAN_CITIES,
+  INTAKE_PROGRAMMES,
+  INTAKE_SEASONS,
+  INTAKE_STUDY_LEVELS,
+  intakeSeasonYearToDate,
+  intakeYearOptions,
+  type IntakeSeason,
+} from "@/lib/intake-form-options";
+import { intakeDateToSeasonYear } from "@/lib/front-desk-intake-manage";
+import type { FrontDeskIntakeRow } from "@/server/portal-front-desk";
+import {
+  archiveFrontDeskIntake,
   assignCounsellor,
   listCounsellorDesks,
   listFrontDeskIntake,
   provisionStudentPortalAccount,
+  updateFrontDeskIntake,
 } from "@/services";
 
 export const Route = createFileRoute("/staff/intake")({
@@ -38,6 +56,8 @@ export const Route = createFileRoute("/staff/intake")({
   component: FrontDeskIntakeListPage,
 });
 
+type SortKey = "createdAt" | "fullName" | "nextFollowUpAt" | "updatedAt";
+
 function FrontDeskIntakeListPage() {
   const queryClient = useQueryClient();
   const [msg, setMsg] = useState<string | null>(null);
@@ -47,6 +67,16 @@ function FrontDeskIntakeListPage() {
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [formError, setFormError] = useState<string | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
+  const [archiveId, setArchiveId] = useState<string | null>(null);
+  const [archiveReason, setArchiveReason] = useState("");
+  const [search, setSearch] = useState("");
+  const [feeFilter, setFeeFilter] = useState("all");
+  const [assignFilter, setAssignFilter] = useState("all");
+  const [sortKey, setSortKey] = useState<SortKey>("createdAt");
+  const [page, setPage] = useState(0);
+  const pageSize = 20;
 
   const listQ = useQuery({
     queryKey: ["front-desk", "intake"],
@@ -93,6 +123,62 @@ function FrontDeskIntakeListPage() {
     },
   });
 
+  const updateM = useMutation({
+    mutationFn: updateFrontDeskIntake,
+    onSuccess: async (result) => {
+      setMsg(result?.message ?? "Registration updated.");
+      setErr(null);
+      setEditingId(null);
+      await queryClient.invalidateQueries({ queryKey: ["front-desk"] });
+    },
+    onError: (e) => {
+      setMsg(null);
+      setErr(portalErrorMessage(e, "Could not update registration."));
+    },
+  });
+
+  const archiveM = useMutation({
+    mutationFn: archiveFrontDeskIntake,
+    onSuccess: async (result) => {
+      setMsg(result?.message ?? "Registration archived.");
+      setErr(null);
+      setArchiveId(null);
+      setArchiveReason("");
+      await queryClient.invalidateQueries({ queryKey: ["front-desk"] });
+    },
+    onError: (e) => {
+      setMsg(null);
+      setErr(portalErrorMessage(e, "Could not archive registration."));
+    },
+  });
+
+  const rows = listQ.data?.rows ?? [];
+  const filtered = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    let list = rows.filter((r) => {
+      if (feeFilter !== "all" && (r.signupFeeStatus || "none") !== feeFilter) return false;
+      if (assignFilter === "pending" && r.assignmentStatus !== "pending") return false;
+      if (assignFilter === "assigned" && r.assignmentStatus !== "assigned") return false;
+      if (!q) return true;
+      return [r.caseId, r.fullName, r.email, r.phone, r.destination, r.program]
+        .filter(Boolean)
+        .some((v) => String(v).toLowerCase().includes(q));
+    });
+    list = [...list].sort((a, b) => {
+      const av = a[sortKey] || "";
+      const bv = b[sortKey] || "";
+      return String(bv).localeCompare(String(av));
+    });
+    return list;
+  }, [rows, search, feeFilter, assignFilter, sortKey]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const pageRows = filtered.slice(page * pageSize, page * pageSize + pageSize);
+  const formRow = formStudentId ? rows.find((r) => r.id === formStudentId) : null;
+  const editRow = editingId ? rows.find((r) => r.id === editingId) : null;
+  const viewRow = viewingId ? rows.find((r) => r.id === viewingId) : null;
+  const archiveRow = archiveId ? rows.find((r) => r.id === archiveId) : null;
+
   if (listQ.isLoading) return <LoadingRows rows={6} />;
   if (listQ.isError) {
     const message = portalErrorMessage(listQ.error);
@@ -102,11 +188,9 @@ function FrontDeskIntakeListPage() {
     return <ErrorState body={message} />;
   }
 
-  const rows = listQ.data?.rows ?? [];
-  const formRow = formStudentId ? rows.find((r) => r.id === formStudentId) : null;
-
   function openCreateForm(studentId: string) {
     setFormStudentId(studentId);
+    setEditingId(null);
     setPassword("");
     setConfirmPassword("");
     setFormError(null);
@@ -132,7 +216,7 @@ function FrontDeskIntakeListPage() {
     <div className="space-y-6">
       <PageHeader
         title="My registrations"
-        subtitle="Intake records you registered. Confidential counsellor and admission files are not shown here."
+        subtitle="Intake records you registered. Edit permitted fields, archive safely, or download the A4 form. Confidential counsellor files are not shown here."
         actions={
           <Button asChild>
             <Link to="/staff/register">Register student</Link>
@@ -151,27 +235,85 @@ function FrontDeskIntakeListPage() {
         </p>
       ) : null}
 
+      <Panel title="Search & filters">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div>
+            <Label htmlFor="fd-search">Search</Label>
+            <Input
+              id="fd-search"
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(0);
+              }}
+              placeholder="Name, email, case ID…"
+            />
+          </div>
+          <div>
+            <Label htmlFor="fd-fee">Signup fee</Label>
+            <select
+              id="fd-fee"
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={feeFilter}
+              onChange={(e) => {
+                setFeeFilter(e.target.value);
+                setPage(0);
+              }}
+            >
+              <option value="all">All</option>
+              <option value="claimed">Claimed</option>
+              <option value="verified">Verified</option>
+              <option value="waived">Waived</option>
+              <option value="rejected">Rejected</option>
+              <option value="unpaid">Unpaid</option>
+            </select>
+          </div>
+          <div>
+            <Label htmlFor="fd-assign">Counsellor</Label>
+            <select
+              id="fd-assign"
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={assignFilter}
+              onChange={(e) => {
+                setAssignFilter(e.target.value);
+                setPage(0);
+              }}
+            >
+              <option value="all">All</option>
+              <option value="pending">Awaiting assignment</option>
+              <option value="assigned">Assigned</option>
+            </select>
+          </div>
+          <div>
+            <Label htmlFor="fd-sort">Sort by</Label>
+            <select
+              id="fd-sort"
+              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={sortKey}
+              onChange={(e) => setSortKey(e.target.value as SortKey)}
+            >
+              <option value="createdAt">Registration date</option>
+              <option value="updatedAt">Last updated</option>
+              <option value="nextFollowUpAt">Follow-up date</option>
+              <option value="fullName">Student name</option>
+            </select>
+          </div>
+        </div>
+      </Panel>
+
       {formRow ? (
         <Panel title="Create Student Portal Account">
           <div className="grid max-w-lg gap-3 text-sm">
             <p className="text-muted-foreground">
-              Creates a login for this CRM record using the same password pattern as staff accounts.
-              No invitation email is sent. Share the password securely. Portal CRM access still
-              requires signup-fee verification.
+              Creates a login using the staff password pattern. No invitation email. Portal CRM
+              access still requires signup-fee verification.
             </p>
             <div>
-              <label className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Student email
-              </label>
+              <Label>Student email</Label>
               <Input value={formRow.email} readOnly className="bg-muted/40" />
             </div>
             <div>
-              <label
-                className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-                htmlFor="fd-portal-password"
-              >
-                Password
-              </label>
+              <Label htmlFor="fd-portal-password">Password</Label>
               <Input
                 id="fd-portal-password"
                 type="password"
@@ -182,12 +324,7 @@ function FrontDeskIntakeListPage() {
               />
             </div>
             <div>
-              <label
-                className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground"
-                htmlFor="fd-portal-confirm"
-              >
-                Confirm password
-              </label>
+              <Label htmlFor="fd-portal-confirm">Confirm password</Label>
               <Input
                 id="fd-portal-confirm"
                 type="password"
@@ -212,11 +349,96 @@ function FrontDeskIntakeListPage() {
                 size="sm"
                 variant="outline"
                 disabled={provisionM.isPending}
+                onClick={() => setFormStudentId(null)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </Panel>
+      ) : null}
+
+      {editRow ? (
+        <EditRegistrationPanel
+          row={editRow}
+          pending={updateM.isPending}
+          onCancel={() => setEditingId(null)}
+          onSave={(payload) => updateM.mutate(payload)}
+        />
+      ) : null}
+
+      {viewRow ? (
+        <Panel
+          title={`Registration form — ${viewRow.caseId}`}
+          action={
+            <div className="flex flex-wrap gap-2 print:hidden">
+              <Button type="button" size="sm" variant="outline" onClick={() => window.print()}>
+                Print Form
+              </Button>
+              <Button type="button" size="sm" variant="navy" onClick={() => window.print()}>
+                Download A4 PDF
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={() => setViewingId(null)}>
+                Close
+              </Button>
+            </div>
+          }
+        >
+          <p className="mb-3 text-xs text-muted-foreground print:hidden">
+            Print or choose “Save as PDF” in the browser print dialog. Shows saved CRM data; claimed
+            fees are not verified payments.
+          </p>
+          <FrontDeskRegistrationFormA4 row={viewRow} mode="print" />
+          <style>{`
+            @media print {
+              @page { size: A4 portrait; margin: 12mm; }
+              .print\\:hidden { display: none !important; }
+            }
+          `}</style>
+        </Panel>
+      ) : null}
+
+      {archiveRow ? (
+        <Panel title="Archive registration">
+          <div className="grid max-w-lg gap-3 text-sm">
+            <p className="text-muted-foreground">
+              Soft-archive <strong>{archiveRow.fullName}</strong> ({archiveRow.caseId}). Documents,
+              fees, applications, audit history, and portal accounts are retained. The record leaves
+              the active list.
+            </p>
+            <div>
+              <Label htmlFor="fd-archive-reason">Reason *</Label>
+              <Input
+                id="fd-archive-reason"
+                value={archiveReason}
+                onChange={(e) => setArchiveReason(e.target.value)}
+                placeholder="e.g. Duplicate registration / student withdrew"
+              />
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                disabled={archiveM.isPending}
+                onClick={() =>
+                  archiveM.mutate({
+                    studentId: archiveRow.id,
+                    archive: true,
+                    reason: archiveReason,
+                  })
+                }
+              >
+                {archiveM.isPending ? "Archiving…" : "Confirm archive"}
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={archiveM.isPending}
                 onClick={() => {
-                  setFormStudentId(null);
-                  setPassword("");
-                  setConfirmPassword("");
-                  setFormError(null);
+                  setArchiveId(null);
+                  setArchiveReason("");
                 }}
               >
                 Cancel
@@ -226,101 +448,424 @@ function FrontDeskIntakeListPage() {
         </Panel>
       ) : null}
 
-      <Panel title={`Intake records (${rows.length})`}>
-        {rows.length === 0 ? (
-          <EmptyState title="No intake records" body="Registrations you create will appear here." />
+      <Panel title={`Intake records (${filtered.length})`}>
+        {filtered.length === 0 ? (
+          <EmptyState title="No matching records" body="Adjust filters or register a student." />
         ) : (
-          <TableWrap>
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="px-3 py-2">Case</th>
-                  <th className="px-3 py-2">Student</th>
-                  <th className="px-3 py-2">Destination</th>
-                  <th className="px-3 py-2">Fee</th>
-                  <th className="px-3 py-2">Portal</th>
-                  <th className="px-3 py-2">Counsellor</th>
-                  <th className="px-3 py-2">Registered</th>
-                </tr>
-              </thead>
-              <tbody>
-                {rows.map((row) => {
-                  const portalStatus = intakePortalStatusFromRow({
-                    profileId: row.profileId,
-                    portalActivatedAt: row.portalActivatedAt,
-                  });
-                  return (
-                    <tr key={row.id} className="border-b border-border/60 align-top">
-                      <td className="px-3 py-2 font-medium text-navy">{row.caseId}</td>
-                      <td className="px-3 py-2">
-                        <div className="font-medium">{row.fullName}</div>
-                        <div className="text-xs text-muted-foreground">{row.email}</div>
-                        <div className="text-xs text-muted-foreground">{row.phone}</div>
-                      </td>
-                      <td className="px-3 py-2">
-                        <div>{row.destination || "—"}</div>
-                        <div className="text-xs text-muted-foreground">{row.program}</div>
-                      </td>
-                      <td className="px-3 py-2 capitalize">
-                        {row.signupFeeStatus?.replaceAll("_", " ") || "—"}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="text-xs font-medium text-navy">
-                          {studentPortalAccountStatusLabel(portalStatus)}
-                        </div>
-                        {portalStatus === "not_provisioned" ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="mt-1.5"
-                            disabled={provisionM.isPending}
-                            onClick={() => openCreateForm(row.id)}
-                          >
-                            Create Student Portal Account
-                          </Button>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2">
-                        {row.assignmentStatus === "assigned" ? (
-                          <span>{row.counsellorName || "Assigned"}</span>
-                        ) : (
-                          <div className="space-y-1.5">
-                            <StatusBadge status="Pending" />
-                            <select
-                              className="flex h-8 w-full max-w-[12rem] rounded-md border border-input bg-background px-2 text-xs"
-                              disabled={assignM.isPending}
-                              value=""
-                              onChange={(e) => {
-                                const consultantId = e.target.value;
-                                if (!consultantId) return;
-                                setAssigningId(row.id);
-                                assignM.mutate({ studentId: row.id, consultantId });
+          <>
+            <TableWrap>
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="px-3 py-2">Case</th>
+                    <th className="px-3 py-2">Student</th>
+                    <th className="px-3 py-2">Registered</th>
+                    <th className="px-3 py-2">Counsellor</th>
+                    <th className="px-3 py-2">Fee</th>
+                    <th className="px-3 py-2">Follow-up</th>
+                    <th className="px-3 py-2">Updated</th>
+                    <th className="px-3 py-2">Portal</th>
+                    <th className="px-3 py-2">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageRows.map((row) => {
+                    const portalStatus = intakePortalStatusFromRow({
+                      profileId: row.profileId,
+                      portalActivatedAt: row.portalActivatedAt,
+                    });
+                    return (
+                      <tr key={row.id} className="border-b border-border/60 align-top">
+                        <td className="px-3 py-2 font-medium text-navy">{row.caseId}</td>
+                        <td className="px-3 py-2">
+                          <div className="font-medium">{row.fullName}</div>
+                          <div className="text-xs text-muted-foreground">{row.email}</div>
+                          <div className="text-xs text-muted-foreground">{row.phone}</div>
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">{fmtDate(row.createdAt)}</td>
+                        <td className="px-3 py-2">
+                          {row.assignmentStatus === "assigned" ? (
+                            <span>{row.counsellorName || "Assigned"}</span>
+                          ) : (
+                            <div className="space-y-1.5">
+                              <StatusBadge status="Pending" />
+                              <select
+                                className="flex h-8 w-full max-w-[11rem] rounded-md border border-input bg-background px-2 text-xs"
+                                disabled={assignM.isPending}
+                                value=""
+                                onChange={(e) => {
+                                  const consultantId = e.target.value;
+                                  if (!consultantId) return;
+                                  setAssigningId(row.id);
+                                  assignM.mutate({ studentId: row.id, consultantId });
+                                }}
+                              >
+                                <option value="">
+                                  {assigningId === row.id && assignM.isPending
+                                    ? "Assigning…"
+                                    : "Assign…"}
+                                </option>
+                                {(desksQ.data?.options ?? []).map((d) => (
+                                  <option key={d.id} value={d.id}>
+                                    {d.fullName}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 capitalize">
+                          {row.signupFeeStatus?.replaceAll("_", " ") || "—"}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {row.nextFollowUpAt || "—"}
+                        </td>
+                        <td className="px-3 py-2 text-muted-foreground">{fmtDate(row.updatedAt)}</td>
+                        <td className="px-3 py-2">
+                          <div className="text-xs font-medium text-navy">
+                            {studentPortalAccountStatusLabel(portalStatus)}
+                          </div>
+                          {portalStatus === "not_provisioned" ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="mt-1.5"
+                              disabled={provisionM.isPending}
+                              onClick={() => openCreateForm(row.id)}
+                            >
+                              Create portal account
+                            </Button>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="flex min-w-[9rem] flex-col gap-1">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setViewingId(row.id);
+                                setEditingId(null);
+                                setFormStudentId(null);
+                                setArchiveId(null);
                               }}
                             >
-                              <option value="">
-                                {assigningId === row.id && assignM.isPending
-                                  ? "Assigning…"
-                                  : "Assign counsellor…"}
-                              </option>
-                              {(desksQ.data?.options ?? []).map((d) => (
-                                <option key={d.id} value={d.id}>
-                                  {d.fullName}
-                                </option>
-                              ))}
-                            </select>
+                              View / Print
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setEditingId(row.id);
+                                setViewingId(null);
+                                setFormStudentId(null);
+                                setArchiveId(null);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="text-destructive"
+                              onClick={() => {
+                                setArchiveId(row.id);
+                                setArchiveReason("");
+                                setEditingId(null);
+                              }}
+                            >
+                              Archive
+                            </Button>
                           </div>
-                        )}
-                      </td>
-                      <td className="px-3 py-2 text-muted-foreground">{fmtDate(row.createdAt)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </TableWrap>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </TableWrap>
+            <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+              <span>
+                Page {page + 1} of {pageCount}
+              </span>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={page <= 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                >
+                  Previous
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={page + 1 >= pageCount}
+                  onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+          </>
         )}
       </Panel>
     </div>
+  );
+}
+
+function EditRegistrationPanel({
+  row,
+  pending,
+  onCancel,
+  onSave,
+}: {
+  row: FrontDeskIntakeRow;
+  pending: boolean;
+  onCancel: () => void;
+  onSave: (payload: Parameters<typeof updateFrontDeskIntake>[0]) => void;
+}) {
+  const parsed = intakeDateToSeasonYear(row.intakeDate);
+  const years = useMemo(() => intakeYearOptions(), []);
+  const [fullName, setFullName] = useState(row.fullName);
+  const [email, setEmail] = useState(row.email);
+  const [phone, setPhone] = useState(row.phone ?? "");
+  const [whatsapp, setWhatsapp] = useState(row.whatsapp ?? "");
+  const [city, setCity] = useState(row.city ?? "");
+  const [destination, setDestination] = useState(row.destination ?? "");
+  const [program, setProgram] = useState(row.program ?? "");
+  const [studyLevel, setStudyLevel] = useState(row.studyLevel ?? "");
+  const [inquirySource, setInquirySource] = useState(row.inquirySource ?? "");
+  const [inquiryChannel, setInquiryChannel] = useState(row.inquiryChannel ?? "");
+  const [intakeSeason, setIntakeSeason] = useState<IntakeSeason | "">(parsed.season);
+  const [intakeYear, setIntakeYear] = useState(parsed.year);
+  const [registrationNotes, setRegistrationNotes] = useState(row.registrationNotes ?? "");
+  const [nextFollowUpAt, setNextFollowUpAt] = useState(row.nextFollowUpAt ?? "");
+  const [localErr, setLocalErr] = useState<string | null>(null);
+
+  return (
+    <Panel title={`Edit registration — ${row.caseId}`}>
+      <div className="grid max-w-3xl gap-3 sm:grid-cols-2">
+        <div className="sm:col-span-2 text-xs text-muted-foreground">
+          Fee verification, portal activation, counsellor assignment, and case ID stay protected.
+          {row.profileId ? " Email is locked because a portal account is linked." : null}
+        </div>
+        <div>
+          <Label>Full name *</Label>
+          <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
+        </div>
+        <div>
+          <Label>Email *</Label>
+          <Input
+            value={email}
+            readOnly={Boolean(row.profileId)}
+            className={row.profileId ? "bg-muted/40" : undefined}
+            onChange={(e) => setEmail(e.target.value)}
+          />
+        </div>
+        <div>
+          <Label>Phone</Label>
+          <Input value={phone} onChange={(e) => setPhone(e.target.value)} />
+        </div>
+        <div>
+          <Label>WhatsApp</Label>
+          <Input value={whatsapp} onChange={(e) => setWhatsapp(e.target.value)} />
+        </div>
+        <div>
+          <Label>City</Label>
+          <select
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={INTAKE_PAKISTAN_CITIES.includes(city as never) ? city : city ? "Other" : ""}
+            onChange={(e) => setCity(e.target.value === "Other" ? city || "Other" : e.target.value)}
+          >
+            <option value="">Select…</option>
+            {INTAKE_PAKISTAN_CITIES.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <Label>Destination</Label>
+          <select
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={
+              INTAKE_DESTINATIONS.includes(destination as never)
+                ? destination
+                : destination
+                  ? "Other"
+                  : ""
+            }
+            onChange={(e) =>
+              setDestination(e.target.value === "Other" ? destination || "Other" : e.target.value)
+            }
+          >
+            <option value="">Select…</option>
+            {INTAKE_DESTINATIONS.map((d) => (
+              <option key={d} value={d}>
+                {d}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <Label>Programme</Label>
+          <select
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={
+              INTAKE_PROGRAMMES.includes(program as never) ? program : program ? "Other" : ""
+            }
+            onChange={(e) =>
+              setProgram(e.target.value === "Other" ? program || "Other" : e.target.value)
+            }
+          >
+            <option value="">Select…</option>
+            {INTAKE_PROGRAMMES.map((p) => (
+              <option key={p} value={p}>
+                {p}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <Label>Study level</Label>
+          <select
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={studyLevel}
+            onChange={(e) => setStudyLevel(e.target.value)}
+          >
+            <option value="">Select…</option>
+            {INTAKE_STUDY_LEVELS.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <Label>Intake season</Label>
+          <select
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={intakeSeason}
+            onChange={(e) => setIntakeSeason(e.target.value as IntakeSeason | "")}
+          >
+            <option value="">Select…</option>
+            {INTAKE_SEASONS.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <Label>Intake year</Label>
+          <select
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={intakeYear}
+            onChange={(e) => setIntakeYear(e.target.value)}
+          >
+            <option value="">Select…</option>
+            {years.map((y) => (
+              <option key={y} value={String(y)}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <Label>Inquiry channel</Label>
+          <select
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={inquiryChannel}
+            onChange={(e) => setInquiryChannel(e.target.value)}
+          >
+            <option value="">Select…</option>
+            {INTAKE_INQUIRY_CHANNELS.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <Label>Inquiry source</Label>
+          <select
+            className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+            value={inquirySource}
+            onChange={(e) => setInquirySource(e.target.value)}
+          >
+            <option value="">Select…</option>
+            {INTAKE_INQUIRY_SOURCES.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <Label>Next follow-up</Label>
+          <Input
+            type="date"
+            value={nextFollowUpAt || ""}
+            onChange={(e) => setNextFollowUpAt(e.target.value)}
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <Label>Registration notes</Label>
+          <textarea
+            className="flex min-h-[80px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm"
+            value={registrationNotes}
+            onChange={(e) => setRegistrationNotes(e.target.value)}
+          />
+        </div>
+        {localErr ? <p className="sm:col-span-2 text-xs text-destructive">{localErr}</p> : null}
+        <div className="sm:col-span-2 flex flex-wrap gap-2">
+          <Button
+            type="button"
+            size="sm"
+            variant="navy"
+            disabled={pending}
+            onClick={() => {
+              if (!fullName.trim() || !email.trim()) {
+                setLocalErr("Name and email are required.");
+                return;
+              }
+              setLocalErr(null);
+              onSave({
+                studentId: row.id,
+                expectedUpdatedAt: row.updatedAt,
+                fullName,
+                email,
+                phone,
+                whatsapp,
+                city,
+                destination,
+                program,
+                studyLevel,
+                inquirySource,
+                inquiryChannel: inquiryChannel || null,
+                intakeDate: intakeSeasonYearToDate(
+                  intakeSeason,
+                  intakeYear ? Number(intakeYear) : "",
+                ),
+                registrationNotes,
+                nextFollowUpAt: nextFollowUpAt || null,
+              });
+            }}
+          >
+            {pending ? "Saving…" : "Save changes"}
+          </Button>
+          <Button type="button" size="sm" variant="outline" disabled={pending} onClick={onCancel}>
+            Cancel
+          </Button>
+        </div>
+      </div>
+    </Panel>
   );
 }

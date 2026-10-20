@@ -185,10 +185,13 @@ import type { ModuleReportsFilters } from "@/types/module-reports";
 import type { ActivityFilters } from "@/types/activity-ops";
 import { portalExportModuleReports, portalGetModuleReports } from "@/server/portal-module-reports";
 import {
+  portalArchiveFrontDeskIntake,
   portalGetFrontDeskDashboard,
   portalListCounsellorDesks,
+  portalListFrontDeskArchivedIntake,
   portalListFrontDeskIntake,
   portalProvisionStudentPortalAccount,
+  portalUpdateFrontDeskIntake,
 } from "@/server/portal-front-desk";
 import {
   portalDeleteProgram,
@@ -596,11 +599,35 @@ export const intakeRegisterStudent = (data: IntakeRegisterInput) =>
 export const getFrontDeskDashboard = () => withAuth((opts) => portalGetFrontDeskDashboard(opts));
 
 export const listFrontDeskIntake = () => withAuth((opts) => portalListFrontDeskIntake(opts));
+export const listFrontDeskArchivedIntake = () =>
+  withAuth((opts) => portalListFrontDeskArchivedIntake(opts));
 export const provisionStudentPortalAccount = (data: {
   studentId: string;
   temporaryPassword: string;
   confirmPassword: string;
 }) => withAuth((opts) => portalProvisionStudentPortalAccount({ ...opts, data }));
+export const updateFrontDeskIntake = (data: {
+  studentId: string;
+  expectedUpdatedAt: string;
+  fullName: string;
+  email: string;
+  phone?: string;
+  whatsapp?: string;
+  city?: string;
+  destination?: string;
+  program?: string;
+  studyLevel?: string;
+  inquirySource?: string;
+  inquiryChannel?: string | null;
+  intakeDate?: string | null;
+  registrationNotes?: string;
+  nextFollowUpAt?: string | null;
+}) => withAuth((opts) => portalUpdateFrontDeskIntake({ ...opts, data }));
+export const archiveFrontDeskIntake = (data: {
+  studentId: string;
+  archive: boolean;
+  reason?: string;
+}) => withAuth((opts) => portalArchiveFrontDeskIntake({ ...opts, data }));
 
 export const listCounsellorDesks = () => withAuth((opts) => portalListCounsellorDesks(opts));
 
