@@ -22,13 +22,17 @@ import {
   forwardFeeVerificationRequest,
   getFrontDeskDashboard,
   listFeeVerificationRequests,
+  reconcileFeeVerificationFromFee,
   returnFeeVerificationRequest,
 } from "@/services";
 import { isFrontDeskBusinessRole } from "@/lib/staff-business-access";
 import { workspaceTitleForSession } from "@/lib/workspace-branding";
 import {
+  describeFeeClaimDisplay,
   feeStatusAllowsAdmissionHandover,
   feeVerificationStatusesForTab,
+  requestCompletedWithoutFeeAuthorization,
+  requestStuckAfterFeeDecision,
   type FeeVerificationQueueTab,
 } from "@/lib/fee-verification-workflow";
 import {
@@ -97,6 +101,16 @@ function FrontDeskDashboardPage() {
     onError: (err) => setActionMsg(portalErrorMessage(err, "Could not return request.")),
   });
 
+  const reconcileM = useMutation({
+    mutationFn: (studentId: string) => reconcileFeeVerificationFromFee({ studentId }),
+    onSuccess: async (res) => {
+      setActionMsg(res?.message ?? "Request synced from fee status.");
+      await queryClient.invalidateQueries({ queryKey: [...FEE_QUEUE_KEY] });
+    },
+    onError: (err) =>
+      setActionMsg(portalErrorMessage(err, "Could not sync request from fee status.")),
+  });
+
   const allRows = feeReqQ.data?.rows ?? [];
   const filteredRows = useMemo(() => {
     const allowed = new Set(feeVerificationStatusesForTab(tab));
@@ -108,6 +122,13 @@ function FrontDeskDashboardPage() {
     feeReqQ.data?.awaitingFinanceCount ?? filteredCountFallback(allRows, "in_progress");
   const correctionCount =
     feeReqQ.data?.needsCorrectionCount ?? filteredCountFallback(allRows, "cancelled");
+  const completedCount = feeReqQ.data?.completedCount ?? filteredCountFallback(allRows, "resolved");
+  const stuckCount = allRows.filter((r) =>
+    requestStuckAfterFeeDecision({
+      requestStatus: r.status,
+      signupFeeStatus: r.signupFeeStatus,
+    }),
+  ).length;
 
   if (dashQ.isLoading) return <LoadingRows rows={6} />;
   if (dashQ.isError) {
@@ -198,12 +219,16 @@ function FrontDeskDashboardPage() {
             Open: <strong className="text-navy">{feeReqQ.isError ? "—" : openCount}</strong>
           </span>
           <span>
-            Pending Accounts/Finance:{" "}
+            Awaiting Finance:{" "}
             <strong className="text-navy">{feeReqQ.isError ? "—" : awaitingCount}</strong>
           </span>
           <span>
             Needs correction:{" "}
             <strong className="text-navy">{feeReqQ.isError ? "—" : correctionCount}</strong>
+          </span>
+          <span>
+            Completed:{" "}
+            <strong className="text-navy">{feeReqQ.isError ? "—" : completedCount}</strong>
           </span>
           {lastSync ? (
             <span>
@@ -212,9 +237,18 @@ function FrontDeskDashboardPage() {
           ) : null}
         </div>
 
+        {stuckCount > 0 ? (
+          <p className="mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+            {stuckCount} request{stuckCount === 1 ? "" : "s"} still open while the signup fee
+            already has an Accounts decision. Use <span className="font-medium">Sync from fee</span>{" "}
+            on the row — this closes the request from fee truth and never invents a verification.
+          </p>
+        ) : null}
+
         {liveStatus === "offline" || liveStatus === "reconnecting" ? (
           <p className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-            Live updates are temporarily unavailable. Showing the latest successfully loaded data.
+            Live updates are temporarily unavailable. Showing the latest successfully loaded data —
+            use Refresh if statuses look stale.
           </p>
         ) : null}
 
@@ -249,7 +283,12 @@ function FrontDeskDashboardPage() {
                 "Apply migrations 20261020150000–20261020170000 on Supabase if the schema is missing.",
               )}
             </p>
-            <Button type="button" size="sm" variant="outline" onClick={() => void feeReqQ.refetch()}>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => void feeReqQ.refetch()}
+            >
               Retry
             </Button>
           </div>
@@ -287,13 +326,21 @@ function FrontDeskDashboardPage() {
                 {filteredRows.map((row) => {
                   const feeOk = feeStatusAllowsAdmissionHandover(row.signupFeeStatus);
                   const forwarded = Boolean(row.forwardedAt) || row.status === "in_progress";
-                  const claimBits = [
-                    row.feeAmount != null
-                      ? `${row.feeCurrency || ""} ${row.feeAmount}`.trim()
-                      : null,
-                    row.feePaymentMethod,
-                    row.feeReferenceReceipt ? `Ref: ${row.feeReferenceReceipt}` : null,
-                  ].filter(Boolean);
+                  const stuck = requestStuckAfterFeeDecision({
+                    requestStatus: row.status,
+                    signupFeeStatus: row.signupFeeStatus,
+                  });
+                  const resolvedWithoutFee = requestCompletedWithoutFeeAuthorization({
+                    requestStatus: row.status,
+                    signupFeeStatus: row.signupFeeStatus,
+                  });
+                  const claim = describeFeeClaimDisplay({
+                    signupFeeStatus: row.signupFeeStatus,
+                    feeAmount: row.feeAmount,
+                    feeCurrency: row.feeCurrency,
+                    feePaymentMethod: row.feePaymentMethod,
+                    feeReferenceReceipt: row.feeReferenceReceipt,
+                  });
                   return (
                     <tr key={row.id} className="border-b border-border/60 align-top">
                       <td className="px-3 py-2">
@@ -313,38 +360,62 @@ function FrontDeskDashboardPage() {
                         ) : null}
                       </td>
                       <td className="px-3 py-2 text-xs">
-                        <div className="capitalize">
-                          {(row.signupFeeStatus || "—").replaceAll("_", " ")}
+                        <div className="capitalize font-medium text-navy">
+                          Fee: {claim.feeStatusLabel}
                         </div>
-                        <div className="text-muted-foreground">
-                          {claimBits.length ? claimBits.join(" · ") : "No claim recorded"}
-                        </div>
+                        <div className="text-muted-foreground">{claim.claimLabel}</div>
+                        {row.feeVerifiedAt ? (
+                          <div className="mt-1 text-[11px] text-muted-foreground">
+                            Decision {fmtDate(row.feeVerifiedAt.slice(0, 10))}
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-3 py-2">
+                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                          Request
+                        </div>
                         <StatusBadge status={row.status} />
                         <div className="mt-1 text-[11px] text-muted-foreground">
                           Updated {fmtDate(row.updatedAt.slice(0, 10))}
                         </div>
-                        {forwarded ? (
+                        {row.resolvedAt ? (
+                          <div className="mt-1 text-[11px] text-muted-foreground">
+                            Resolved {fmtDate(row.resolvedAt.slice(0, 10))}
+                          </div>
+                        ) : null}
+                        {forwarded && row.status !== "resolved" ? (
                           <div className="mt-1 text-[11px] font-medium text-navy">
                             Forwarded to Accounts
-                            {row.forwardedAt
-                              ? ` · ${fmtDate(row.forwardedAt.slice(0, 10))}`
-                              : ""}
+                            {row.forwardedAt ? ` · ${fmtDate(row.forwardedAt.slice(0, 10))}` : ""}
                           </div>
-                        ) : (
+                        ) : null}
+                        {!forwarded && row.status === "open" ? (
                           <div className="mt-1 text-[11px] text-muted-foreground">
                             Not yet forwarded
                           </div>
-                        )}
+                        ) : null}
+                        {stuck ? (
+                          <div className="mt-1 text-[11px] font-medium text-amber-900">
+                            Out of sync — fee decided, request still open
+                          </div>
+                        ) : null}
+                        {resolvedWithoutFee ? (
+                          <div className="mt-1 text-[11px] font-medium text-danger">
+                            Request closed but fee gate not satisfied
+                          </div>
+                        ) : null}
                       </td>
                       <td className="px-3 py-2">
                         <p className="mb-2 text-xs text-muted-foreground">
                           {feeOk
                             ? "Fee authorized — counsellor may hand over to Admission"
-                            : forwarded
-                              ? "Awaiting Accounts verify / waive / reject"
-                              : "Review claim, then send to Accounts / Finance"}
+                            : resolvedWithoutFee
+                              ? "Do not treat as paid — Accounts must verify or waive"
+                              : stuck
+                                ? "Sync request from fee status, then refresh"
+                                : forwarded
+                                  ? "Awaiting Accounts verify / waive / reject"
+                                  : "Review claim, then send to Accounts / Finance"}
                         </p>
                         <div className="flex flex-wrap gap-1.5">
                           <Button asChild size="sm" variant="outline">
@@ -356,8 +427,22 @@ function FrontDeskDashboardPage() {
                               View Case
                             </Link>
                           </Button>
-                          {row.status === "open" ||
-                          (row.status === "in_progress" && !row.forwardedAt) ? (
+                          {stuck ? (
+                            <Button
+                              size="sm"
+                              variant="navy"
+                              disabled={reconcileM.isPending}
+                              onClick={() => {
+                                setActionMsg(null);
+                                reconcileM.mutate(row.studentId);
+                              }}
+                            >
+                              Sync from fee
+                            </Button>
+                          ) : null}
+                          {!stuck &&
+                          (row.status === "open" ||
+                            (row.status === "in_progress" && !row.forwardedAt)) ? (
                             <Button
                               size="sm"
                               variant="navy"
@@ -370,7 +455,7 @@ function FrontDeskDashboardPage() {
                               Send to Accounts / Finance
                             </Button>
                           ) : null}
-                          {row.status === "open" || row.status === "in_progress" ? (
+                          {!stuck && (row.status === "open" || row.status === "in_progress") ? (
                             <Button
                               size="sm"
                               variant="outline"
@@ -475,10 +560,7 @@ function FrontDeskDashboardPage() {
   );
 }
 
-function filteredCountFallback(
-  rows: { status: string }[],
-  status: string,
-): number {
+function filteredCountFallback(rows: { status: string }[], status: string): number {
   return rows.filter((r) => r.status === status).length;
 }
 

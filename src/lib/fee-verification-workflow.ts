@@ -100,6 +100,87 @@ export function feeVerificationStatusesForTab(tab: FeeVerificationQueueTab): str
   }
 }
 
+/** Fee obligation reached an authorized Accounts decision (not merely claimed). */
+export function signupFeeIsTerminalDecision(status: string | null | undefined): boolean {
+  const s = (status ?? "").trim().toLowerCase();
+  return s === "verified" || s === "waived" || s === "rejected";
+}
+
+/**
+ * Request still open/forwarded while signup fee already has a terminal decision.
+ * Safe to reconcile request from fee truth (never invent a verification).
+ */
+export function requestStuckAfterFeeDecision(input: {
+  requestStatus: string;
+  signupFeeStatus: string | null | undefined;
+}): boolean {
+  const req = input.requestStatus.trim().toLowerCase();
+  return (
+    (req === "open" || req === "in_progress") &&
+    signupFeeIsTerminalDecision(input.signupFeeStatus)
+  );
+}
+
+/**
+ * Request marked completed but fee gate is not satisfied — must not unlock admission.
+ */
+export function requestCompletedWithoutFeeAuthorization(input: {
+  requestStatus: string;
+  signupFeeStatus: string | null | undefined;
+}): boolean {
+  return (
+    input.requestStatus.trim().toLowerCase() === "resolved" &&
+    !feeStatusAllowsAdmissionHandover(input.signupFeeStatus)
+  );
+}
+
+export function describeFeeClaimDisplay(input: {
+  signupFeeStatus: string | null | undefined;
+  feeAmount: number | null | undefined;
+  feeCurrency: string | null | undefined;
+  feePaymentMethod: string | null | undefined;
+  feeReferenceReceipt: string | null | undefined;
+}): {
+  feeStatusLabel: string;
+  claimLabel: string;
+  hasFeeRecord: boolean;
+  claimFieldsMissing: boolean;
+} {
+  const hasFeeRecord = Boolean(input.signupFeeStatus?.trim());
+  const feeStatusLabel = hasFeeRecord
+    ? input.signupFeeStatus!.replaceAll("_", " ")
+    : "No fee record";
+  const claimBits = [
+    input.feeAmount != null
+      ? `${input.feeCurrency || ""} ${input.feeAmount}`.trim()
+      : null,
+    input.feePaymentMethod,
+    input.feeReferenceReceipt ? `Ref: ${input.feeReferenceReceipt}` : null,
+  ].filter(Boolean) as string[];
+  if (!hasFeeRecord) {
+    return {
+      feeStatusLabel,
+      claimLabel: "No signup fee record on file",
+      hasFeeRecord: false,
+      claimFieldsMissing: true,
+    };
+  }
+  if (!claimBits.length) {
+    return {
+      feeStatusLabel,
+      claimLabel: "Fee on file — amount/method/reference not recorded",
+      hasFeeRecord: true,
+      claimFieldsMissing: true,
+    };
+  }
+  return {
+    feeStatusLabel,
+    claimLabel: claimBits.join(" · "),
+    hasFeeRecord: true,
+    claimFieldsMissing: false,
+  };
+}
+
 export function normalizeRpcRowList(data: unknown): Record<string, unknown>[] {
   if (Array.isArray(data)) return data as Record<string, unknown>[];
   if (data && typeof data === "object") return [data as Record<string, unknown>];

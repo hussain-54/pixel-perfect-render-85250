@@ -88,6 +88,7 @@ import {
   portalRequestFeeVerification,
   portalUpdateAdmissionHandover,
   portalVerifySignupFee,
+  type SignupFeeQueueInput,
 } from "@/server/portal-intake";
 import type {
   AdmissionHandoverInput,
@@ -195,6 +196,7 @@ import {
   portalListFrontDeskArchivedIntake,
   portalListFrontDeskIntake,
   portalProvisionStudentPortalAccount,
+  portalReconcileFeeVerificationFromFee,
   portalReturnFeeVerificationRequest,
   portalUpdateFrontDeskIntake,
 } from "@/server/portal-front-desk";
@@ -655,8 +657,8 @@ export const recordSignupFee = (data: SignupFeeRecordInput) =>
 export const verifySignupFee = (data: VerifySignupFeeInput) =>
   withAuth((opts) => portalVerifySignupFee({ ...opts, data }));
 
-export const listSignupFeeQueue = () =>
-  withAuth((opts) => portalListSignupFeeQueue(opts));
+export const listSignupFeeQueue = (filters?: SignupFeeQueueInput) =>
+  withAuth((opts) => portalListSignupFeeQueue({ ...opts, data: filters ?? {} }));
 
 export const assignCounsellor = (data: AssignCounsellorInput) =>
   withAuth((opts) => portalAssignCounsellor({ ...opts, data }));
@@ -680,6 +682,9 @@ export const forwardFeeVerificationRequest = (data: { requestId: string; note?: 
 
 export const returnFeeVerificationRequest = (data: { requestId: string; reason: string }) =>
   withAuth((opts) => portalReturnFeeVerificationRequest({ ...opts, data }));
+
+export const reconcileFeeVerificationFromFee = (data: { studentId: string }) =>
+  withAuth((opts) => portalReconcileFeeVerificationFromFee({ ...opts, data }));
 
 export const listAdmissionHandovers = (filters?: {
   status?: "submitted" | "accepted" | "returned";

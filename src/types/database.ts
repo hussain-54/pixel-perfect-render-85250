@@ -1561,6 +1561,14 @@ export type Database = {
           portal_activated_at: string | null;
         }[];
       };
+      reconcile_counselling_fee_request_from_fee: {
+        Args: { p_student_id: string };
+        Returns: {
+          student_id: string;
+          fee_status: SignupFeeStatusDb;
+          requests_resolved: number;
+        }[];
+      };
       request_counselling_fee_verification: {
         Args: { p_student_id: string; p_summary: string };
         Returns: Database["public"]["Tables"]["counselling_fee_verification_requests"]["Row"];
@@ -1580,11 +1588,14 @@ export type Database = {
           fee_currency: string | null;
           fee_payment_method: string | null;
           fee_reference_receipt: string | null;
+          fee_verified_at: string | null;
           requested_by: string | null;
           registrar_id: string | null;
           coordinator_note: string | null;
           forwarded_at: string | null;
           forwarded_by: string | null;
+          resolved_at: string | null;
+          resolved_by: string | null;
           created_at: string;
           updated_at: string;
         }[];

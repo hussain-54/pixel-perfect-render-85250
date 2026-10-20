@@ -60,6 +60,15 @@ describe("mapVerifySignupFeeRpcError (pure — not a DB integration test)", () =
     expect(mapVerifySignupFeeRpcError("authentication required").status).toBe(401);
   });
 
+  it("maps reconcile terminal-fee and authorization errors", () => {
+    expect(mapVerifySignupFeeRpcError("fee is not in a terminal verified/waived/rejected state").status).toBe(
+      400,
+    );
+    expect(mapVerifySignupFeeRpcError("not authorized to reconcile fee verification requests").status).toBe(
+      403,
+    );
+  });
+
   it("does not forward raw unexpected SQL details", () => {
     const mapped = mapVerifySignupFeeRpcError(
       'duplicate key value violates unique constraint "signup_fee_payments_pkey"',

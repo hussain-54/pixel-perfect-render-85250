@@ -846,11 +846,14 @@ export type FeeVerificationRequestRow = {
   feeCurrency: string | null;
   feePaymentMethod: string | null;
   feeReferenceReceipt: string | null;
+  feeVerifiedAt: string | null;
   requestedBy: string | null;
   registrarId: string | null;
   coordinatorNote: string | null;
   forwardedAt: string | null;
   forwardedBy: string | null;
+  resolvedAt: string | null;
+  resolvedBy: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -887,11 +890,14 @@ function mapFeeVerificationRow(r: Record<string, unknown>): FeeVerificationReque
     feeCurrency: strOrNull(r["fee_currency"]),
     feePaymentMethod: strOrNull(r["fee_payment_method"]),
     feeReferenceReceipt: strOrNull(r["fee_reference_receipt"]),
+    feeVerifiedAt: strOrNull(r["fee_verified_at"]),
     requestedBy: strOrNull(r["requested_by"]),
     registrarId: strOrNull(r["registrar_id"]),
     coordinatorNote: strOrNull(r["coordinator_note"]),
     forwardedAt: strOrNull(r["forwarded_at"]),
     forwardedBy: strOrNull(r["forwarded_by"]),
+    resolvedAt: strOrNull(r["resolved_at"]),
+    resolvedBy: strOrNull(r["resolved_by"]),
     createdAt: str(r["created_at"]),
     updatedAt: str(r["updated_at"]),
   };
@@ -1080,6 +1086,87 @@ export const portalForwardFeeVerificationRequest = createServerFn({ method: "POS
         status: String(created.status),
         forwardedAt: (created.forwarded_at as string | null) ?? null,
         message: "Request forwarded to Accounts / Finance.",
+      };
+    } catch (error) {
+      toError(error);
+    }
+  });
+
+/**
+ * Close stuck open/in_progress counselling requests when signup fee is already
+ * verified/waived/rejected. Never invents a fee verification.
+ */
+export const portalReconcileFeeVerificationFromFee = createServerFn({ method: "POST" })
+  .validator((data: { studentId: string }) => data)
+  .handler(async ({ data }) => {
+    try {
+      const session = await requireTrustedSession();
+      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      assertFrontDeskOrFeeVerifierOrAdmin(session);
+
+      const studentId = data.studentId?.trim();
+      if (!studentId) throw new AuthError("Student id is required.", 400);
+
+      const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
+      if (!usesSupabaseDataPlane(session)) {
+        throw new AuthError("Reconcile requires the live data plane.", 400);
+      }
+      const client = requireAoSupabaseClient();
+      const { mapVerifySignupFeeRpcError } = await import("@/lib/signup-fee-gate");
+
+      const { data: rpcRows, error } = await client.rpc(
+        "reconcile_counselling_fee_request_from_fee",
+        { p_student_id: studentId },
+      );
+      if (error) {
+        if (/does not exist|function|PGRST202/i.test(error.message)) {
+          throw new AuthError(
+            "Reconcile unavailable. Apply migration 20261020180000_verify_signup_fee_resolve_counselling_request.sql.",
+            503,
+          );
+        }
+        const mapped = mapVerifySignupFeeRpcError(error.message);
+        throw new AuthError(mapped.message, mapped.status);
+      }
+
+      const row = Array.isArray(rpcRows) ? rpcRows[0] : rpcRows;
+      const requestsResolved =
+        row && typeof row === "object" && "requests_resolved" in row
+          ? Number((row as { requests_resolved: number }).requests_resolved ?? 0)
+          : 0;
+      const feeStatus =
+        row && typeof row === "object" && "fee_status" in row
+          ? String((row as { fee_status: string }).fee_status)
+          : null;
+
+      try {
+        const { writeAudit } = await import("@/services/db");
+        await writeAudit(client, {
+          action: "student.fee_verification_reconciled",
+          entity_type: "counselling_fee_verification_requests",
+          entity_id: studentId,
+          student_id: studentId,
+          metadata: { feeStatus, requestsResolved, via: "reconcile_counselling_fee_request_from_fee" },
+        });
+      } catch {
+        /* best-effort */
+      }
+
+      logFeeQueueDiag("reconcile_ok", {
+        userId: session.userId ?? null,
+        studentId,
+        requestsResolved,
+      });
+
+      return {
+        ok: true as const,
+        studentId,
+        feeStatus,
+        requestsResolved,
+        message:
+          requestsResolved > 0
+            ? `Closed ${requestsResolved} request(s) from fee status ${feeStatus}.`
+            : `No open requests to close. Fee status is ${feeStatus ?? "unknown"}.`,
       };
     } catch (error) {
       toError(error);

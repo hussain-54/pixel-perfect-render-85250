@@ -37,6 +37,12 @@ import type {
   SignupFeeView,
   VerifySignupFeeInput,
 } from "@/types/intake";
+import {
+  clampSignupFeeLedgerPage,
+  signupFeeLedgerRowMatchesSearch,
+  signupFeeStatusesForLedgerFilter,
+  type SignupFeeLedgerStatusFilter,
+} from "@/lib/signup-fee-ledger";
 
 function toError(error: unknown): never {
   if (error instanceof AuthError) {
@@ -45,10 +51,7 @@ function toError(error: unknown): never {
   throw error instanceof Error ? error : new Error("Authorization failed.");
 }
 
-function logFeeRequestDiag(
-  event: string,
-  meta: Record<string, string | number | boolean | null>,
-) {
+function logFeeRequestDiag(event: string, meta: Record<string, string | number | boolean | null>) {
   console.info(JSON.stringify({ scope: "fee_verification_request", event, ...meta }));
 }
 
@@ -449,6 +452,15 @@ export const portalRecordSignupFee = createServerFn({ method: "POST" })
     }
   });
 
+export type SignupFeeQueueStatusFilter = SignupFeeLedgerStatusFilter;
+
+export type SignupFeeQueueInput = {
+  status?: SignupFeeQueueStatusFilter;
+  search?: string;
+  limit?: number;
+  offset?: number;
+};
+
 export type SignupFeeQueueRow = {
   feeId: string;
   studentId: string;
@@ -468,124 +480,186 @@ export type SignupFeeQueueRow = {
   openRequestSummary: string | null;
 };
 
-/** Accounts/Finance queue: unpaid/claimed signup fees (separate from university_fee_obligations). */
-export const portalListSignupFeeQueue = createServerFn({ method: "GET" }).handler(async () => {
-  try {
-    const session = await requireTrustedSession();
-    requireRoles(session, ["admin", "super_admin", "consultant"]);
-    session.businessRole = await resolveSessionBusinessRole(session);
-    denyFrontDeskConsultantWorkflows(session, "signup fee verification queue");
-    requireSignupFeeVerifyPermission(session);
-    const canVerify =
-      rolesAtLeastAdmin(session.role) ||
-      canFullyApproveModule(session.businessRole, "fees_payments") ||
-      session.businessRole === "accounts_banking_finance" ||
-      session.businessRole === "manager";
-    if (!canVerify) {
-      throw new AuthError("Only Accounts/Finance or Admin may view the signup fee queue.", 403);
-    }
-
-    const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
-    if (!usesSupabaseDataPlane(session)) {
-      throw new AuthError("Signup fee queue requires the live data plane.", 400);
-    }
-    const client = requireAoSupabaseClient();
-
-    const { data: fees, error } = await client
-      .from("signup_fee_payments")
-      .select(
-        "id, student_id, status, amount, currency, payment_method, reference_receipt, notes, verified_at, created_at, updated_at",
-      )
-      .in("status", ["unpaid", "claimed"])
-      .order("updated_at", { ascending: false })
-      .limit(200);
-    if (error) {
-      if (/does not exist|relation|PGRST205|42P01/i.test(error.message)) {
-        throw new AuthError("Signup fee table unavailable. Apply signup-fee migrations.", 503);
+/** Accounts/Finance ledger: signup/intake fees (separate from university_fee_obligations). */
+export const portalListSignupFeeQueue = createServerFn({ method: "GET" })
+  .validator((data?: SignupFeeQueueInput) => data ?? {})
+  .handler(async ({ data }) => {
+    try {
+      const session = await requireTrustedSession();
+      requireRoles(session, ["admin", "super_admin", "consultant"]);
+      session.businessRole = await resolveSessionBusinessRole(session);
+      denyFrontDeskConsultantWorkflows(session, "signup fee verification queue");
+      requireSignupFeeVerifyPermission(session);
+      const canVerify =
+        rolesAtLeastAdmin(session.role) ||
+        canFullyApproveModule(session.businessRole, "fees_payments") ||
+        session.businessRole === "accounts_banking_finance" ||
+        session.businessRole === "manager";
+      if (!canVerify) {
+        throw new AuthError("Only Accounts/Finance or Admin may view the signup fee queue.", 403);
       }
-      throw new Error(error.message);
-    }
 
-    const studentIds = [...new Set((fees ?? []).map((f) => f.student_id))];
-    const nameById = new Map<string, { full_name: string; case_id: string }>();
-    if (studentIds.length) {
-      const { data: students, error: stuErr } = await client
-        .from("students")
-        .select("id, full_name, case_id")
-        .in("id", studentIds);
-      if (stuErr) throw new Error(stuErr.message);
-      for (const s of students ?? []) {
-        nameById.set(s.id, { full_name: s.full_name, case_id: s.case_id });
+      const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
+      if (!usesSupabaseDataPlane(session)) {
+        throw new AuthError("Signup fee queue requires the live data plane.", 400);
       }
-    }
+      const client = requireAoSupabaseClient();
 
-    const requestByStudent = new Map<
-      string,
-      { id: string; status: string; summary: string }
-    >();
-    if (studentIds.length) {
+      const statusFilter = (data?.status ?? "pending") as SignupFeeQueueStatusFilter;
+      const statuses = signupFeeStatusesForLedgerFilter(statusFilter);
+      const pageInput: { limit?: number; offset?: number } = {};
+      if (typeof data?.limit === "number") pageInput.limit = data.limit;
+      if (typeof data?.offset === "number") pageInput.offset = data.offset;
+      const { limit, offset } = clampSignupFeeLedgerPage(pageInput);
+      const search = (data?.search ?? "").trim();
+
+      // Overview counts across the ledger (authorized fee-verifier SELECT).
+      const countFor = async (
+        statusList: NonNullable<ReturnType<typeof signupFeeStatusesForLedgerFilter>>,
+      ) => {
+        const { count, error: cErr } = await client
+          .from("signup_fee_payments")
+          .select("id", { count: "exact", head: true })
+          .in("status", statusList);
+        if (cErr) throw new Error(cErr.message);
+        return count ?? 0;
+      };
+
+      let pendingCount = 0;
+      let verifiedCount = 0;
+      let rejectedCount = 0;
+      let waivedCount = 0;
       try {
-        const { data: reqs } = await client
+        [pendingCount, verifiedCount, rejectedCount, waivedCount] = await Promise.all([
+          countFor(["unpaid", "claimed"]),
+          countFor(["verified"]),
+          countFor(["rejected"]),
+          countFor(["waived"]),
+        ]);
+      } catch (countErr) {
+        if (
+          countErr instanceof Error &&
+          /does not exist|relation|PGRST205|42P01/i.test(countErr.message)
+        ) {
+          throw new AuthError("Signup fee table unavailable. Apply signup-fee migrations.", 503);
+        }
+        throw countErr;
+      }
+
+      let query = client
+        .from("signup_fee_payments")
+        .select(
+          "id, student_id, status, amount, currency, payment_method, reference_receipt, notes, verified_at, created_at, updated_at",
+          { count: "exact" },
+        )
+        .order("updated_at", { ascending: false })
+        .range(offset, offset + limit - 1);
+      if (statuses) {
+        query = query.in("status", statuses);
+      }
+
+      const { data: fees, error, count: matchedCount } = await query;
+      if (error) {
+        if (/does not exist|relation|PGRST205|42P01/i.test(error.message)) {
+          throw new AuthError("Signup fee table unavailable. Apply signup-fee migrations.", 503);
+        }
+        throw new Error(error.message);
+      }
+
+      const studentIds = [...new Set((fees ?? []).map((f) => f.student_id))];
+      const nameById = new Map<string, { full_name: string; case_id: string }>();
+      if (studentIds.length) {
+        const { data: students, error: stuErr } = await client
+          .from("students")
+          .select("id, full_name, case_id")
+          .in("id", studentIds);
+        if (stuErr) throw new Error(stuErr.message);
+        for (const s of students ?? []) {
+          nameById.set(s.id, { full_name: s.full_name, case_id: s.case_id });
+        }
+      }
+
+      const requestByStudent = new Map<string, { id: string; status: string; summary: string }>();
+      if (studentIds.length) {
+        const { data: reqs, error: reqErr } = await client
           .from("counselling_fee_verification_requests")
           .select("id, student_id, status, summary")
           .in("student_id", studentIds)
           .in("status", ["open", "in_progress"])
           .order("created_at", { ascending: false });
-        for (const r of reqs ?? []) {
-          if (!requestByStudent.has(r.student_id)) {
-            requestByStudent.set(r.student_id, {
-              id: r.id,
-              status: r.status,
-              summary: r.summary,
-            });
+        if (reqErr) {
+          if (!/does not exist|relation|PGRST205|42P01/i.test(reqErr.message)) {
+            throw new Error(reqErr.message);
+          }
+        } else {
+          for (const r of reqs ?? []) {
+            if (!requestByStudent.has(r.student_id)) {
+              requestByStudent.set(r.student_id, {
+                id: r.id,
+                status: r.status,
+                summary: r.summary,
+              });
+            }
           }
         }
-      } catch {
-        /* coordination table may be unavailable until migration applied */
       }
-    }
 
-    const rows: SignupFeeQueueRow[] = (fees ?? []).map((f) => {
-      const stu = nameById.get(f.student_id);
-      const req = requestByStudent.get(f.student_id);
+      let rows: SignupFeeQueueRow[] = (fees ?? []).map((f) => {
+        const stu = nameById.get(f.student_id);
+        const req = requestByStudent.get(f.student_id);
+        return {
+          feeId: f.id,
+          studentId: f.student_id,
+          studentName: stu?.full_name ?? null,
+          caseId: stu?.case_id ?? null,
+          status: f.status,
+          amount: Number(f.amount),
+          currency: f.currency,
+          paymentMethod: f.payment_method,
+          referenceReceipt: f.reference_receipt,
+          notes: f.notes,
+          verifiedAt: f.verified_at,
+          createdAt: f.created_at,
+          updatedAt: f.updated_at,
+          openRequestId: req?.id ?? null,
+          openRequestStatus: req?.status ?? null,
+          openRequestSummary: req?.summary ?? null,
+        };
+      });
+
+      if (search) {
+        rows = rows.filter((r) => signupFeeLedgerRowMatchesSearch(r, search));
+      }
+
+      console.info(
+        JSON.stringify({
+          scope: "signup_fee_queue",
+          event: "list_ok",
+          userId: session.userId ?? null,
+          rowCount: rows.length,
+          statusFilter,
+          offset,
+          limit,
+        }),
+      );
+
       return {
-        feeId: f.id,
-        studentId: f.student_id,
-        studentName: stu?.full_name ?? null,
-        caseId: stu?.case_id ?? null,
-        status: f.status,
-        amount: Number(f.amount),
-        currency: f.currency,
-        paymentMethod: f.payment_method,
-        referenceReceipt: f.reference_receipt,
-        notes: f.notes,
-        verifiedAt: f.verified_at,
-        createdAt: f.created_at,
-        updatedAt: f.updated_at,
-        openRequestId: req?.id ?? null,
-        openRequestStatus: req?.status ?? null,
-        openRequestSummary: req?.summary ?? null,
+        ok: true as const,
+        rows,
+        pendingCount,
+        verifiedCount,
+        rejectedCount,
+        waivedCount,
+        matchedCount: matchedCount ?? rows.length,
+        limit,
+        offset,
+        statusFilter,
+        fetchedAt: new Date().toISOString(),
       };
-    });
-
-    console.info(
-      JSON.stringify({
-        scope: "signup_fee_queue",
-        event: "list_ok",
-        userId: session.userId ?? null,
-        rowCount: rows.length,
-      }),
-    );
-
-    return {
-      ok: true as const,
-      rows,
-      fetchedAt: new Date().toISOString(),
-    };
-  } catch (error) {
-    toError(error);
-  }
-});
+    } catch (error) {
+      toError(error);
+    }
+  });
 
 export const portalVerifySignupFee = createServerFn({ method: "POST" })
   .validator((data: VerifySignupFeeInput) => data)
@@ -656,6 +730,51 @@ export const portalVerifySignupFee = createServerFn({ method: "POST" })
       const fee = feeAfter ?? existingFee;
       const portalActivatedAt = rpcRow.portal_activated_at ?? null;
 
+      // Prefer in-RPC resolve (migration 20261020180000). Idempotent reconcile closes leftovers.
+      // Never swallow resolve errors as success — surface requestSyncWarning when fee already committed.
+      let requestsResolved: number | null = null;
+      let requestSyncWarning: string | null = null;
+      {
+        const { data: reconcileRows, error: reconcileErr } = await client.rpc(
+          "reconcile_counselling_fee_request_from_fee",
+          { p_student_id: data.studentId },
+        );
+        if (reconcileErr) {
+          if (/does not exist|function|PGRST202/i.test(reconcileErr.message)) {
+            const { error: resolveErr, count } = await client
+              .from("counselling_fee_verification_requests")
+              .update(
+                {
+                  status: "resolved",
+                  resolved_at: new Date().toISOString(),
+                  resolved_by: session.userId ?? null,
+                },
+                { count: "exact" },
+              )
+              .eq("student_id", data.studentId)
+              .in("status", ["open", "in_progress"]);
+            if (resolveErr) {
+              if (/does not exist|relation|PGRST205|42P01/i.test(resolveErr.message)) {
+                requestSyncWarning =
+                  "Fee decision saved. Coordination requests unavailable — apply migrations 20261020150000–20261020180000.";
+              } else {
+                requestSyncWarning = `Fee decision saved (${String(rpcRow.status)}), but the Front Desk request may still show pending. Use Sync from fee on Front Desk.`;
+              }
+            } else {
+              requestsResolved = count ?? 0;
+            }
+          } else {
+            requestSyncWarning = `Fee decision saved (${String(rpcRow.status)}), but request sync failed. Use Sync from fee on Front Desk after applying migration 20261020180000.`;
+          }
+        } else {
+          const row = Array.isArray(reconcileRows) ? reconcileRows[0] : reconcileRows;
+          requestsResolved =
+            row && typeof row === "object" && "requests_resolved" in row
+              ? Number((row as { requests_resolved: number }).requests_resolved ?? 0)
+              : 0;
+        }
+      }
+
       const { writeAudit } = await import("@/services/db");
       await writeAudit(client, {
         action: `signup_fee.${data.action}`,
@@ -666,23 +785,10 @@ export const portalVerifySignupFee = createServerFn({ method: "POST" })
           status: rpcRow.status,
           portalActivated: Boolean(portalActivatedAt),
           via: "verify_signup_fee_and_activate",
+          requestsResolved,
+          requestSyncWarning: requestSyncWarning ? true : null,
         },
       });
-
-      // Close open counsellor fee-verification requests for this student.
-      try {
-        await client
-          .from("counselling_fee_verification_requests")
-          .update({
-            status: "resolved",
-            resolved_at: new Date().toISOString(),
-            resolved_by: session.userId ?? null,
-          })
-          .eq("student_id", data.studentId)
-          .in("status", ["open", "in_progress"]);
-      } catch {
-        /* queue table may be unavailable until migration is applied */
-      }
 
       // Notify Front Desk registrar + assigned counsellor (durable).
       try {
@@ -702,8 +808,7 @@ export const portalVerifySignupFee = createServerFn({ method: "POST" })
               user_id: userId,
               title: `Signup fee ${outcome}`,
               body,
-              link_path:
-                userId === stu?.registered_by ? "/staff/front-desk" : "/staff/students",
+              link_path: userId === stu?.registered_by ? "/staff/front-desk" : "/staff/students",
               student_id: data.studentId,
             })),
           );
@@ -724,6 +829,8 @@ export const portalVerifySignupFee = createServerFn({ method: "POST" })
           verifiedAt: fee.verified_at,
           portalActivatedAt,
         } satisfies SignupFeeView,
+        requestsResolved,
+        requestSyncWarning,
       };
     } catch (error) {
       toError(error);
@@ -965,10 +1072,8 @@ export const portalHandoverToAdmission = createServerFn({ method: "POST" })
         .select("status")
         .eq("student_id", data.studentId)
         .maybeSingle();
-      const {
-        feeStatusAllowsAdmissionHandover,
-        admissionHandoverBlockedByFeeMessage,
-      } = await import("@/lib/fee-verification-workflow");
+      const { feeStatusAllowsAdmissionHandover, admissionHandoverBlockedByFeeMessage } =
+        await import("@/lib/fee-verification-workflow");
       if (!feeStatusAllowsAdmissionHandover(feeRow?.status)) {
         throw new AuthError(admissionHandoverBlockedByFeeMessage(), 400);
       }
@@ -1117,9 +1222,8 @@ export const portalListAdmissionHandovers = createServerFn({ method: "GET" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       session.businessRole = await resolveSessionBusinessRole(session);
-      const { HANDOVER_QUEUE_MODULE, HANDOVER_QUEUE_VIEW_MINIMUM } = await import(
-        "@/lib/counsellor-handover-rules"
-      );
+      const { HANDOVER_QUEUE_MODULE, HANDOVER_QUEUE_VIEW_MINIMUM } =
+        await import("@/lib/counsellor-handover-rules");
       await requireModulePermission(
         session,
         HANDOVER_QUEUE_MODULE,
@@ -1181,9 +1285,8 @@ export const portalUpdateAdmissionHandover = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       session.businessRole = await resolveSessionBusinessRole(session);
-      const { HANDOVER_QUEUE_MODULE, HANDOVER_QUEUE_MUTATE_MINIMUM } = await import(
-        "@/lib/counsellor-handover-rules"
-      );
+      const { HANDOVER_QUEUE_MODULE, HANDOVER_QUEUE_MUTATE_MINIMUM } =
+        await import("@/lib/counsellor-handover-rules");
       await requireModulePermission(
         session,
         HANDOVER_QUEUE_MODULE,
@@ -1272,9 +1375,8 @@ export const portalRequestFeeVerification = createServerFn({ method: "POST" })
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       session.businessRole = await resolveSessionBusinessRole(session);
       denyFrontDeskConsultantWorkflows(session, "fee verification request");
-      const { HANDOVER_INITIATE_MINIMUM, HANDOVER_INITIATE_MODULE } = await import(
-        "@/lib/counsellor-handover-rules"
-      );
+      const { HANDOVER_INITIATE_MINIMUM, HANDOVER_INITIATE_MODULE } =
+        await import("@/lib/counsellor-handover-rules");
       await requireModulePermission(
         session,
         HANDOVER_INITIATE_MODULE,
@@ -1282,9 +1384,8 @@ export const portalRequestFeeVerification = createServerFn({ method: "POST" })
         "fee verification request",
       );
 
-      const { validateFeeVerificationRequestSummary } = await import(
-        "@/lib/fee-verification-workflow"
-      );
+      const { validateFeeVerificationRequestSummary } =
+        await import("@/lib/fee-verification-workflow");
       const summaryCheck = validateFeeVerificationRequestSummary(data.summary);
       if (!summaryCheck.ok) throw new AuthError(summaryCheck.message, 400);
 

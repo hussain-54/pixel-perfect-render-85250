@@ -2,12 +2,16 @@ import { describe, expect, it } from "vitest";
 import {
   admissionHandoverBlockedByFeeMessage,
   canRequestFeeVerification,
+  describeFeeClaimDisplay,
   feeStatusAllowsAdmissionHandover,
   feeVerificationStatusesForTab,
   feeVerificationTabForStatus,
   frontDeskCanSeeFeeVerificationRequest,
   normalizeAssessmentEligibilityForDraft,
   normalizeRpcRowList,
+  requestCompletedWithoutFeeAuthorization,
+  requestStuckAfterFeeDecision,
+  signupFeeIsTerminalDecision,
   validateFeeVerificationRequestSummary,
 } from "./fee-verification-workflow";
 
@@ -83,5 +87,74 @@ describe("fee verification workflow", () => {
     expect(normalizeRpcRowList(null)).toEqual([]);
     expect(normalizeRpcRowList({ id: "1" })).toEqual([{ id: "1" }]);
     expect(normalizeRpcRowList([{ id: "1" }, { id: "2" }])).toHaveLength(2);
+  });
+
+  it("detects fee-verified but request still pending (reconcile candidate)", () => {
+    expect(signupFeeIsTerminalDecision("verified")).toBe(true);
+    expect(signupFeeIsTerminalDecision("claimed")).toBe(false);
+    expect(
+      requestStuckAfterFeeDecision({
+        requestStatus: "in_progress",
+        signupFeeStatus: "verified",
+      }),
+    ).toBe(true);
+    expect(
+      requestStuckAfterFeeDecision({
+        requestStatus: "in_progress",
+        signupFeeStatus: "claimed",
+      }),
+    ).toBe(false);
+    expect(
+      requestStuckAfterFeeDecision({
+        requestStatus: "resolved",
+        signupFeeStatus: "verified",
+      }),
+    ).toBe(false);
+  });
+
+  it("blocks fee-gate when request is resolved without verified/waived fee", () => {
+    expect(
+      requestCompletedWithoutFeeAuthorization({
+        requestStatus: "resolved",
+        signupFeeStatus: "claimed",
+      }),
+    ).toBe(true);
+    expect(
+      requestCompletedWithoutFeeAuthorization({
+        requestStatus: "resolved",
+        signupFeeStatus: "verified",
+      }),
+    ).toBe(false);
+    expect(feeStatusAllowsAdmissionHandover("claimed")).toBe(false);
+  });
+
+  it("distinguishes missing fee row from missing claim fields", () => {
+    expect(
+      describeFeeClaimDisplay({
+        signupFeeStatus: null,
+        feeAmount: null,
+        feeCurrency: null,
+        feePaymentMethod: null,
+        feeReferenceReceipt: null,
+      }).claimLabel,
+    ).toMatch(/No signup fee record/i);
+    expect(
+      describeFeeClaimDisplay({
+        signupFeeStatus: "claimed",
+        feeAmount: null,
+        feeCurrency: "PKR",
+        feePaymentMethod: null,
+        feeReferenceReceipt: null,
+      }).claimLabel,
+    ).toMatch(/not recorded/i);
+    expect(
+      describeFeeClaimDisplay({
+        signupFeeStatus: "verified",
+        feeAmount: 5000,
+        feeCurrency: "PKR",
+        feePaymentMethod: "cash",
+        feeReferenceReceipt: "R-1",
+      }).claimLabel,
+    ).toContain("5000");
   });
 });

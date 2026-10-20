@@ -79,6 +79,19 @@ export function mapVerifySignupFeeRpcError(rawMessage: string): MappedSignupFeeR
   if (/student row missing/i.test(message)) {
     return { status: 404, message: "Student record not found for activation." };
   }
+  if (/fee is not in a terminal/i.test(message)) {
+    return {
+      status: 400,
+      message:
+        "Cannot close the verification request until Accounts verifies, waives, or rejects the signup fee.",
+    };
+  }
+  if (/not authorized to reconcile/i.test(message)) {
+    return {
+      status: 403,
+      message: "Not authorized to reconcile fee-verification requests.",
+    };
+  }
   return {
     status: 400,
     message: "Could not verify the signup fee. Try again or contact an administrator.",
