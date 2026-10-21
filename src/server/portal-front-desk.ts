@@ -57,6 +57,9 @@ export type FrontDeskDashboardPayload = {
   greetingName: string;
   myRegistrations: number;
   awaitingAssignment: number;
+  assignedStudents: number;
+  /** Signup fees still unpaid or claimed (not yet verified/waived/rejected). */
+  feesAwaitingFinance: number;
   recentAssigned: FrontDeskIntakeRow[];
   recentRegistrations: FrontDeskIntakeRow[];
 };
@@ -180,10 +183,17 @@ export const portalGetFrontDeskDashboard = createServerFn({ method: "GET" }).han
       if (profile?.full_name?.trim()) greetingName = profile.full_name.trim();
     }
 
+    const feesAwaitingFinance = rows.filter((r) => {
+      const s = (r.signupFeeStatus ?? "").toLowerCase();
+      return s === "unpaid" || s === "claimed";
+    }).length;
+
     return {
       greetingName,
       myRegistrations: rows.length,
       awaitingAssignment: awaiting.length,
+      assignedStudents: assigned.length,
+      feesAwaitingFinance,
       recentAssigned: assigned.slice(0, 8),
       recentRegistrations: rows.slice(0, 12),
     } satisfies FrontDeskDashboardPayload;

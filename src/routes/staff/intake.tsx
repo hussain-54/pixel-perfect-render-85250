@@ -36,6 +36,10 @@ import {
   type IntakeSeason,
 } from "@/lib/intake-form-options";
 import { intakeDateToSeasonYear } from "@/lib/front-desk-intake-manage";
+import {
+  describePersistedSignupFeeStatus,
+  printRegistrationFormPdf,
+} from "@/lib/registration-form-a4";
 import type { FrontDeskIntakeRow } from "@/server/portal-front-desk";
 import {
   archiveFrontDeskIntake,
@@ -215,408 +219,425 @@ function FrontDeskIntakeListPage() {
   return (
     <div className="space-y-6">
       <div className="fd-intake-no-print space-y-6">
-      <PageHeader
-        title="My registrations"
-        subtitle="Intake records you registered. Edit permitted fields, archive safely, or download the A4 form. Confidential counsellor files are not shown here."
-        actions={
-          <Button asChild>
-            <Link to="/staff/register">Register student</Link>
-          </Button>
-        }
-      />
-
-      {msg ? (
-        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
-          {msg}
-        </p>
-      ) : null}
-      {err ? (
-        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-          {err}
-        </p>
-      ) : null}
-
-      <Panel title="Search & filters">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-          <div>
-            <Label htmlFor="fd-search">Search</Label>
-            <Input
-              id="fd-search"
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(0);
-              }}
-              placeholder="Name, email, case ID…"
-            />
-          </div>
-          <div>
-            <Label htmlFor="fd-fee">Signup fee</Label>
-            <select
-              id="fd-fee"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              value={feeFilter}
-              onChange={(e) => {
-                setFeeFilter(e.target.value);
-                setPage(0);
-              }}
-            >
-              <option value="all">All</option>
-              <option value="claimed">Claimed</option>
-              <option value="verified">Verified</option>
-              <option value="waived">Waived</option>
-              <option value="rejected">Rejected</option>
-              <option value="unpaid">Unpaid</option>
-            </select>
-          </div>
-          <div>
-            <Label htmlFor="fd-assign">Counsellor</Label>
-            <select
-              id="fd-assign"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              value={assignFilter}
-              onChange={(e) => {
-                setAssignFilter(e.target.value);
-                setPage(0);
-              }}
-            >
-              <option value="all">All</option>
-              <option value="pending">Awaiting assignment</option>
-              <option value="assigned">Assigned</option>
-            </select>
-          </div>
-          <div>
-            <Label htmlFor="fd-sort">Sort by</Label>
-            <select
-              id="fd-sort"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-              value={sortKey}
-              onChange={(e) => setSortKey(e.target.value as SortKey)}
-            >
-              <option value="createdAt">Registration date</option>
-              <option value="updatedAt">Last updated</option>
-              <option value="nextFollowUpAt">Follow-up date</option>
-              <option value="fullName">Student name</option>
-            </select>
-          </div>
-        </div>
-      </Panel>
-
-      {formRow ? (
-        <Panel title="Create Student Portal Account">
-          <div className="grid max-w-lg gap-3 text-sm">
-            <p className="text-muted-foreground">
-              Creates a login using the staff password pattern. No invitation email. Portal CRM
-              access still requires signup-fee verification.
-            </p>
-            <div>
-              <Label>Student email</Label>
-              <Input value={formRow.email} readOnly className="bg-muted/40" />
-            </div>
-            <div>
-              <Label htmlFor="fd-portal-password">Password</Label>
-              <Input
-                id="fd-portal-password"
-                type="password"
-                autoComplete="new-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder={`At least ${PASSWORD_MIN_LENGTH} characters`}
-              />
-            </div>
-            <div>
-              <Label htmlFor="fd-portal-confirm">Confirm password</Label>
-              <Input
-                id="fd-portal-confirm"
-                type="password"
-                autoComplete="new-password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
-            </div>
-            {formError ? <p className="text-xs text-destructive">{formError}</p> : null}
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="navy"
-                disabled={provisionM.isPending}
-                onClick={submitCreate}
-              >
-                {provisionM.isPending ? "Creating account…" : "Create account"}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={provisionM.isPending}
-                onClick={() => setFormStudentId(null)}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </Panel>
-      ) : null}
-
-      {editRow ? (
-        <EditRegistrationPanel
-          row={editRow}
-          pending={updateM.isPending}
-          onCancel={() => setEditingId(null)}
-          onSave={(payload) => updateM.mutate(payload)}
-        />
-      ) : null}
-
-      {viewRow ? (
-        <Panel
-          title={`Registration form — ${viewRow.caseId}`}
-          action={
-            <div className="flex flex-wrap gap-2">
-              <Button type="button" size="sm" variant="outline" onClick={() => window.print()}>
-                Print Form
-              </Button>
-              <Button type="button" size="sm" variant="navy" onClick={() => window.print()}>
-                Download A4 PDF
-              </Button>
-              <Button type="button" size="sm" variant="ghost" onClick={() => setViewingId(null)}>
-                Close
-              </Button>
-            </div>
+        <PageHeader
+          title="My registrations"
+          subtitle="Intake records you registered. Edit permitted fields, archive safely, or download the A4 form. Confidential counsellor files are not shown here."
+          actions={
+            <Button asChild>
+              <Link to="/staff/register">Register student</Link>
+            </Button>
           }
-        >
-          <p className="mb-0 text-xs text-muted-foreground">
-            Print or choose “Save as PDF” in the browser print dialog. Only the registration form is
-            included — not search filters or the portal menu.
+        />
+
+        {msg ? (
+          <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+            {msg}
           </p>
+        ) : null}
+        {err ? (
+          <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+            {err}
+          </p>
+        ) : null}
+
+        <Panel title="Search & filters">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <Label htmlFor="fd-search">Search</Label>
+              <Input
+                id="fd-search"
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(0);
+                }}
+                placeholder="Name, email, case ID…"
+              />
+            </div>
+            <div>
+              <Label htmlFor="fd-fee">Signup fee</Label>
+              <select
+                id="fd-fee"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={feeFilter}
+                onChange={(e) => {
+                  setFeeFilter(e.target.value);
+                  setPage(0);
+                }}
+              >
+                <option value="all">All</option>
+                <option value="claimed">Claimed</option>
+                <option value="verified">Verified</option>
+                <option value="waived">Waived</option>
+                <option value="rejected">Rejected</option>
+                <option value="unpaid">Unpaid</option>
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="fd-assign">Counsellor</Label>
+              <select
+                id="fd-assign"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={assignFilter}
+                onChange={(e) => {
+                  setAssignFilter(e.target.value);
+                  setPage(0);
+                }}
+              >
+                <option value="all">All</option>
+                <option value="pending">Awaiting assignment</option>
+                <option value="assigned">Assigned</option>
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="fd-sort">Sort by</Label>
+              <select
+                id="fd-sort"
+                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={sortKey}
+                onChange={(e) => setSortKey(e.target.value as SortKey)}
+              >
+                <option value="createdAt">Registration date</option>
+                <option value="updatedAt">Last updated</option>
+                <option value="nextFollowUpAt">Follow-up date</option>
+                <option value="fullName">Student name</option>
+              </select>
+            </div>
+          </div>
         </Panel>
-      ) : null}
+
+        {formRow ? (
+          <Panel title="Create Student Portal Account">
+            <div className="grid max-w-lg gap-3 text-sm">
+              <p className="text-muted-foreground">
+                Creates a login using the staff password pattern. No invitation email. Portal CRM
+                access still requires signup-fee verification.
+              </p>
+              <div>
+                <Label>Student email</Label>
+                <Input value={formRow.email} readOnly className="bg-muted/40" />
+              </div>
+              <div>
+                <Label htmlFor="fd-portal-password">Password</Label>
+                <Input
+                  id="fd-portal-password"
+                  type="password"
+                  autoComplete="new-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={`At least ${PASSWORD_MIN_LENGTH} characters`}
+                />
+              </div>
+              <div>
+                <Label htmlFor="fd-portal-confirm">Confirm password</Label>
+                <Input
+                  id="fd-portal-confirm"
+                  type="password"
+                  autoComplete="new-password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+              </div>
+              {formError ? <p className="text-xs text-destructive">{formError}</p> : null}
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="navy"
+                  disabled={provisionM.isPending}
+                  onClick={submitCreate}
+                >
+                  {provisionM.isPending ? "Creating account…" : "Create account"}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={provisionM.isPending}
+                  onClick={() => setFormStudentId(null)}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          </Panel>
+        ) : null}
+
+        {editRow ? (
+          <EditRegistrationPanel
+            row={editRow}
+            pending={updateM.isPending}
+            onCancel={() => setEditingId(null)}
+            onSave={(payload) => updateM.mutate(payload)}
+          />
+        ) : null}
+
+        {viewRow ? (
+          <Panel
+            title={`Registration form — ${viewRow.caseId}`}
+            action={
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => printRegistrationFormPdf(viewRow.caseId)}
+                >
+                  Print
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="navy"
+                  onClick={() => printRegistrationFormPdf(viewRow.caseId)}
+                >
+                  Download Registration Form (PDF)
+                </Button>
+                <Button type="button" size="sm" variant="ghost" onClick={() => setViewingId(null)}>
+                  Close
+                </Button>
+              </div>
+            }
+          >
+            <p className="mb-3 text-xs text-muted-foreground">
+              On-screen form matches the print/PDF layout. In the print dialog, choose “Save as
+              PDF”. Filename defaults to the case ID.
+            </p>
+            <div className="overflow-x-auto">
+              <FrontDeskRegistrationFormA4 row={viewRow} mode="view" />
+            </div>
+          </Panel>
+        ) : null}
       </div>
 
       {viewRow ? (
-        <div id="fd-registration-print-root" className="mt-2">
+        <div id="fd-registration-print-root" className="hidden print:block">
           <FrontDeskRegistrationFormA4 row={viewRow} mode="print" />
         </div>
       ) : null}
 
       <div className="fd-intake-no-print space-y-6">
-      {archiveRow ? (
-        <Panel title="Archive registration">
-          <div className="grid max-w-lg gap-3 text-sm">
-            <p className="text-muted-foreground">
-              Soft-archive <strong>{archiveRow.fullName}</strong> ({archiveRow.caseId}). Documents,
-              fees, applications, audit history, and portal accounts are retained. The record leaves
-              the active list.
-            </p>
-            <div>
-              <Label htmlFor="fd-archive-reason">Reason *</Label>
-              <Input
-                id="fd-archive-reason"
-                value={archiveReason}
-                onChange={(e) => setArchiveReason(e.target.value)}
-                placeholder="e.g. Duplicate registration / student withdrew"
-              />
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button
-                type="button"
-                size="sm"
-                variant="destructive"
-                disabled={archiveM.isPending}
-                onClick={() =>
-                  archiveM.mutate({
-                    studentId: archiveRow.id,
-                    archive: true,
-                    reason: archiveReason,
-                  })
-                }
-              >
-                {archiveM.isPending ? "Archiving…" : "Confirm archive"}
-              </Button>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={archiveM.isPending}
-                onClick={() => {
-                  setArchiveId(null);
-                  setArchiveReason("");
-                }}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </Panel>
-      ) : null}
-
-      <Panel title={`Intake records (${filtered.length})`}>
-        {filtered.length === 0 ? (
-          <EmptyState title="No matching records" body="Adjust filters or register a student." />
-        ) : (
-          <>
-            <TableWrap>
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="px-3 py-2">Case</th>
-                    <th className="px-3 py-2">Student</th>
-                    <th className="px-3 py-2">Registered</th>
-                    <th className="px-3 py-2">Counsellor</th>
-                    <th className="px-3 py-2">Fee</th>
-                    <th className="px-3 py-2">Follow-up</th>
-                    <th className="px-3 py-2">Updated</th>
-                    <th className="px-3 py-2">Portal</th>
-                    <th className="px-3 py-2">Actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {pageRows.map((row) => {
-                    const portalStatus = intakePortalStatusFromRow({
-                      profileId: row.profileId,
-                      portalActivatedAt: row.portalActivatedAt,
-                    });
-                    return (
-                      <tr key={row.id} className="border-b border-border/60 align-top">
-                        <td className="px-3 py-2 font-medium text-navy">{row.caseId}</td>
-                        <td className="px-3 py-2">
-                          <div className="font-medium">{row.fullName}</div>
-                          <div className="text-xs text-muted-foreground">{row.email}</div>
-                          <div className="text-xs text-muted-foreground">{row.phone}</div>
-                        </td>
-                        <td className="px-3 py-2 text-muted-foreground">{fmtDate(row.createdAt)}</td>
-                        <td className="px-3 py-2">
-                          {row.assignmentStatus === "assigned" ? (
-                            <span>{row.counsellorName || "Assigned"}</span>
-                          ) : (
-                            <div className="space-y-1.5">
-                              <StatusBadge status="Pending" />
-                              <select
-                                className="flex h-8 w-full max-w-[11rem] rounded-md border border-input bg-background px-2 text-xs"
-                                disabled={assignM.isPending}
-                                value=""
-                                onChange={(e) => {
-                                  const consultantId = e.target.value;
-                                  if (!consultantId) return;
-                                  setAssigningId(row.id);
-                                  assignM.mutate({ studentId: row.id, consultantId });
-                                }}
-                              >
-                                <option value="">
-                                  {assigningId === row.id && assignM.isPending
-                                    ? "Assigning…"
-                                    : "Assign…"}
-                                </option>
-                                {(desksQ.data?.options ?? []).map((d) => (
-                                  <option key={d.id} value={d.id}>
-                                    {d.fullName}
-                                  </option>
-                                ))}
-                              </select>
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 capitalize">
-                          {row.signupFeeStatus?.replaceAll("_", " ") || "—"}
-                        </td>
-                        <td className="px-3 py-2 text-muted-foreground">
-                          {row.nextFollowUpAt || "—"}
-                        </td>
-                        <td className="px-3 py-2 text-muted-foreground">{fmtDate(row.updatedAt)}</td>
-                        <td className="px-3 py-2">
-                          <div className="text-xs font-medium text-navy">
-                            {studentPortalAccountStatusLabel(portalStatus)}
-                          </div>
-                          {portalStatus === "not_provisioned" ? (
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              className="mt-1.5"
-                              disabled={provisionM.isPending}
-                              onClick={() => openCreateForm(row.id)}
-                            >
-                              Create portal account
-                            </Button>
-                          ) : null}
-                        </td>
-                        <td className="px-3 py-2">
-                          <div className="flex min-w-[9rem] flex-col gap-1">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setViewingId(row.id);
-                                setEditingId(null);
-                                setFormStudentId(null);
-                                setArchiveId(null);
-                              }}
-                            >
-                              View / Print
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setEditingId(row.id);
-                                setViewingId(null);
-                                setFormStudentId(null);
-                                setArchiveId(null);
-                              }}
-                            >
-                              Edit
-                            </Button>
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              className="text-destructive"
-                              onClick={() => {
-                                setArchiveId(row.id);
-                                setArchiveReason("");
-                                setEditingId(null);
-                              }}
-                            >
-                              Archive
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </TableWrap>
-            <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-              <span>
-                Page {page + 1} of {pageCount}
-              </span>
-              <div className="flex gap-2">
+        {archiveRow ? (
+          <Panel title="Archive registration">
+            <div className="grid max-w-lg gap-3 text-sm">
+              <p className="text-muted-foreground">
+                Soft-archive <strong>{archiveRow.fullName}</strong> ({archiveRow.caseId}).
+                Documents, fees, applications, audit history, and portal accounts are retained. The
+                record leaves the active list.
+              </p>
+              <div>
+                <Label htmlFor="fd-archive-reason">Reason *</Label>
+                <Input
+                  id="fd-archive-reason"
+                  value={archiveReason}
+                  onChange={(e) => setArchiveReason(e.target.value)}
+                  placeholder="e.g. Duplicate registration / student withdrew"
+                />
+              </div>
+              <div className="flex flex-wrap gap-2">
                 <Button
                   type="button"
                   size="sm"
-                  variant="outline"
-                  disabled={page <= 0}
-                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  variant="destructive"
+                  disabled={archiveM.isPending}
+                  onClick={() =>
+                    archiveM.mutate({
+                      studentId: archiveRow.id,
+                      archive: true,
+                      reason: archiveReason,
+                    })
+                  }
                 >
-                  Previous
+                  {archiveM.isPending ? "Archiving…" : "Confirm archive"}
                 </Button>
                 <Button
                   type="button"
                   size="sm"
                   variant="outline"
-                  disabled={page + 1 >= pageCount}
-                  onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                  disabled={archiveM.isPending}
+                  onClick={() => {
+                    setArchiveId(null);
+                    setArchiveReason("");
+                  }}
                 >
-                  Next
+                  Cancel
                 </Button>
               </div>
             </div>
-          </>
-        )}
-      </Panel>
+          </Panel>
+        ) : null}
+
+        <Panel title={`Intake records (${filtered.length})`}>
+          {filtered.length === 0 ? (
+            <EmptyState title="No matching records" body="Adjust filters or register a student." />
+          ) : (
+            <>
+              <TableWrap>
+                <table className="w-full text-left text-sm">
+                  <thead>
+                    <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
+                      <th className="px-3 py-2">Case</th>
+                      <th className="px-3 py-2">Student</th>
+                      <th className="px-3 py-2">Registered</th>
+                      <th className="px-3 py-2">Counsellor</th>
+                      <th className="px-3 py-2">Fee</th>
+                      <th className="px-3 py-2">Follow-up</th>
+                      <th className="px-3 py-2">Updated</th>
+                      <th className="px-3 py-2">Portal</th>
+                      <th className="px-3 py-2">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pageRows.map((row) => {
+                      const portalStatus = intakePortalStatusFromRow({
+                        profileId: row.profileId,
+                        portalActivatedAt: row.portalActivatedAt,
+                      });
+                      return (
+                        <tr key={row.id} className="border-b border-border/60 align-top">
+                          <td className="px-3 py-2 font-medium text-navy">{row.caseId}</td>
+                          <td className="px-3 py-2">
+                            <div className="font-medium">{row.fullName}</div>
+                            <div className="text-xs text-muted-foreground">{row.email}</div>
+                            <div className="text-xs text-muted-foreground">{row.phone}</div>
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            {fmtDate(row.createdAt)}
+                          </td>
+                          <td className="px-3 py-2">
+                            {row.assignmentStatus === "assigned" ? (
+                              <span>{row.counsellorName || "Assigned"}</span>
+                            ) : (
+                              <div className="space-y-1.5">
+                                <StatusBadge status="Pending" />
+                                <select
+                                  className="flex h-8 w-full max-w-[11rem] rounded-md border border-input bg-background px-2 text-xs"
+                                  disabled={assignM.isPending}
+                                  value=""
+                                  onChange={(e) => {
+                                    const consultantId = e.target.value;
+                                    if (!consultantId) return;
+                                    setAssigningId(row.id);
+                                    assignM.mutate({ studentId: row.id, consultantId });
+                                  }}
+                                >
+                                  <option value="">
+                                    {assigningId === row.id && assignM.isPending
+                                      ? "Assigning…"
+                                      : "Assign…"}
+                                  </option>
+                                  {(desksQ.data?.options ?? []).map((d) => (
+                                    <option key={d.id} value={d.id}>
+                                      {d.fullName}
+                                    </option>
+                                  ))}
+                                </select>
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-xs">
+                            {describePersistedSignupFeeStatus(row.signupFeeStatus).label}
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            {row.nextFollowUpAt || "—"}
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground">
+                            {fmtDate(row.updatedAt)}
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="text-xs font-medium text-navy">
+                              {studentPortalAccountStatusLabel(portalStatus)}
+                            </div>
+                            {portalStatus === "not_provisioned" ? (
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                className="mt-1.5"
+                                disabled={provisionM.isPending}
+                                onClick={() => openCreateForm(row.id)}
+                              >
+                                Create portal account
+                              </Button>
+                            ) : null}
+                          </td>
+                          <td className="px-3 py-2">
+                            <div className="flex min-w-[9rem] flex-col gap-1">
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setViewingId(row.id);
+                                  setEditingId(null);
+                                  setFormStudentId(null);
+                                  setArchiveId(null);
+                                }}
+                              >
+                                View / PDF
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setEditingId(row.id);
+                                  setViewingId(null);
+                                  setFormStudentId(null);
+                                  setArchiveId(null);
+                                }}
+                              >
+                                Edit
+                              </Button>
+                              <Button
+                                type="button"
+                                size="sm"
+                                variant="ghost"
+                                className="text-destructive"
+                                onClick={() => {
+                                  setArchiveId(row.id);
+                                  setArchiveReason("");
+                                  setEditingId(null);
+                                }}
+                              >
+                                Archive
+                              </Button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </TableWrap>
+              <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  Page {page + 1} of {pageCount}
+                </span>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={page <= 0}
+                    onClick={() => setPage((p) => Math.max(0, p - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={page + 1 >= pageCount}
+                    onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
+        </Panel>
       </div>
 
       {viewRow ? (
@@ -634,6 +655,7 @@ function FrontDeskIntakeListPage() {
             .fd-intake-no-print { display: none !important; }
             aside, nav, header { display: none !important; }
             #fd-registration-print-root {
+              display: block !important;
               position: absolute !important;
               left: 0 !important;
               top: 0 !important;
@@ -748,9 +770,7 @@ function EditRegistrationPanel({
           <Label>Programme</Label>
           <select
             className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-            value={
-              INTAKE_PROGRAMMES.includes(program as never) ? program : program ? "Other" : ""
-            }
+            value={INTAKE_PROGRAMMES.includes(program as never) ? program : program ? "Other" : ""}
             onChange={(e) =>
               setProgram(e.target.value === "Other" ? program || "Other" : e.target.value)
             }

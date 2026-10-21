@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import { LogoMark } from "@/components/Logo";
 import { fmtDate } from "@/components/common";
 import { intakeDateToSeasonYear } from "@/lib/front-desk-intake-manage";
+import { describePersistedSignupFeeStatus, displayOrBlank } from "@/lib/registration-form-a4";
 import type { FrontDeskIntakeRow } from "@/server/portal-front-desk";
 
 const NAVY = "#17365D";
@@ -115,7 +116,7 @@ function ChoiceRow({ options }: { options: { label: string; checked: boolean }[]
 
 function ValueLine({ value }: { value: string | null | undefined }) {
   const v = value?.trim();
-  return <span className="font-medium">{v || "_______________________________"}</span>;
+  return <span className="break-words font-medium">{v || "_______________________________"}</span>;
 }
 
 export function FrontDeskRegistrationFormA4({
@@ -134,12 +135,10 @@ export function FrontDeskRegistrationFormA4({
   const intake = intakeDateToSeasonYear(row.intakeDate);
   const channel = inquiryChannelBucket(row.inquiryChannel);
   const pay = paymentMethodBucket(row.signupFeeMethod);
-  const feeClaimed = ["claimed", "verified", "waived"].includes(
-    normalize(row.signupFeeStatus),
-  );
+  const feeDisplay = describePersistedSignupFeeStatus(row.signupFeeStatus);
   const feeAmount =
-    row.signupFeeAmount != null
-      ? `${row.signupFeeCurrency || "PKR"} ${row.signupFeeAmount}`
+    row.signupFeeAmount != null && !Number.isNaN(Number(row.signupFeeAmount))
+      ? `${row.signupFeeCurrency || "PKR"} ${Number(row.signupFeeAmount).toLocaleString()}`
       : null;
 
   return (
@@ -151,18 +150,30 @@ export function FrontDeskRegistrationFormA4({
       }
       style={{ fontFamily: "Aptos, Calibri, 'Segoe UI', sans-serif" }}
     >
-      <header className="flex items-start justify-between gap-4 border-b px-4 pb-3 pt-4" style={{ borderColor: BORDER }}>
+      <header
+        className="flex items-start justify-between gap-4 border-b px-4 pb-3 pt-4"
+        style={{ borderColor: BORDER }}
+      >
         <div>
           <LogoMark className="h-11 w-auto" />
-          <h1 className="mt-2 text-[18px] font-bold tracking-tight" style={{ color: NAVY }}>
-            STUDENT REGISTRATION FORM
+          <p className="mt-1 text-[12px] font-semibold" style={{ color: NAVY }}>
+            GlobalRoots Consultants
+          </p>
+          <h1 className="mt-1 text-[18px] font-bold tracking-tight" style={{ color: NAVY }}>
+            Student Registration Form
           </h1>
           <p className="text-[11px] text-slate-600">
-            Initial intake details · Counsellor assignment · Signup fee record
+            Front Desk intake · Counsellor assignment · Signup fee record
           </p>
         </div>
-        <div className="min-w-[9rem] rounded border px-3 py-2 text-right" style={{ borderColor: BORDER, backgroundColor: WASH }}>
-          <div className="text-[10px] font-semibold uppercase tracking-wide" style={{ color: NAVY }}>
+        <div
+          className="min-w-[9rem] rounded border px-3 py-2 text-right"
+          style={{ borderColor: BORDER, backgroundColor: WASH }}
+        >
+          <div
+            className="text-[10px] font-semibold uppercase tracking-wide"
+            style={{ color: NAVY }}
+          >
             Student / CRM ID
           </div>
           <div className="text-[15px] font-bold" style={{ color: NAVY }}>
@@ -173,7 +184,7 @@ export function FrontDeskRegistrationFormA4({
       </header>
 
       <div className="space-y-3 p-4">
-        <section>
+        <section className="registration-a4-section">
           <SectionBanner title="1.  STUDENT & CONTACT" />
           <div className="grid grid-cols-2">
             <FieldCell label="Full name *" hint="As per passport / official ID">
@@ -202,7 +213,7 @@ export function FrontDeskRegistrationFormA4({
           </div>
         </section>
 
-        <section>
+        <section className="registration-a4-section">
           <SectionBanner title="2.  STUDY PREFERENCES" />
           <div className="grid grid-cols-2">
             <FieldCell label="Preferred destination *">
@@ -290,10 +301,10 @@ export function FrontDeskRegistrationFormA4({
           </div>
         </section>
 
-        <section>
-          <SectionBanner title="3.  SIGNUP FEE (OPTIONAL)  |  Claimed is not Accounts-verified" />
+        <section className="registration-a4-section">
+          <SectionBanner title="3.  SIGNUP FEE  |  Claimed is not Accounts-verified" />
           <div className="grid grid-cols-2">
-            <FieldCell label="Amount (PKR)">
+            <FieldCell label="Amount">
               <ValueLine value={feeAmount} />
             </FieldCell>
             <FieldCell label="Payment method">
@@ -314,31 +325,41 @@ export function FrontDeskRegistrationFormA4({
             <FieldCell label="Receipt / reference">
               <ValueLine value={row.signupFeeReference} />
             </FieldCell>
-            <FieldCell label="Mark as claimed (not verified)">
+            <FieldCell label="Fee status (persisted)">
+              <div className="font-semibold" style={{ color: NAVY }}>
+                {feeDisplay.label}
+              </div>
               <ChoiceRow
                 options={[
                   {
-                    label: "Yes — student/payment reported as claimed",
-                    checked: feeClaimed,
+                    label: "Not claimed",
+                    checked: feeDisplay.label === "Not claimed",
+                  },
+                  {
+                    label: "Claimed — awaiting Finance",
+                    checked: feeDisplay.isClaimedAwaitingFinance,
+                  },
+                  {
+                    label: "Verified / Waived by Accounts",
+                    checked: feeDisplay.isAuthorized,
+                  },
+                  {
+                    label: "Rejected",
+                    checked: normalize(row.signupFeeStatus) === "rejected",
                   },
                 ]}
               />
-              {row.signupFeeStatus ? (
-                <div className="mt-1 text-[11px] text-slate-700">
-                  Status: {row.signupFeeStatus.replaceAll("_", " ")}
-                </div>
-              ) : null}
             </FieldCell>
-            <FieldCell label="Fee notes" full>
+            <FieldCell label="Office note" full>
               <p className="text-[11px] text-slate-600">
-                Claimed receipts are not verified payments. Accounts verification is separate and
-                restricted to Accounts staff.
+                Claimed is a reported payment only. Verified and Waived are Accounts decisions.
+                Front Desk does not verify fees.
               </p>
             </FieldCell>
           </div>
         </section>
 
-        <section>
+        <section className="registration-a4-section">
           <SectionBanner title="4.  COUNSELLOR ASSIGNMENT" />
           <div className="grid grid-cols-2">
             <FieldCell label="Assigned counsellor">
@@ -357,18 +378,16 @@ export function FrontDeskRegistrationFormA4({
                 ]}
               />
             </FieldCell>
-            <FieldCell label="Assignment date">
+            <FieldCell label="Last updated">
               <ValueLine
-                value={
-                  row.assignmentStatus === "assigned" ? fmtDate(row.updatedAt) : null
-                }
+                value={row.assignmentStatus === "assigned" ? fmtDate(row.updatedAt) : null}
               />
             </FieldCell>
-            <FieldCell label="Assigned by">
-              <ValueLine value={row.registrarName} />
+            <FieldCell label="Registered / assigned by">
+              <ValueLine value={displayOrBlank(row.registrarName, "") || null} />
             </FieldCell>
-            <FieldCell label="Internal handover notes">
-              <ValueLine value={null} />
+            <FieldCell label="Workflow stage">
+              <ValueLine value={row.journeyStage?.replaceAll("_", " ") || null} />
             </FieldCell>
           </div>
         </section>
@@ -377,13 +396,13 @@ export function FrontDeskRegistrationFormA4({
           className="rounded px-3 py-2 text-[10px] leading-relaxed"
           style={{ backgroundColor: WASH, color: NAVY }}
         >
-          <strong>WORKFLOW NOTE</strong> | This form captures initial intake details only. University
-          applications and visa work begin after counsellor assignment. Signup fee claims are
-          recorded only as reported; Accounts verification is separate and restricted to Accounts
-          staff.
+          <strong>WORKFLOW NOTE</strong> | This form captures initial intake details only.
+          University applications and visa work begin after counsellor assignment. Signup fee claims
+          are recorded only as reported; Accounts verification is separate and restricted to
+          Accounts staff.
         </div>
 
-        <section>
+        <section className="registration-a4-section">
           <SectionBanner title="5.  OFFICE USE ONLY" />
           <div className="grid grid-cols-2">
             <FieldCell label="Student / CRM ID">
@@ -396,19 +415,44 @@ export function FrontDeskRegistrationFormA4({
               <ValueLine value={row.registrarName || row.registeredBy} />
             </FieldCell>
             <FieldCell label="Next follow-up date">
-              <ValueLine value={row.nextFollowUpAt} />
+              <ValueLine
+                value={row.nextFollowUpAt ? fmtDate(row.nextFollowUpAt.slice(0, 10)) : null}
+              />
             </FieldCell>
           </div>
         </section>
       </div>
 
+      <footer
+        className="registration-a4-footer flex items-center justify-between border-t px-4 py-2 text-[10px] text-slate-500"
+        style={{ borderColor: BORDER }}
+      >
+        <span>GlobalRoots Consultants · Confidential office record</span>
+        <span className="registration-a4-page" />
+      </footer>
+
       <style>{`
         @media print {
-          @page { size: A4 portrait; margin: 10mm; }
+          @page {
+            size: A4 portrait;
+            margin: 12mm 12mm 16mm 12mm;
+            @bottom-center {
+              content: "Page " counter(page) " of " counter(pages);
+              font-size: 9pt;
+              color: #64748b;
+            }
+          }
           .registration-a4 {
             box-shadow: none !important;
             border: none !important;
             max-width: none !important;
+          }
+          .registration-a4-section {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+          .registration-a4-footer {
+            display: none !important;
           }
         }
       `}</style>

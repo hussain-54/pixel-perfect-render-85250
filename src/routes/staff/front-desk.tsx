@@ -35,6 +35,7 @@ import {
   requestStuckAfterFeeDecision,
   type FeeVerificationQueueTab,
 } from "@/lib/fee-verification-workflow";
+import { describePersistedSignupFeeStatus } from "@/lib/registration-form-a4";
 import {
   FEE_QUEUE_KEY,
   useFeeVerificationQueueRealtime,
@@ -158,7 +159,7 @@ function FrontDeskDashboardPage() {
     <div className="space-y-8">
       <PageHeader
         title={`${workspaceTitleForSession({ portal: "staff", businessRole: "front_desk_student_affairs" })} — ${data.greetingName}`}
-        subtitle="Register students, record intake fees, and assign counsellors."
+        subtitle="Register students, assign counsellors, and coordinate signup-fee verification."
         actions={
           <Button asChild>
             <Link to="/staff/register">
@@ -169,341 +170,388 @@ function FrontDeskDashboardPage() {
         }
       />
 
-      <div className="grid gap-4 sm:grid-cols-4">
-        <StatCard label="My registrations" value={String(data.myRegistrations)} icon={<Users />} />
+      <div className="flex flex-wrap gap-2">
+        <Button asChild size="sm" variant="navy">
+          <Link to="/staff/register">Register New Student</Link>
+        </Button>
+        <Button asChild size="sm" variant="outline">
+          <Link to="/staff/intake">My Registrations</Link>
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            setTab("awaiting_finance");
+            document
+              .getElementById("fd-fee-verification-panel")
+              ?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
+        >
+          Pending Fee Verification
+        </Button>
+        <Button
+          type="button"
+          size="sm"
+          variant="outline"
+          onClick={() => {
+            setTab("open");
+            document
+              .getElementById("fd-fee-verification-panel")
+              ?.scrollIntoView({ behavior: "smooth", block: "start" });
+          }}
+        >
+          Counsellor Requests
+        </Button>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+        <StatCard
+          label="Total registrations"
+          value={String(data.myRegistrations)}
+          icon={<Users />}
+        />
         <StatCard
           label="Awaiting counsellor"
           value={String(data.awaitingAssignment)}
           icon={<Clock3 />}
         />
         <StatCard
-          label="Recently assigned"
-          value={String(data.recentAssigned.length)}
+          label="Assigned students"
+          value={String(data.assignedStudents)}
           icon={<UserCheck />}
         />
         <StatCard
-          label="Fee verification queue"
+          label="Fees awaiting Finance"
+          value={String(data.feesAwaitingFinance)}
+          icon={<BadgeDollarSign />}
+        />
+        <StatCard
+          label="Requests needing action"
           value={queueStatValue}
           icon={<BadgeDollarSign />}
         />
       </div>
 
-      <Panel
-        title="Counsellor Fee-Verification Requests"
-        action={
-          <div className="flex flex-wrap items-center gap-2">
-            <LiveBadge status={liveStatus} />
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              disabled={feeReqQ.isFetching}
-              onClick={() => void feeReqQ.refetch()}
-            >
-              {feeReqQ.isFetching ? "Refreshing…" : "Refresh"}
-            </Button>
-            <Button asChild variant="outline" size="sm">
-              <Link to="/staff/finance">Accounts / Finance</Link>
-            </Button>
-          </div>
-        }
-      >
-        <p className="mb-3 text-sm text-muted-foreground">
-          Review requests returned by counsellors and coordinate verification with Accounts /
-          Finance. Navigating to Finance alone does not forward a request — use{" "}
-          <span className="font-medium text-navy">Send to Accounts / Finance</span>.
-        </p>
-
-        <div className="mb-4 flex flex-wrap gap-3 text-xs text-muted-foreground">
-          <span>
-            Open: <strong className="text-navy">{feeReqQ.isError ? "—" : openCount}</strong>
-          </span>
-          <span>
-            Awaiting Finance:{" "}
-            <strong className="text-navy">{feeReqQ.isError ? "—" : awaitingCount}</strong>
-          </span>
-          <span>
-            Needs correction:{" "}
-            <strong className="text-navy">{feeReqQ.isError ? "—" : correctionCount}</strong>
-          </span>
-          <span>
-            Completed:{" "}
-            <strong className="text-navy">{feeReqQ.isError ? "—" : completedCount}</strong>
-          </span>
-          {lastSync ? (
-            <span>
-              Last sync: <strong className="text-navy">{lastSync}</strong>
-            </span>
-          ) : null}
-        </div>
-
-        {stuckCount > 0 ? (
-          <p className="mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950">
-            {stuckCount} request{stuckCount === 1 ? "" : "s"} still open while the signup fee
-            already has an Accounts decision. Use <span className="font-medium">Sync from fee</span>{" "}
-            on the row — this closes the request from fee truth and never invents a verification.
-          </p>
-        ) : null}
-
-        {liveStatus === "offline" || liveStatus === "reconnecting" ? (
-          <p className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-            Live updates are temporarily unavailable. Showing the latest successfully loaded data —
-            use Refresh if statuses look stale.
-          </p>
-        ) : null}
-
-        <div className="mb-4 flex flex-wrap gap-1 border-b border-border pb-2">
-          {TABS.map((t) => (
-            <button
-              key={t.id}
-              type="button"
-              className={cn(
-                "rounded px-3 py-1.5 text-xs font-semibold uppercase tracking-wide",
-                tab === t.id ? "bg-navy text-white" : "text-muted-foreground hover:bg-accent",
-              )}
-              onClick={() => setTab(t.id)}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-
-        {actionMsg ? <p className="mb-3 text-xs text-navy">{actionMsg}</p> : null}
-
-        {feeReqQ.isLoading && !feeReqQ.data ? (
-          <p className="text-sm text-muted-foreground">Loading fee-verification requests…</p>
-        ) : feeReqQ.isError ? (
-          <div className="space-y-2">
-            <p className="text-sm text-danger">
-              Unable to load requests. The queue may be out of date. Retry.
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {portalErrorMessage(
-                feeReqQ.error,
-                "Apply migrations 20261020150000–20261020170000 on Supabase if the schema is missing.",
-              )}
-            </p>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => void feeReqQ.refetch()}
-            >
-              Retry
-            </Button>
-          </div>
-        ) : filteredRows.length === 0 ? (
-          allRows.length > 0 ? (
-            <div className="space-y-3">
-              <EmptyState
-                title="No requests in this filter"
-                body="Requests exist in other statuses. Clear the filter or switch tabs."
-              />
-              <Button type="button" size="sm" variant="outline" onClick={() => setTab("open")}>
-                Show Open
+      <div id="fd-fee-verification-panel">
+        <Panel
+          title="Counsellor Fee-Verification Requests"
+          action={
+            <div className="flex flex-wrap items-center gap-2">
+              <LiveBadge status={liveStatus} />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={feeReqQ.isFetching}
+                onClick={() => void feeReqQ.refetch()}
+              >
+                {feeReqQ.isFetching ? "Refreshing…" : "Refresh"}
+              </Button>
+              <Button asChild variant="outline" size="sm">
+                <Link to="/staff/finance">Accounts / Finance</Link>
               </Button>
             </div>
+          }
+        >
+          <p className="mb-3 text-sm text-muted-foreground">
+            Review requests returned by counsellors and coordinate verification with Accounts /
+            Finance. Navigating to Finance alone does not forward a request — use{" "}
+            <span className="font-medium text-navy">Send to Accounts / Finance</span>.
+          </p>
+
+          <div className="mb-4 flex flex-wrap gap-3 text-xs text-muted-foreground">
+            <span>
+              Open: <strong className="text-navy">{feeReqQ.isError ? "—" : openCount}</strong>
+            </span>
+            <span>
+              Awaiting Finance:{" "}
+              <strong className="text-navy">{feeReqQ.isError ? "—" : awaitingCount}</strong>
+            </span>
+            <span>
+              Needs correction:{" "}
+              <strong className="text-navy">{feeReqQ.isError ? "—" : correctionCount}</strong>
+            </span>
+            <span>
+              Completed:{" "}
+              <strong className="text-navy">{feeReqQ.isError ? "—" : completedCount}</strong>
+            </span>
+            {lastSync ? (
+              <span>
+                Last sync: <strong className="text-navy">{lastSync}</strong>
+              </span>
+            ) : null}
+          </div>
+
+          {stuckCount > 0 ? (
+            <p className="mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950">
+              {stuckCount} request{stuckCount === 1 ? "" : "s"} still open while the signup fee
+              already has an Accounts decision. Use{" "}
+              <span className="font-medium">Sync from fee</span> on the row — this closes the
+              request from fee truth and never invents a verification.
+            </p>
+          ) : null}
+
+          {liveStatus === "offline" || liveStatus === "reconnecting" ? (
+            <p className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              Live updates are temporarily unavailable. Showing the latest successfully loaded data
+              — use Refresh if statuses look stale.
+            </p>
+          ) : null}
+
+          <div className="mb-4 flex flex-wrap gap-1 border-b border-border pb-2">
+            {TABS.map((t) => (
+              <button
+                key={t.id}
+                type="button"
+                className={cn(
+                  "rounded px-3 py-1.5 text-xs font-semibold uppercase tracking-wide",
+                  tab === t.id ? "bg-navy text-white" : "text-muted-foreground hover:bg-accent",
+                )}
+                onClick={() => setTab(t.id)}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+
+          {actionMsg ? <p className="mb-3 text-xs text-navy">{actionMsg}</p> : null}
+
+          {feeReqQ.isLoading && !feeReqQ.data ? (
+            <p className="text-sm text-muted-foreground">Loading fee-verification requests…</p>
+          ) : feeReqQ.isError ? (
+            <div className="space-y-2">
+              <p className="text-sm text-danger">
+                Unable to load requests. The queue may be out of date. Retry.
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {portalErrorMessage(
+                  feeReqQ.error,
+                  "Apply migrations 20261020150000–20261020170000 on Supabase if the schema is missing.",
+                )}
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => void feeReqQ.refetch()}
+              >
+                Retry
+              </Button>
+            </div>
+          ) : filteredRows.length === 0 ? (
+            allRows.length > 0 ? (
+              <div className="space-y-3">
+                <EmptyState
+                  title="No requests in this filter"
+                  body="Requests exist in other statuses. Clear the filter or switch tabs."
+                />
+                <Button type="button" size="sm" variant="outline" onClick={() => setTab("open")}>
+                  Show Open
+                </Button>
+              </div>
+            ) : (
+              <EmptyState
+                title="No open fee-verification requests"
+                body="When a counsellor successfully returns a case for signup-fee verification, it appears here. Accounts verifies or waives fees — Front Desk coordinates only."
+              />
+            )
           ) : (
-            <EmptyState
-              title="No open fee-verification requests"
-              body="When a counsellor successfully returns a case for signup-fee verification, it appears here. Accounts verifies or waives fees — Front Desk coordinates only."
-            />
-          )
-        ) : (
-          <TableWrap>
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="px-3 py-2">Student</th>
-                  <th className="px-3 py-2">Counsellor</th>
-                  <th className="px-3 py-2">Summary</th>
-                  <th className="px-3 py-2">Fee</th>
-                  <th className="px-3 py-2">Statuses</th>
-                  <th className="px-3 py-2">Next / actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredRows.map((row) => {
-                  const feeOk = feeStatusAllowsAdmissionHandover(row.signupFeeStatus);
-                  const forwarded = Boolean(row.forwardedAt) || row.status === "in_progress";
-                  const stuck = requestStuckAfterFeeDecision({
-                    requestStatus: row.status,
-                    signupFeeStatus: row.signupFeeStatus,
-                  });
-                  const resolvedWithoutFee = requestCompletedWithoutFeeAuthorization({
-                    requestStatus: row.status,
-                    signupFeeStatus: row.signupFeeStatus,
-                  });
-                  const claim = describeFeeClaimDisplay({
-                    signupFeeStatus: row.signupFeeStatus,
-                    feeAmount: row.feeAmount,
-                    feeCurrency: row.feeCurrency,
-                    feePaymentMethod: row.feePaymentMethod,
-                    feeReferenceReceipt: row.feeReferenceReceipt,
-                  });
-                  return (
-                    <tr key={row.id} className="border-b border-border/60 align-top">
-                      <td className="px-3 py-2">
-                        <div className="font-medium text-navy">{row.fullName}</div>
-                        <div className="text-xs text-muted-foreground">{row.caseId}</div>
-                        <div className="text-[11px] text-muted-foreground">
-                          Submitted {fmtDate(row.createdAt.slice(0, 10))}
-                        </div>
-                      </td>
-                      <td className="px-3 py-2">{row.counsellorName || "—"}</td>
-                      <td className="max-w-[14rem] px-3 py-2 text-xs text-muted-foreground">
-                        {row.summary}
-                        {row.coordinatorNote ? (
-                          <div className="mt-1 text-[11px] text-amber-800">
-                            Note: {row.coordinatorNote}
+            <TableWrap>
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
+                    <th className="px-3 py-2">Student</th>
+                    <th className="px-3 py-2">Counsellor</th>
+                    <th className="px-3 py-2">Summary</th>
+                    <th className="px-3 py-2">Fee</th>
+                    <th className="px-3 py-2">Statuses</th>
+                    <th className="px-3 py-2">Next / actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredRows.map((row) => {
+                    const feeOk = feeStatusAllowsAdmissionHandover(row.signupFeeStatus);
+                    const forwarded = Boolean(row.forwardedAt) || row.status === "in_progress";
+                    const stuck = requestStuckAfterFeeDecision({
+                      requestStatus: row.status,
+                      signupFeeStatus: row.signupFeeStatus,
+                    });
+                    const resolvedWithoutFee = requestCompletedWithoutFeeAuthorization({
+                      requestStatus: row.status,
+                      signupFeeStatus: row.signupFeeStatus,
+                    });
+                    const claim = describeFeeClaimDisplay({
+                      signupFeeStatus: row.signupFeeStatus,
+                      feeAmount: row.feeAmount,
+                      feeCurrency: row.feeCurrency,
+                      feePaymentMethod: row.feePaymentMethod,
+                      feeReferenceReceipt: row.feeReferenceReceipt,
+                    });
+                    return (
+                      <tr key={row.id} className="border-b border-border/60 align-top">
+                        <td className="px-3 py-2">
+                          <div className="font-medium text-navy">{row.fullName}</div>
+                          <div className="text-xs text-muted-foreground">{row.caseId}</div>
+                          <div className="text-[11px] text-muted-foreground">
+                            Submitted {fmtDate(row.createdAt.slice(0, 10))}
                           </div>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2 text-xs">
-                        <div className="capitalize font-medium text-navy">
-                          Fee: {claim.feeStatusLabel}
-                        </div>
-                        <div className="text-muted-foreground">{claim.claimLabel}</div>
-                        {row.feeVerifiedAt ? (
-                          <div className="mt-1 text-[11px] text-muted-foreground">
-                            Decision {fmtDate(row.feeVerifiedAt.slice(0, 10))}
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          Request
-                        </div>
-                        <StatusBadge status={row.status} />
-                        <div className="mt-1 text-[11px] text-muted-foreground">
-                          Updated {fmtDate(row.updatedAt.slice(0, 10))}
-                        </div>
-                        {row.resolvedAt ? (
-                          <div className="mt-1 text-[11px] text-muted-foreground">
-                            Resolved {fmtDate(row.resolvedAt.slice(0, 10))}
-                          </div>
-                        ) : null}
-                        {forwarded && row.status !== "resolved" ? (
-                          <div className="mt-1 text-[11px] font-medium text-navy">
-                            Forwarded to Accounts
-                            {row.forwardedAt ? ` · ${fmtDate(row.forwardedAt.slice(0, 10))}` : ""}
-                          </div>
-                        ) : null}
-                        {!forwarded && row.status === "open" ? (
-                          <div className="mt-1 text-[11px] text-muted-foreground">
-                            Not yet forwarded
-                          </div>
-                        ) : null}
-                        {stuck ? (
-                          <div className="mt-1 text-[11px] font-medium text-amber-900">
-                            Out of sync — fee decided, request still open
-                          </div>
-                        ) : null}
-                        {resolvedWithoutFee ? (
-                          <div className="mt-1 text-[11px] font-medium text-danger">
-                            Request closed but fee gate not satisfied
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2">
-                        <p className="mb-2 text-xs text-muted-foreground">
-                          {feeOk
-                            ? "Fee authorized — counsellor may hand over to Admission"
-                            : resolvedWithoutFee
-                              ? "Do not treat as paid — Accounts must verify or waive"
-                              : stuck
-                                ? "Sync request from fee status, then refresh"
-                                : forwarded
-                                  ? "Awaiting Accounts verify / waive / reject"
-                                  : "Review claim, then send to Accounts / Finance"}
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          <Button asChild size="sm" variant="outline">
-                            <Link
-                              to="/staff/students/$studentId"
-                              params={{ studentId: row.studentId }}
-                              search={{ tab: "assessment" }}
-                            >
-                              View Case
-                            </Link>
-                          </Button>
-                          {stuck ? (
-                            <Button
-                              size="sm"
-                              variant="navy"
-                              disabled={reconcileM.isPending}
-                              onClick={() => {
-                                setActionMsg(null);
-                                reconcileM.mutate(row.studentId);
-                              }}
-                            >
-                              Sync from fee
-                            </Button>
-                          ) : null}
-                          {!stuck &&
-                          (row.status === "open" ||
-                            (row.status === "in_progress" && !row.forwardedAt)) ? (
-                            <Button
-                              size="sm"
-                              variant="navy"
-                              disabled={forwardM.isPending}
-                              onClick={() => {
-                                setActionMsg(null);
-                                forwardM.mutate(row.id);
-                              }}
-                            >
-                              Send to Accounts / Finance
-                            </Button>
-                          ) : null}
-                          {!stuck && (row.status === "open" || row.status === "in_progress") ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setReturnForId(row.id);
-                                setReturnReason("");
-                                setActionMsg(null);
-                              }}
-                            >
-                              Return to Counsellor
-                            </Button>
-                          ) : null}
-                        </div>
-                        {returnForId === row.id ? (
-                          <div className="mt-2 space-y-2 rounded border border-border p-2">
-                            <Textarea
-                              placeholder="Required reason for counsellor (min 5 characters)"
-                              value={returnReason}
-                              onChange={(e) => setReturnReason(e.target.value)}
-                            />
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                disabled={returnM.isPending || returnReason.trim().length < 5}
-                                onClick={() => returnM.mutate()}
-                              >
-                                Confirm return
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setReturnForId(null)}
-                              >
-                                Cancel
-                              </Button>
+                        </td>
+                        <td className="px-3 py-2">{row.counsellorName || "—"}</td>
+                        <td className="max-w-[14rem] px-3 py-2 text-xs text-muted-foreground">
+                          {row.summary}
+                          {row.coordinatorNote ? (
+                            <div className="mt-1 text-[11px] text-amber-800">
+                              Note: {row.coordinatorNote}
                             </div>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-2 text-xs">
+                          <div className="capitalize font-medium text-navy">
+                            Fee: {claim.feeStatusLabel}
                           </div>
-                        ) : null}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </TableWrap>
-        )}
-      </Panel>
+                          <div className="text-muted-foreground">{claim.claimLabel}</div>
+                          {row.feeVerifiedAt ? (
+                            <div className="mt-1 text-[11px] text-muted-foreground">
+                              Decision {fmtDate(row.feeVerifiedAt.slice(0, 10))}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-2">
+                          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            Request
+                          </div>
+                          <StatusBadge status={row.status} />
+                          <div className="mt-1 text-[11px] text-muted-foreground">
+                            Updated {fmtDate(row.updatedAt.slice(0, 10))}
+                          </div>
+                          {row.resolvedAt ? (
+                            <div className="mt-1 text-[11px] text-muted-foreground">
+                              Resolved {fmtDate(row.resolvedAt.slice(0, 10))}
+                            </div>
+                          ) : null}
+                          {forwarded && row.status !== "resolved" ? (
+                            <div className="mt-1 text-[11px] font-medium text-navy">
+                              Forwarded to Accounts
+                              {row.forwardedAt ? ` · ${fmtDate(row.forwardedAt.slice(0, 10))}` : ""}
+                            </div>
+                          ) : null}
+                          {!forwarded && row.status === "open" ? (
+                            <div className="mt-1 text-[11px] text-muted-foreground">
+                              Not yet forwarded
+                            </div>
+                          ) : null}
+                          {stuck ? (
+                            <div className="mt-1 text-[11px] font-medium text-amber-900">
+                              Out of sync — fee decided, request still open
+                            </div>
+                          ) : null}
+                          {resolvedWithoutFee ? (
+                            <div className="mt-1 text-[11px] font-medium text-danger">
+                              Request closed but fee gate not satisfied
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="px-3 py-2">
+                          <p className="mb-2 text-xs text-muted-foreground">
+                            {feeOk
+                              ? "Fee authorized — counsellor may hand over to Admission"
+                              : resolvedWithoutFee
+                                ? "Do not treat as paid — Accounts must verify or waive"
+                                : stuck
+                                  ? "Sync request from fee status, then refresh"
+                                  : forwarded
+                                    ? "Awaiting Accounts verify / waive / reject"
+                                    : "Review claim, then send to Accounts / Finance"}
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            <Button asChild size="sm" variant="outline">
+                              <Link
+                                to="/staff/students/$studentId"
+                                params={{ studentId: row.studentId }}
+                                search={{ tab: "assessment" }}
+                              >
+                                View Case
+                              </Link>
+                            </Button>
+                            {stuck ? (
+                              <Button
+                                size="sm"
+                                variant="navy"
+                                disabled={reconcileM.isPending}
+                                onClick={() => {
+                                  setActionMsg(null);
+                                  reconcileM.mutate(row.studentId);
+                                }}
+                              >
+                                Sync from fee
+                              </Button>
+                            ) : null}
+                            {!stuck &&
+                            (row.status === "open" ||
+                              (row.status === "in_progress" && !row.forwardedAt)) ? (
+                              <Button
+                                size="sm"
+                                variant="navy"
+                                disabled={forwardM.isPending}
+                                onClick={() => {
+                                  setActionMsg(null);
+                                  forwardM.mutate(row.id);
+                                }}
+                              >
+                                Send to Accounts / Finance
+                              </Button>
+                            ) : null}
+                            {!stuck && (row.status === "open" || row.status === "in_progress") ? (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => {
+                                  setReturnForId(row.id);
+                                  setReturnReason("");
+                                  setActionMsg(null);
+                                }}
+                              >
+                                Return to Counsellor
+                              </Button>
+                            ) : null}
+                          </div>
+                          {returnForId === row.id ? (
+                            <div className="mt-2 space-y-2 rounded border border-border p-2">
+                              <Textarea
+                                placeholder="Required reason for counsellor (min 5 characters)"
+                                value={returnReason}
+                                onChange={(e) => setReturnReason(e.target.value)}
+                              />
+                              <div className="flex gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="destructive"
+                                  disabled={returnM.isPending || returnReason.trim().length < 5}
+                                  onClick={() => returnM.mutate()}
+                                >
+                                  Confirm return
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => setReturnForId(null)}
+                                >
+                                  Cancel
+                                </Button>
+                              </div>
+                            </div>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </TableWrap>
+          )}
+        </Panel>
+      </div>
 
       <Panel
         title="Recent registrations"
@@ -545,8 +593,8 @@ function FrontDeskDashboardPage() {
                         row.counsellorName || "Assigned"
                       )}
                     </td>
-                    <td className="px-3 py-2 capitalize">
-                      {row.signupFeeStatus?.replaceAll("_", " ") || "—"}
+                    <td className="px-3 py-2 text-xs">
+                      {describePersistedSignupFeeStatus(row.signupFeeStatus).label}
                     </td>
                     <td className="px-3 py-2 text-muted-foreground">{fmtDate(row.createdAt)}</td>
                   </tr>
