@@ -14,21 +14,23 @@ export type FeeVerificationRequestStatus = (typeof FEE_VERIFICATION_REQUEST_STAT
 
 export const FEE_STATUSES_ALLOWING_ADMISSION_HANDOVER = ["verified", "waived"] as const;
 
-export function feeStatusAllowsAdmissionHandover(
-  status: string | null | undefined,
-): boolean {
+export function feeStatusAllowsAdmissionHandover(status: string | null | undefined): boolean {
   const s = (status ?? "").trim().toLowerCase();
   return (FEE_STATUSES_ALLOWING_ADMISSION_HANDOVER as readonly string[]).includes(s);
 }
 
+/**
+ * Optional counsellor notes for Front Desk. Empty is allowed — server applies a
+ * factual default action label. Non-empty notes have no minimum length.
+ */
 export function validateFeeVerificationRequestSummary(
   summary: string,
 ): { ok: true } | { ok: false; message: string } {
   const t = summary.trim();
-  if (t.length < 10) {
+  if (t.length > 2000) {
     return {
       ok: false,
-      message: "Add a short verification request summary (at least 10 characters).",
+      message: "Keep the verification note under 2000 characters.",
     };
   }
   return { ok: true };
@@ -44,7 +46,10 @@ export function canRequestFeeVerification(input: {
     return { ok: false, message: "You may only request verification for your assigned students." };
   }
   if (!input.hasAssessment) {
-    return { ok: false, message: "Save the eligibility assessment before requesting fee verification." };
+    return {
+      ok: false,
+      message: "Save the eligibility assessment before requesting fee verification.",
+    };
   }
   if (!input.hasConsent) {
     return { ok: false, message: "Record counselling consent before requesting fee verification." };
@@ -76,7 +81,8 @@ export function frontDeskCanSeeFeeVerificationRequest(input: {
   return Boolean(input.isFrontDesk && input.viewerUserId);
 }
 
-export type FeeVerificationQueueTab = "open" | "awaiting_finance" | "needs_correction" | "completed";
+export type FeeVerificationQueueTab =
+  "open" | "awaiting_finance" | "needs_correction" | "completed";
 
 export function feeVerificationTabForStatus(status: string): FeeVerificationQueueTab {
   const s = status.trim().toLowerCase();
@@ -116,8 +122,7 @@ export function requestStuckAfterFeeDecision(input: {
 }): boolean {
   const req = input.requestStatus.trim().toLowerCase();
   return (
-    (req === "open" || req === "in_progress") &&
-    signupFeeIsTerminalDecision(input.signupFeeStatus)
+    (req === "open" || req === "in_progress") && signupFeeIsTerminalDecision(input.signupFeeStatus)
   );
 }
 
@@ -151,9 +156,7 @@ export function describeFeeClaimDisplay(input: {
     ? input.signupFeeStatus!.replaceAll("_", " ")
     : "No fee record";
   const claimBits = [
-    input.feeAmount != null
-      ? `${input.feeCurrency || ""} ${input.feeAmount}`.trim()
-      : null,
+    input.feeAmount != null ? `${input.feeCurrency || ""} ${input.feeAmount}`.trim() : null,
     input.feePaymentMethod,
     input.feeReferenceReceipt ? `Ref: ${input.feeReferenceReceipt}` : null,
   ].filter(Boolean) as string[];

@@ -1011,9 +1011,14 @@ export const portalHandoverToAdmission = createServerFn({ method: "POST" })
         throw new AuthError("You may only hand over your assigned students.", 403);
       }
 
-      const summary = data.summary.trim();
-      if (summary.length < 10) {
-        throw new AuthError("Add a short handover summary (at least 10 characters).", 400);
+      const { DEFAULT_ADMISSION_HANDOVER_SUMMARY, normalizeOptionalActionSummary } =
+        await import("@/lib/counsellor-lifecycle-next");
+      const summary = normalizeOptionalActionSummary(
+        data.summary,
+        DEFAULT_ADMISSION_HANDOVER_SUMMARY,
+      );
+      if (summary.length > 2000) {
+        throw new AuthError("Keep the handover note under 2000 characters.", 400);
       }
 
       const { data: existingSubmitted } = await client
@@ -1145,6 +1150,11 @@ export const portalGetSignupFeeStatus = createServerFn({ method: "GET" })
         return {
           ok: true as const,
           fee: null as SignupFeeView | null,
+          lifecycle: {
+            hasConsent: false,
+            feeRequest: null,
+            handover: null,
+          },
         };
       }
       const client = requireAoSupabaseClient();
@@ -1167,6 +1177,50 @@ export const portalGetSignupFeeStatus = createServerFn({ method: "GET" })
         .eq("id", studentId)
         .maybeSingle();
 
+      const [{ data: agreement }, { data: feeReq }, { data: handover }] = await Promise.all([
+        client
+          .from("counselling_agreements")
+          .select("id, consented")
+          .eq("student_id", studentId)
+          .eq("consented", true)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        client
+          .from("counselling_fee_verification_requests")
+          .select("id, status, summary, updated_at")
+          .eq("student_id", studentId)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+        client
+          .from("admission_handovers")
+          .select("id, status, handed_over_at")
+          .eq("student_id", studentId)
+          .order("handed_over_at", { ascending: false })
+          .limit(1)
+          .maybeSingle(),
+      ]);
+
+      const lifecycle = {
+        hasConsent: Boolean(agreement?.consented),
+        feeRequest: feeReq
+          ? {
+              id: feeReq.id as string,
+              status: String(feeReq.status),
+              summary: String(feeReq.summary ?? ""),
+              updatedAt: (feeReq.updated_at as string | null) ?? null,
+            }
+          : null,
+        handover: handover
+          ? {
+              id: handover.id as string,
+              status: String(handover.status),
+              handedOverAt: (handover.handed_over_at as string | null) ?? null,
+            }
+          : null,
+      };
+
       if (!fee) {
         return {
           ok: true as const,
@@ -1180,6 +1234,7 @@ export const portalGetSignupFeeStatus = createServerFn({ method: "GET" })
             verifiedAt: null,
             portalActivatedAt: stu?.portal_activated_at ?? null,
           } satisfies SignupFeeView,
+          lifecycle,
         };
       }
 
@@ -1196,6 +1251,7 @@ export const portalGetSignupFeeStatus = createServerFn({ method: "GET" })
           portalActivatedAt: stu?.portal_activated_at ?? null,
         } satisfies SignupFeeView,
         feeVerified: isSignupFeeVerified(fee.status),
+        lifecycle,
       };
     } catch (error) {
       toError(error);
@@ -1386,8 +1442,14 @@ export const portalRequestFeeVerification = createServerFn({ method: "POST" })
 
       const { validateFeeVerificationRequestSummary } =
         await import("@/lib/fee-verification-workflow");
-      const summaryCheck = validateFeeVerificationRequestSummary(data.summary);
+      const summaryCheck = validateFeeVerificationRequestSummary(data.summary ?? "");
       if (!summaryCheck.ok) throw new AuthError(summaryCheck.message, 400);
+      const { DEFAULT_FEE_VERIFICATION_SUMMARY, normalizeOptionalActionSummary } =
+        await import("@/lib/counsellor-lifecycle-next");
+      const summary = normalizeOptionalActionSummary(
+        data.summary,
+        DEFAULT_FEE_VERIFICATION_SUMMARY,
+      );
 
       const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb } =
         await import("@/server/ao-data");
@@ -1408,7 +1470,7 @@ export const portalRequestFeeVerification = createServerFn({ method: "POST" })
 
       const { data: row, error } = await client.rpc("request_counselling_fee_verification", {
         p_student_id: data.studentId,
-        p_summary: data.summary.trim(),
+        p_summary: summary,
       });
       if (error) {
         if (/does not exist|function|PGRST202/i.test(error.message)) {

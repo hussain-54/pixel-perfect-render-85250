@@ -51,11 +51,13 @@ describe("fee verification workflow", () => {
     ).toBe(false);
   });
 
-  it("validates summary length and draft eligibility default", () => {
-    expect(validateFeeVerificationRequestSummary("short").ok).toBe(false);
+  it("treats fee-request notes as optional (no min length)", () => {
+    expect(validateFeeVerificationRequestSummary("").ok).toBe(true);
+    expect(validateFeeVerificationRequestSummary("short").ok).toBe(true);
     expect(validateFeeVerificationRequestSummary("Please verify claimed signup fee.").ok).toBe(
       true,
     );
+    expect(validateFeeVerificationRequestSummary("x".repeat(2001)).ok).toBe(false);
     expect(normalizeAssessmentEligibilityForDraft("")).toBe("Pending Review");
     expect(normalizeAssessmentEligibilityForDraft("Good Fit")).toBe("Good Fit");
   });
