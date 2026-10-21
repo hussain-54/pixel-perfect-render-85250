@@ -6,6 +6,7 @@ import {
   ErrorState,
   LoadingRows,
   PageHeader,
+  PageLoadState,
   Panel,
   PermissionDenied,
   StatCard,
@@ -66,23 +67,47 @@ function AdminReports() {
     },
   });
 
-  if (reportQ.isLoading) return <LoadingRows rows={10} />;
+  const reportsTitle = "Reports";
+  const reportsSubtitle =
+    "Persisted aggregates across journey, admissions, finance, HR, marketing and office ops. Missing data shows N/A — never as zero.";
+
+  if (reportQ.isLoading) {
+    return (
+      <PageLoadState title={reportsTitle} subtitle={reportsSubtitle}>
+        <LoadingRows rows={10} />
+      </PageLoadState>
+    );
+  }
   if (reportQ.isError) {
     const msg = portalErrorMessage(reportQ.error);
     if (msg.includes("403") || msg.toLowerCase().includes("permission")) {
-      return <PermissionDenied body={msg} />;
+      return (
+        <PageLoadState title={reportsTitle} subtitle={reportsSubtitle}>
+          <PermissionDenied body={msg} />
+        </PageLoadState>
+      );
     }
-    return <ErrorState body={msg} />;
+    return (
+      <PageLoadState title={reportsTitle} subtitle={reportsSubtitle}>
+        <ErrorState body={msg} onRetry={() => void reportQ.refetch()} />
+      </PageLoadState>
+    );
   }
 
   const data = reportQ.data;
-  if (!data) return <EmptyState title="No report data" />;
+  if (!data) {
+    return (
+      <PageLoadState title={reportsTitle} subtitle={reportsSubtitle}>
+        <EmptyState title="No report data" body="No aggregates were returned for this filter set." />
+      </PageLoadState>
+    );
+  }
 
   return (
     <div>
       <PageHeader
-        title="Reports"
-        subtitle="Persisted aggregates across journey, admissions, finance, HR, marketing and office ops. Missing data shows N/A — never as zero."
+        title={reportsTitle}
+        subtitle={reportsSubtitle}
         actions={
           data.canExport ? (
             <div className="flex flex-wrap gap-2">
@@ -112,6 +137,7 @@ function AdminReports() {
           { to: "/admin/import-export", label: "Import / Export" },
           { to: "/admin/audit-logs", label: "Audit Logs" },
           { to: "/admin/leaderboard", label: "Leaderboard" },
+          { to: "/admin/notifications", label: "Notifications" },
         ]}
       />
 

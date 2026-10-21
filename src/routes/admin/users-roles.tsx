@@ -1,10 +1,9 @@
 import { useMemo } from "react";
-import { createFileRoute, useNavigate, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, useRouterState } from "@tanstack/react-router";
 import { PageHeader, Panel } from "@/components/common";
 import { AdminAccountManagement } from "@/components/portal/AdminAccountManagement";
 import { AdminPermissionMatrix } from "@/components/portal/AdminPermissionMatrix";
 import { AdminModuleSubnav } from "@/components/portal/AdminModuleSubnav";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 const TABS = [
   { id: "users", label: "User Management" },
@@ -28,7 +27,6 @@ export const Route = createFileRoute("/admin/users-roles")({
 });
 
 function AdminUsersRoles() {
-  const navigate = useNavigate();
   const tab = useRouterState({
     select: (s) => parseTab((s.location.search as { tab?: string }).tab),
   });
@@ -43,80 +41,51 @@ function AdminUsersRoles() {
     [],
   );
 
-  const accountFocus =
-    tab === "create"
-      ? "create"
-      : tab === "actions"
-        ? "actions"
-        : tab === "users"
-          ? "directory"
-          : null;
-
   return (
     <div className="space-y-6">
       <PageHeader
         title="Users & Roles"
-        subtitle="Manage portal accounts, business-role permissions, and account actions. Technical admin access is required for changes."
+        subtitle="Manage portal accounts, business-role permissions, and account actions."
       />
       <AdminModuleSubnav items={subnav} />
 
-      <Tabs
-        value={tab}
-        onValueChange={(next) => {
-          void navigate({
-            href: `/admin/users-roles?tab=${encodeURIComponent(parseTab(next))}`,
-          });
-        }}
-      >
-        <TabsList className="mb-4 flex h-auto flex-wrap gap-1">
-          {TABS.map((t) => (
-            <TabsTrigger key={t.id} value={t.id}>
-              {t.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+      {tab === "users" ? (
+        <Panel title="User Management">
+          <p className="mb-4 text-sm text-muted-foreground">
+            Search and update existing portal accounts and business roles.
+          </p>
+          <AdminAccountManagement focus="directory" />
+        </Panel>
+      ) : null}
 
-        <TabsContent value="users" className="space-y-4">
-          <Panel title="User Management">
-            <p className="mb-4 text-sm text-muted-foreground">
-              Search, filter, review existing portal accounts, and update business roles without
-              creating duplicates.
-            </p>
-            {accountFocus === "directory" ? <AdminAccountManagement focus="directory" /> : null}
-          </Panel>
-        </TabsContent>
+      {tab === "create" ? (
+        <Panel title="Create User Account">
+          <p className="mb-4 text-sm text-muted-foreground">
+            Provision a new Auth user with an app role and business role. Existing emails are
+            rejected.
+          </p>
+          <AdminAccountManagement focus="create" />
+        </Panel>
+      ) : null}
 
-        <TabsContent value="create" className="space-y-4">
-          <Panel title="Create User Account">
-            <p className="mb-4 text-sm text-muted-foreground">
-              Provision a new Auth user with an app role and business role. Existing emails are
-              rejected.
-            </p>
-            {accountFocus === "create" ? <AdminAccountManagement focus="create" /> : null}
-          </Panel>
-        </TabsContent>
+      {tab === "roles" ? (
+        <Panel title="Roles & Permissions">
+          <p className="mb-4 text-sm text-muted-foreground">
+            Approved business-role matrix. Edits persist when the live permissions table is
+            available.
+          </p>
+          <AdminPermissionMatrix />
+        </Panel>
+      ) : null}
 
-        <TabsContent value="roles" className="space-y-4">
-          <Panel title="Roles & Permissions">
-            <p className="mb-4 text-sm text-muted-foreground">
-              Approved 10×12 business-role matrix. Edits persist to{" "}
-              <code className="text-xs">business_module_permissions</code> when the live table is
-              available.
-            </p>
-            <AdminPermissionMatrix />
-          </Panel>
-        </TabsContent>
-
-        <TabsContent value="actions" className="space-y-4">
-          <Panel title="Account Actions">
-            <p className="mb-4 text-sm text-muted-foreground">
-              Reset passwords, revoke sessions, update consultant desk status, and reassign business
-              roles from the account list.
-            </p>
-            {accountFocus === "actions" ? <AdminAccountManagement focus="actions" /> : null}
-          </Panel>
-        </TabsContent>
-      </Tabs>
+      {tab === "actions" ? (
+        <Panel title="Account Actions">
+          <p className="mb-4 text-sm text-muted-foreground">
+            Reset passwords, revoke sessions, update consultant desk status, and reassign roles.
+          </p>
+          <AdminAccountManagement focus="actions" />
+        </Panel>
+      ) : null}
     </div>
   );
 }

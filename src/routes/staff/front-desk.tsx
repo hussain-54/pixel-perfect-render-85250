@@ -7,6 +7,7 @@ import {
   ErrorState,
   LoadingRows,
   PageHeader,
+  PageLoadState,
   Panel,
   PermissionDenied,
   StatCard,
@@ -130,18 +131,46 @@ function FrontDeskDashboardPage() {
     }),
   ).length;
 
-  if (dashQ.isLoading) return <LoadingRows rows={6} />;
+  const fdTitle = "Front Desk & Student Affairs";
+
+  if (dashQ.isLoading) {
+    return (
+      <PageLoadState title={fdTitle}>
+        <LoadingRows rows={6} />
+      </PageLoadState>
+    );
+  }
   if (dashQ.isError) {
     const msg = portalErrorMessage(dashQ.error);
     if (/403|permission|not authorized|front desk/i.test(msg)) {
-      return <PermissionDenied body={msg} />;
+      return (
+        <PageLoadState title={fdTitle}>
+          <PermissionDenied body={msg} />
+        </PageLoadState>
+      );
     }
-    return <ErrorState body={msg} />;
+    return (
+      <PageLoadState title={fdTitle}>
+        <ErrorState body={msg} onRetry={() => void dashQ.refetch()} />
+      </PageLoadState>
+    );
   }
 
   const data = dashQ.data;
   if (!data) {
-    return <EmptyState title="No intake data" body="No registrations are available yet." />;
+    return (
+      <PageLoadState title={fdTitle}>
+        <EmptyState
+          title="No intake data"
+          body="No registrations are available yet."
+          action={
+            <Button asChild size="sm">
+              <Link to="/staff/register">Register New Student</Link>
+            </Button>
+          }
+        />
+      </PageLoadState>
+    );
   }
 
   const queueStatValue = feeReqQ.isError

@@ -6,6 +6,7 @@ import {
   ErrorState,
   LoadingRows,
   PageHeader,
+  PageLoadState,
   Panel,
   PermissionDenied,
   StatCard,
@@ -237,14 +238,30 @@ export function FinanceModulePage() {
     (/403|permission/i.test(portalErrorMessage(feesQ.error)) ||
       portalErrorMessage(feesQ.error).includes("403"));
 
+  const financeTitle = "Finance — fees & verification";
+  const financeSubtitle =
+    "Signup/intake and university/application fees are separate ledgers. Claimed is never treated as verified.";
+
   if (ledgerTab === "signup" && signupQ.isLoading && !signupQ.data) {
-    return <LoadingRows rows={8} />;
+    return (
+      <PageLoadState title={financeTitle} subtitle={financeSubtitle}>
+        <LoadingRows rows={8} />
+      </PageLoadState>
+    );
   }
   if (ledgerTab === "university" && feesQ.isLoading && !feesQ.data) {
-    return <LoadingRows rows={8} />;
+    return (
+      <PageLoadState title={financeTitle} subtitle={financeSubtitle}>
+        <LoadingRows rows={8} />
+      </PageLoadState>
+    );
   }
   if (uniBlocked && signupQ.isError) {
-    return <PermissionDenied body={portalErrorMessage(feesQ.error)} />;
+    return (
+      <PageLoadState title={financeTitle} subtitle={financeSubtitle}>
+        <PermissionDenied body={portalErrorMessage(feesQ.error)} />
+      </PageLoadState>
+    );
   }
 
   const pendingCount = signupQ.data?.pendingCount ?? 0;
@@ -257,10 +274,7 @@ export function FinanceModulePage() {
 
   return (
     <div className="space-y-8">
-      <PageHeader
-        title="Finance — fees & verification"
-        subtitle="Signup/intake fees and university/application fees are separate ledgers. An obligation, a claim, and a verification are distinct states."
-      />
+      <PageHeader title={financeTitle} subtitle={financeSubtitle} />
 
       {msg ? <p className="text-sm text-navy">{msg}</p> : null}
 

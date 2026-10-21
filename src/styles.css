@@ -213,6 +213,27 @@
   border-radius: var(--radius-lg);
 }
 
+/* Portal content rhythm — used with PortalShell main padding */
+@utility portal-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  @media (min-width: 768px) {
+    gap: 1.5rem;
+  }
+}
+
+@utility field-control {
+  height: 2.5rem;
+  min-height: 2.5rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--input);
+  background: var(--card);
+  padding-inline: 0.75rem;
+  font-size: 0.875rem;
+  color: var(--navy);
+}
+
 @utility prose-narrow {
   max-width: 36rem;
 }

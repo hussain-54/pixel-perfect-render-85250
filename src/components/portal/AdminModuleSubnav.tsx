@@ -1,4 +1,4 @@
-import { useRouterState } from "@tanstack/react-router";
+import { useNavigate, useRouterState } from "@tanstack/react-router";
 import { cn } from "@/lib/utils";
 
 export type AdminModuleSubnavItem = {
@@ -10,6 +10,7 @@ export type AdminModuleSubnavItem = {
 
 /** Local sub-navigation inside a module landing page (not the main sidebar). */
 export function AdminModuleSubnav({ items }: { items: AdminModuleSubnavItem[] }) {
+  const navigate = useNavigate();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const searchTab = useRouterState({
     select: (s) => {
@@ -33,19 +34,25 @@ export function AdminModuleSubnav({ items }: { items: AdminModuleSubnavItem[] })
     >
       {items.map((item) => {
         const search = item.tab ? `?tab=${encodeURIComponent(item.tab)}` : "";
+        const href = `${item.to}${search}`;
         const active = item.tab
           ? pathname === item.to && searchTab === item.tab
           : pathname === item.to;
         return (
           <a
             key={`${item.to}${search}${item.label}`}
-            href={`${item.to}${search}`}
+            href={href}
+            aria-current={active ? "page" : undefined}
             className={cn(
-              "rounded-md px-3 py-1.5 text-sm font-medium transition-colors",
+              "min-h-9 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal/40",
               active
                 ? "bg-navy text-white"
                 : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
+            onClick={(e) => {
+              e.preventDefault();
+              void navigate({ href });
+            }}
           >
             {item.label}
           </a>

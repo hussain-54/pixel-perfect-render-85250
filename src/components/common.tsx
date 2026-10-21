@@ -13,12 +13,34 @@ export function PageHeader({
   actions?: ReactNode;
 }) {
   return (
-    <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+    <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
       <div className="min-w-0">
-        <h1 className="font-display text-2xl font-semibold text-navy md:text-[1.75rem]">{title}</h1>
-        {subtitle && <p className="mt-1 text-sm text-muted-foreground">{subtitle}</p>}
+        <h1 className="font-display text-xl font-semibold text-navy sm:text-2xl md:text-[1.75rem]">
+          {title}
+        </h1>
+        {subtitle && (
+          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">{subtitle}</p>
+        )}
       </div>
       {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+    </div>
+  );
+}
+
+/** Keep page title visible during loading / error so layout does not jump. */
+export function PageLoadState({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: ReactNode;
+}) {
+  return (
+    <div>
+      <PageHeader title={title} {...(subtitle ? { subtitle } : {})} />
+      {children}
     </div>
   );
 }
@@ -72,25 +94,74 @@ export function Panel({
   );
 }
 
-export function EmptyState({ title, body }: { title: string; body?: string }) {
+export function EmptyState({
+  title,
+  body,
+  action,
+}: {
+  title: string;
+  body?: string;
+  action?: ReactNode;
+}) {
   return (
-    <div className="flex flex-col items-center justify-center py-12 text-center">
-      <Inbox className="h-8 w-8 text-muted-foreground" />
+    <div className="flex flex-col items-center justify-center px-4 py-10 text-center sm:py-12">
+      <Inbox className="h-8 w-8 text-muted-foreground" aria-hidden />
       <p className="mt-3 font-semibold text-navy">{title}</p>
-      {body && <p className="mt-1 max-w-sm text-sm text-muted-foreground">{body}</p>}
+      {body ? <p className="mt-1 max-w-sm text-sm text-muted-foreground">{body}</p> : null}
+      {action ? <div className="mt-4">{action}</div> : null}
     </div>
   );
 }
 
 export function ErrorState({
   body = "Something went wrong loading this data.",
+  onRetry,
 }: {
   body?: string;
+  onRetry?: () => void;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-lg bg-danger-soft p-4 text-sm text-danger">
-      <AlertTriangle className="h-4 w-4" /> {body}
+    <div
+      role="alert"
+      className="flex flex-col gap-3 rounded-lg bg-danger-soft p-4 text-sm text-danger sm:flex-row sm:items-center"
+    >
+      <div className="flex min-w-0 items-start gap-3">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+        <span className="min-w-0 break-words">{body}</span>
+      </div>
+      {onRetry ? (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="shrink-0 rounded-md border border-danger/30 bg-white px-3 py-1.5 text-xs font-semibold text-danger hover:bg-danger-soft focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-danger/40"
+        >
+          Retry
+        </button>
+      ) : null}
     </div>
+  );
+}
+
+/** Shared success / error banner for mutation feedback. */
+export function InlineFeedback({
+  kind,
+  children,
+}: {
+  kind: "ok" | "err" | "warn";
+  children: ReactNode;
+}) {
+  return (
+    <p
+      role="status"
+      className={cn(
+        "rounded-md border px-3 py-2 text-sm",
+        kind === "ok" && "border-emerald-200 bg-emerald-50 text-emerald-900",
+        kind === "err" && "border-destructive/30 bg-destructive/10 text-destructive",
+        kind === "warn" && "border-amber-200 bg-amber-50 text-amber-950",
+      )}
+    >
+      {children}
+    </p>
   );
 }
 
@@ -125,12 +196,34 @@ export function LoadingRows({ rows = 4 }: { rows?: number }) {
   );
 }
 
-/** Horizontal scroll container for tables on small screens. */
-export function TableWrap({ children }: { children: ReactNode }) {
+/** Horizontal scroll container for tables on small screens — scroll inside, do not clip cells globally. */
+export function TableWrap({
+  children,
+  compact = false,
+}: {
+  children: ReactNode;
+  /** Narrower min-width for simpler tables on phones. */
+  compact?: boolean;
+}) {
   return (
     <div className="panel overflow-hidden">
-      <div className="overflow-x-auto [-webkit-overflow-scrolling:touch]">
-        <table className="w-full min-w-[640px] text-left text-sm sm:min-w-[720px] [&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-border [&_th]:bg-transparent [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-[0.6875rem] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.1em] [&_th]:text-muted-foreground sm:[&_th]:px-4 [&_td]:border-t [&_td]:border-border/70 [&_td]:px-3 [&_td]:py-3 [&_td]:align-middle sm:[&_td]:px-4 [&_a]:rounded-sm [&_a]:focus-visible:outline-none [&_a]:focus-visible:ring-2 [&_a]:focus-visible:ring-royal/40 [&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-royal/40 [&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-royal/40">
+      <div
+        className="overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]"
+        role="region"
+        aria-label="Scrollable table"
+        tabIndex={0}
+      >
+        <table
+          className={cn(
+            "w-full text-left text-sm",
+            compact ? "min-w-[480px]" : "min-w-[640px] sm:min-w-[720px]",
+            "[&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-border [&_th]:bg-transparent [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-[0.6875rem] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.1em] [&_th]:text-muted-foreground sm:[&_th]:px-4",
+            "[&_td]:border-t [&_td]:border-border/70 [&_td]:px-3 [&_td]:py-2.5 [&_td]:align-middle sm:[&_td]:px-4 sm:[&_td]:py-3",
+            "[&_a]:rounded-sm [&_a]:focus-visible:outline-none [&_a]:focus-visible:ring-2 [&_a]:focus-visible:ring-royal/40",
+            "[&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-royal/40",
+            "[&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-royal/40",
+          )}
+        >
           {children}
         </table>
       </div>
@@ -194,7 +287,7 @@ export function FilterSelect({
       aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="h-11 rounded-md border border-input bg-white px-3 text-sm text-navy focus:border-royal/50 focus:outline-none focus:ring-2 focus:ring-ring/30"
+      className="h-10 min-h-10 rounded-md border border-input bg-white px-3 text-sm text-navy focus-visible:border-royal/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
     >
       <option value="">{label}: All</option>
       {options.map((o) => (

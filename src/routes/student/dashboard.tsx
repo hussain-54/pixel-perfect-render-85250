@@ -3,7 +3,16 @@ import { Calendar, FileWarning, GraduationCap } from "lucide-react";
 import { JourneyTracker } from "@/components/JourneyTracker";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ActionRequiredBanner, filterActionRequired } from "@/components/portal/ActionRequiredDocs";
-import { PageHeader, Panel, StatCard, fmtDate, ErrorState, LoadingRows } from "@/components/common";
+import {
+  PageHeader,
+  PageLoadState,
+  Panel,
+  StatCard,
+  fmtDate,
+  EmptyState,
+  ErrorState,
+  LoadingRows,
+} from "@/components/common";
 import { useData } from "@/lib/useData";
 import { studentFacingFeeLabel, studentProfileCompletion } from "@/lib/student-portal-account";
 import {
@@ -41,9 +50,33 @@ function StudentDashboard() {
     sid ? getSignupFeeStatus(sid) : Promise.resolve(null),
   );
 
-  if (studentQ.isLoading) return <LoadingRows rows={6} />;
-  if (studentQ.isError || !studentQ.data)
-    return <ErrorState body="Could not load your student profile." />;
+  if (studentQ.isLoading) {
+    return (
+      <PageLoadState title="Student dashboard">
+        <LoadingRows rows={6} />
+      </PageLoadState>
+    );
+  }
+  if (studentQ.isError) {
+    return (
+      <PageLoadState title="Student dashboard">
+        <ErrorState
+          body="Could not load your student profile."
+          onRetry={() => void studentQ.refetch()}
+        />
+      </PageLoadState>
+    );
+  }
+  if (!studentQ.data) {
+    return (
+      <PageLoadState title="Student dashboard">
+        <EmptyState
+          title="Profile not found"
+          body="No student profile is linked to this account."
+        />
+      </PageLoadState>
+    );
+  }
 
   const student = studentQ.data;
   const profile = studentProfileCompletion(student);

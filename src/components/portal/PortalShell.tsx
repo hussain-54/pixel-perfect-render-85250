@@ -434,8 +434,8 @@ export function PortalShell({ role, nav, children, barTitle, session }: PortalSh
             {searchPanel ? <div className="mt-2">{searchPanel}</div> : null}
           </div>
         ) : null}
-        <main className="min-h-0 min-w-0 flex-1 overflow-x-clip overflow-y-auto overscroll-contain p-4 md:p-6 lg:p-7">
-          {children ?? <Outlet />}
+        <main className="portal-main min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4 md:p-6 lg:p-7">
+          <div className="mx-auto w-full max-w-[90rem]">{children ?? <Outlet />}</div>
         </main>
       </div>
     </div>

@@ -12,9 +12,11 @@ import {
 } from "lucide-react";
 import {
   PageHeader,
+  PageLoadState,
   StatCard,
   Panel,
   LoadingRows,
+  EmptyState,
   ErrorState,
   PermissionDenied,
   fmtDate,
@@ -53,25 +55,58 @@ function AdminDashboard() {
     );
   }, [opsQ.data?.searchableStudents, q]);
 
-  if (opsQ.isLoading) return <LoadingRows rows={8} />;
+  const pageTitle = "Operations overview";
+  const pageSubtitle =
+    "Authorized live aggregates across intake, counselling, admissions, documents and finance.";
+
+  if (opsQ.isLoading) {
+    return (
+      <PageLoadState title={pageTitle} subtitle={pageSubtitle}>
+        <LoadingRows rows={8} />
+      </PageLoadState>
+    );
+  }
   if (opsQ.isError) {
     const msg = portalErrorMessage(opsQ.error);
     if (msg.includes("403") || msg.toLowerCase().includes("permission")) {
-      return <PermissionDenied body={msg} />;
+      return (
+        <PageLoadState title={pageTitle} subtitle={pageSubtitle}>
+          <PermissionDenied body={msg} />
+        </PageLoadState>
+      );
     }
-    return <ErrorState body={msg} />;
+    return (
+      <PageLoadState title={pageTitle} subtitle={pageSubtitle}>
+        <ErrorState body={msg} onRetry={() => void opsQ.refetch()} />
+      </PageLoadState>
+    );
   }
 
   const data = opsQ.data;
-  if (!data) return <EmptyFallback />;
+  if (!data) {
+    return (
+      <PageLoadState title={pageTitle} subtitle={pageSubtitle}>
+        <EmptyState
+          title="Overview unavailable"
+          body="No operations data was returned for your session. Try refreshing, or contact an administrator if this continues."
+          action={
+            <button
+              type="button"
+              className="text-sm font-semibold text-royal hover:underline"
+              onClick={() => void opsQ.refetch()}
+            >
+              Refresh
+            </button>
+          }
+        />
+      </PageLoadState>
+    );
+  }
   const m = data.metrics;
 
   return (
     <div>
-      <PageHeader
-        title="Operations overview"
-        subtitle="Authorized live aggregates across intake, counselling, admissions, documents and finance."
-      />
+      <PageHeader title={pageTitle} subtitle={pageSubtitle} />
 
       <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="Active students" value={m.activeStudents} icon={<Users />} />
@@ -209,8 +244,4 @@ function AdminDashboard() {
       </div>
     </div>
   );
-}
-
-function EmptyFallback() {
-  return <ErrorState body="Operations overview unavailable." />;
 }
