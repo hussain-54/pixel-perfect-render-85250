@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  assessmentFormPdfFilename,
   describePersistedSignupFeeStatus,
   displayOrBlank,
   registrationFormPdfFilename,
@@ -20,6 +21,8 @@ describe("registration form A4 helpers", () => {
   it("builds PDF filenames from case ID without personal names", () => {
     expect(registrationFormPdfFilename("GR-MVBOX0HH")).toBe("GR-MVBOX0HH-registration-form");
     expect(registrationFormPdfFilename("GR/TEST 1")).toBe("GR-TEST-1-registration-form");
+    expect(assessmentFormPdfFilename("GR-MVBOX0HH")).toBe("GR-MVBOX0HH-assessment-form");
+    expect(assessmentFormPdfFilename("GR/TEST 1")).toBe("GR-TEST-1-assessment-form");
   });
 
   it("never renders undefined/null as text", () => {

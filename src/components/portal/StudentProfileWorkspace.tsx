@@ -43,6 +43,7 @@ import { cn } from "@/lib/utils";
 import { SearchableSelect } from "@/components/portal/SearchableSelect";
 import { CounsellingAssessmentFormA4 } from "@/components/portal/CounsellingAssessmentFormA4";
 import { validateAssessmentForSave } from "@/lib/counsellor-handover-rules";
+import { printAssessmentFormPdf } from "@/lib/registration-form-a4";
 import {
   counsellorLifecycleProgressSteps,
   DEFAULT_ADMISSION_HANDOVER_SUMMARY,
@@ -263,8 +264,15 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
       setSaveMsg("Save the assessment before printing or downloading.");
       return;
     }
+    if (assessmentDirty) {
+      setSaveMsg(
+        "Save assessment changes before downloading. The PDF uses the last saved version only.",
+      );
+      return;
+    }
     setShowPrintAssessment(true);
-    window.setTimeout(() => window.print(), 80);
+    // Match Front Desk: set Save-as-PDF filename from case ID, then print.
+    window.setTimeout(() => printAssessmentFormPdf(s.caseId), 40);
   };
 
   const noteM = useMutation({
@@ -922,14 +930,24 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 size="sm"
                 disabled={!hasSavedAssessment}
                 onClick={printAssessment}
+                title={
+                  hasSavedAssessment
+                    ? "Save as PDF (enable Background graphics for full colour)"
+                    : "Save the assessment first"
+                }
               >
-                Download PDF
+                Download Assessment (PDF)
               </Button>
               <Button
                 variant="outline"
                 size="sm"
                 disabled={!hasSavedAssessment}
                 onClick={printAssessment}
+                title={
+                  hasSavedAssessment
+                    ? "Print (enable Background graphics for full colour)"
+                    : "Save the assessment first"
+                }
               >
                 Print Assessment
               </Button>
@@ -1319,6 +1337,16 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
 
       <style>{`
       @media print {
+        @page {
+          size: A4 portrait;
+          margin: 8mm;
+        }
+        html, body {
+          background: #fff !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          color-adjust: exact !important;
+        }
         body * { visibility: hidden !important; }
         #counselling-assessment-print-host,
         #counselling-assessment-print-host * { visibility: visible !important; }
@@ -1329,6 +1357,14 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
           left: 0 !important;
           top: 0 !important;
           width: 100% !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          color-adjust: exact !important;
+        }
+        #counselling-assessment-print-host * {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          color-adjust: exact !important;
         }
       }
     `}</style>

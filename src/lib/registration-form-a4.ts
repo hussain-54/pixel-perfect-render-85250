@@ -8,9 +8,18 @@ export function displayOrBlank(value: string | null | undefined, blank = "—"):
   return t || blank;
 }
 
+export function caseDocumentPdfFilename(caseId: string, documentKind: string): string {
+  const safeCase = (caseId || "document").replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "");
+  const safeKind = (documentKind || "form").replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "");
+  return `${safeCase || "document"}-${safeKind || "form"}`;
+}
+
 export function registrationFormPdfFilename(caseId: string): string {
-  const safe = (caseId || "registration").replace(/[^\w.-]+/g, "-").replace(/^-+|-+$/g, "");
-  return `${safe || "registration"}-registration-form`;
+  return caseDocumentPdfFilename(caseId, "registration-form");
+}
+
+export function assessmentFormPdfFilename(caseId: string): string {
+  return caseDocumentPdfFilename(caseId, "assessment-form");
 }
 
 /** Human-readable signup fee status for FD lists and A4 form. */
@@ -59,10 +68,10 @@ export function describePersistedSignupFeeStatus(status: string | null | undefin
  * Note: browsers may still strip background colours unless the user enables
  * “Background graphics” in the print dialog — CSS cannot override that setting.
  */
-export function printRegistrationFormPdf(caseId: string): void {
+export function printCaseDocumentPdf(caseId: string, documentKind: string): void {
   if (typeof window === "undefined" || typeof document === "undefined") return;
   const previous = document.title;
-  document.title = registrationFormPdfFilename(caseId);
+  document.title = caseDocumentPdfFilename(caseId, documentKind);
   const restore = () => {
     document.title = previous;
     window.removeEventListener("afterprint", restore);
@@ -73,4 +82,12 @@ export function printRegistrationFormPdf(caseId: string): void {
     window.print();
     window.setTimeout(restore, 2000);
   }, 120);
+}
+
+export function printRegistrationFormPdf(caseId: string): void {
+  printCaseDocumentPdf(caseId, "registration-form");
+}
+
+export function printAssessmentFormPdf(caseId: string): void {
+  printCaseDocumentPdf(caseId, "assessment-form");
 }

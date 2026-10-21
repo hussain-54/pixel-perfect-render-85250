@@ -36,13 +36,15 @@ describe("CounsellingAssessmentFormA4", () => {
         assessment: sample,
       }),
     );
-    expect(html).toContain("COUNSELLING ASSESSMENT");
+    expect(html).toContain("Counselling Assessment");
     expect(html).toContain("GR-1001");
     expect(html).toContain("Test Student");
     expect(html).toContain("Good Fit");
     expect(html).toContain("Apply to three UK programmes.");
     expect(html).toContain("CONFIDENTIAL");
+    expect(html).toContain("print-color-adjust");
     expect(html).toContain("@page");
     expect(html).toContain("A4");
+    expect(html).toContain("#17365D");
   });
 });
