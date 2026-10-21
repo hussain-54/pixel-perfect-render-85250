@@ -343,7 +343,7 @@ function FrontDeskRegisterPage() {
     <div className="mx-auto max-w-2xl space-y-6">
       <PageHeader
         title="Register student"
-        subtitle="Capture intake details. University applications and visa work happen after counsellor assignment."
+        subtitle="Required fields marked *. Fee claims are not Accounts-verified."
       />
 
       {err ? (
@@ -353,9 +353,9 @@ function FrontDeskRegisterPage() {
       ) : null}
       {desksQ.isError ? <ErrorState body={portalErrorMessage(desksQ.error)} /> : null}
 
-      <form className="space-y-6" onSubmit={onSubmit}>
+      <form className="space-y-4 md:space-y-5" onSubmit={onSubmit}>
         <Panel title="1. Student & contact">
-          <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
             <div className="sm:col-span-2">
               <Label htmlFor="fullName">Full name *</Label>
               <Input
@@ -400,9 +400,7 @@ function FrontDeskRegisterPage() {
                 type="checkbox"
                 checked={form.whatsappSameAsPhone}
                 disabled={submitting}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, whatsappSameAsPhone: e.target.checked }))
-                }
+                onChange={(e) => setForm((f) => ({ ...f, whatsappSameAsPhone: e.target.checked }))}
               />
               <Label htmlFor="whatsappSame">WhatsApp same as phone number</Label>
             </div>

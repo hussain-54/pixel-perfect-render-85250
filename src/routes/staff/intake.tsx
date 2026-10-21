@@ -221,7 +221,7 @@ function FrontDeskIntakeListPage() {
       <div className="fd-intake-no-print space-y-6">
         <PageHeader
           title="My registrations"
-          subtitle="Intake records you registered. Edit permitted fields, archive safely, or download the A4 form. Confidential counsellor files are not shown here."
+          subtitle="Your intake records — view, edit, assign, or download the registration PDF."
           actions={
             <Button asChild>
               <Link to="/staff/register">Register student</Link>
@@ -240,7 +240,7 @@ function FrontDeskIntakeListPage() {
           </p>
         ) : null}
 
-        <Panel title="Search & filters">
+        <Panel title="Find registrations">
           <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <Label htmlFor="fd-search">Search</Label>
@@ -399,11 +399,10 @@ function FrontDeskIntakeListPage() {
               </div>
             }
           >
-            <p className="mb-3 text-xs text-muted-foreground">
-              On-screen form matches the print/PDF layout. In the print dialog, choose “Save as
-              PDF”. Filename defaults to the case ID.
+            <p className="mb-2 text-xs text-muted-foreground">
+              Choose “Save as PDF” and enable background graphics if colours are missing.
             </p>
-            <div className="overflow-x-auto">
+            <div className="overflow-x-auto rounded-lg border border-border">
               <FrontDeskRegistrationFormA4 row={viewRow} mode="view" />
             </div>
           </Panel>
@@ -476,15 +475,15 @@ function FrontDeskIntakeListPage() {
                 <table className="w-full text-left text-sm">
                   <thead>
                     <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
-                      <th className="px-3 py-2">Case</th>
-                      <th className="px-3 py-2">Student</th>
-                      <th className="px-3 py-2">Registered</th>
-                      <th className="px-3 py-2">Counsellor</th>
-                      <th className="px-3 py-2">Fee</th>
-                      <th className="px-3 py-2">Follow-up</th>
-                      <th className="px-3 py-2">Updated</th>
-                      <th className="px-3 py-2">Portal</th>
-                      <th className="px-3 py-2">Actions</th>
+                      <th className="px-2 py-2 sm:px-3">Case</th>
+                      <th className="px-2 py-2 sm:px-3">Student</th>
+                      <th className="hidden px-3 py-2 md:table-cell">Registered</th>
+                      <th className="px-2 py-2 sm:px-3">Counsellor</th>
+                      <th className="px-2 py-2 sm:px-3">Fee</th>
+                      <th className="hidden px-3 py-2 lg:table-cell">Follow-up</th>
+                      <th className="hidden px-3 py-2 xl:table-cell">Updated</th>
+                      <th className="hidden px-3 py-2 lg:table-cell">Portal</th>
+                      <th className="px-2 py-2 sm:px-3">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -495,16 +494,18 @@ function FrontDeskIntakeListPage() {
                       });
                       return (
                         <tr key={row.id} className="border-b border-border/60 align-top">
-                          <td className="px-3 py-2 font-medium text-navy">{row.caseId}</td>
-                          <td className="px-3 py-2">
+                          <td className="px-2 py-2 font-medium text-navy sm:px-3">{row.caseId}</td>
+                          <td className="px-2 py-2 sm:px-3">
                             <div className="font-medium">{row.fullName}</div>
                             <div className="text-xs text-muted-foreground">{row.email}</div>
-                            <div className="text-xs text-muted-foreground">{row.phone}</div>
+                            <div className="text-xs text-muted-foreground md:hidden">
+                              {fmtDate(row.createdAt)}
+                            </div>
                           </td>
-                          <td className="px-3 py-2 text-muted-foreground">
+                          <td className="hidden px-3 py-2 text-muted-foreground md:table-cell">
                             {fmtDate(row.createdAt)}
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="px-2 py-2 sm:px-3">
                             {row.assignmentStatus === "assigned" ? (
                               <span>{row.counsellorName || "Assigned"}</span>
                             ) : (
@@ -535,16 +536,16 @@ function FrontDeskIntakeListPage() {
                               </div>
                             )}
                           </td>
-                          <td className="px-3 py-2 text-xs">
+                          <td className="px-2 py-2 text-xs sm:px-3">
                             {describePersistedSignupFeeStatus(row.signupFeeStatus).label}
                           </td>
-                          <td className="px-3 py-2 text-muted-foreground">
+                          <td className="hidden px-3 py-2 text-muted-foreground lg:table-cell">
                             {row.nextFollowUpAt || "—"}
                           </td>
-                          <td className="px-3 py-2 text-muted-foreground">
+                          <td className="hidden px-3 py-2 text-muted-foreground xl:table-cell">
                             {fmtDate(row.updatedAt)}
                           </td>
-                          <td className="px-3 py-2">
+                          <td className="hidden px-3 py-2 lg:table-cell">
                             <div className="text-xs font-medium text-navy">
                               {studentPortalAccountStatusLabel(portalStatus)}
                             </div>
@@ -561,8 +562,8 @@ function FrontDeskIntakeListPage() {
                               </Button>
                             ) : null}
                           </td>
-                          <td className="px-3 py-2">
-                            <div className="flex min-w-[9rem] flex-col gap-1">
+                          <td className="px-2 py-2 sm:px-3">
+                            <div className="flex min-w-[7.5rem] flex-col gap-1 sm:min-w-[9rem]">
                               <Button
                                 type="button"
                                 size="sm"
@@ -643,17 +644,19 @@ function FrontDeskIntakeListPage() {
       {viewRow ? (
         <style>{`
           @media print {
-            @page { size: A4 portrait; margin: 10mm; }
+            @page { size: A4 portrait; margin: 8mm; }
             html, body {
               background: #fff !important;
               height: auto !important;
               overflow: visible !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
             }
             body * { visibility: hidden !important; }
             #fd-registration-print-root,
             #fd-registration-print-root * { visibility: visible !important; }
             .fd-intake-no-print { display: none !important; }
-            aside, nav, header { display: none !important; }
+            aside, nav, [data-sidebar], header.staff-chrome { display: none !important; }
             #fd-registration-print-root {
               display: block !important;
               position: absolute !important;
@@ -663,6 +666,16 @@ function FrontDeskIntakeListPage() {
               margin: 0 !important;
               padding: 0 !important;
               background: #fff !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+            #fd-registration-print-root .registration-a4-banner {
+              background-color: #17365D !important;
+              color: #fff !important;
+            }
+            #fd-registration-print-root .registration-a4-idbox,
+            #fd-registration-print-root .registration-a4-note {
+              background-color: #F3F6FA !important;
             }
           }
         `}</style>

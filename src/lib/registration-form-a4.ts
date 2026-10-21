@@ -55,6 +55,9 @@ export function describePersistedSignupFeeStatus(status: string | null | undefin
 /**
  * Sets the browser document title used as the default Save-as-PDF filename,
  * then opens print. Restores the previous title afterward.
+ *
+ * Note: browsers may still strip background colours unless the user enables
+ * “Background graphics” in the print dialog — CSS cannot override that setting.
  */
 export function printRegistrationFormPdf(caseId: string): void {
   if (typeof window === "undefined" || typeof document === "undefined") return;
@@ -65,9 +68,9 @@ export function printRegistrationFormPdf(caseId: string): void {
     window.removeEventListener("afterprint", restore);
   };
   window.addEventListener("afterprint", restore);
+  // Allow logo/layout paint before print (helps colour + image fidelity).
   window.setTimeout(() => {
     window.print();
-    // Fallback restore if afterprint is unavailable.
-    window.setTimeout(restore, 1500);
-  }, 50);
+    window.setTimeout(restore, 2000);
+  }, 120);
 }

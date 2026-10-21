@@ -26,7 +26,6 @@ import {
   returnFeeVerificationRequest,
 } from "@/services";
 import { isFrontDeskBusinessRole } from "@/lib/staff-business-access";
-import { workspaceTitleForSession } from "@/lib/workspace-branding";
 import {
   describeFeeClaimDisplay,
   feeStatusAllowsAdmissionHandover,
@@ -156,56 +155,39 @@ function FrontDeskDashboardPage() {
     : null;
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-5 md:space-y-6">
       <PageHeader
-        title={`${workspaceTitleForSession({ portal: "staff", businessRole: "front_desk_student_affairs" })} — ${data.greetingName}`}
-        subtitle="Register students, assign counsellors, and coordinate signup-fee verification."
+        title="Front Desk & Student Affairs"
+        subtitle={data.greetingName}
         actions={
-          <Button asChild>
-            <Link to="/staff/register">
-              <UserPlus className="mr-2 h-4 w-4" />
-              Register New Student
-            </Link>
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild size="sm">
+              <Link to="/staff/register">
+                <UserPlus className="mr-2 h-4 w-4" />
+                Register New Student
+              </Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link to="/staff/intake">My Registrations</Link>
+            </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setTab("awaiting_finance");
+                document
+                  .getElementById("fd-fee-verification-panel")
+                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+            >
+              Fee queue
+            </Button>
+          </div>
         }
       />
 
-      <div className="flex flex-wrap gap-2">
-        <Button asChild size="sm" variant="navy">
-          <Link to="/staff/register">Register New Student</Link>
-        </Button>
-        <Button asChild size="sm" variant="outline">
-          <Link to="/staff/intake">My Registrations</Link>
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => {
-            setTab("awaiting_finance");
-            document
-              .getElementById("fd-fee-verification-panel")
-              ?.scrollIntoView({ behavior: "smooth", block: "start" });
-          }}
-        >
-          Pending Fee Verification
-        </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="outline"
-          onClick={() => {
-            setTab("open");
-            document
-              .getElementById("fd-fee-verification-panel")
-              ?.scrollIntoView({ behavior: "smooth", block: "start" });
-          }}
-        >
-          Counsellor Requests
-        </Button>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard
           label="Total registrations"
           value={String(data.myRegistrations)}
@@ -254,13 +236,7 @@ function FrontDeskDashboardPage() {
             </div>
           }
         >
-          <p className="mb-3 text-sm text-muted-foreground">
-            Review requests returned by counsellors and coordinate verification with Accounts /
-            Finance. Navigating to Finance alone does not forward a request — use{" "}
-            <span className="font-medium text-navy">Send to Accounts / Finance</span>.
-          </p>
-
-          <div className="mb-4 flex flex-wrap gap-3 text-xs text-muted-foreground">
+          <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
             <span>
               Open: <strong className="text-navy">{feeReqQ.isError ? "—" : openCount}</strong>
             </span>
@@ -276,27 +252,18 @@ function FrontDeskDashboardPage() {
               Completed:{" "}
               <strong className="text-navy">{feeReqQ.isError ? "—" : completedCount}</strong>
             </span>
-            {lastSync ? (
-              <span>
-                Last sync: <strong className="text-navy">{lastSync}</strong>
-              </span>
-            ) : null}
+            {lastSync ? <span>Synced {lastSync}</span> : null}
           </div>
 
           {stuckCount > 0 ? (
             <p className="mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950">
-              {stuckCount} request{stuckCount === 1 ? "" : "s"} still open while the signup fee
-              already has an Accounts decision. Use{" "}
-              <span className="font-medium">Sync from fee</span> on the row — this closes the
-              request from fee truth and never invents a verification.
+              {stuckCount} request{stuckCount === 1 ? "" : "s"} out of sync — use Sync from fee (fee
+              already decided).
             </p>
           ) : null}
 
           {liveStatus === "offline" || liveStatus === "reconnecting" ? (
-            <p className="mb-3 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              Live updates are temporarily unavailable. Showing the latest successfully loaded data
-              — use Refresh if statuses look stale.
-            </p>
+            <p className="mb-3 text-xs text-amber-800">Live updates offline — use Refresh.</p>
           ) : null}
 
           <div className="mb-4 flex flex-wrap gap-1 border-b border-border pb-2">
@@ -455,14 +422,14 @@ function FrontDeskDashboardPage() {
                         <td className="px-3 py-2">
                           <p className="mb-2 text-xs text-muted-foreground">
                             {feeOk
-                              ? "Fee authorized — counsellor may hand over to Admission"
+                              ? "Fee authorized"
                               : resolvedWithoutFee
-                                ? "Do not treat as paid — Accounts must verify or waive"
+                                ? "Fee gate not satisfied"
                                 : stuck
-                                  ? "Sync request from fee status, then refresh"
+                                  ? "Out of sync — Sync from fee"
                                   : forwarded
-                                    ? "Awaiting Accounts verify / waive / reject"
-                                    : "Review claim, then send to Accounts / Finance"}
+                                    ? "Awaiting Finance verification"
+                                    : "Send to Accounts when ready"}
                           </p>
                           <div className="flex flex-wrap gap-1.5">
                             <Button asChild size="sm" variant="outline">

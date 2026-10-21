@@ -69,7 +69,7 @@ function paymentMethodBucket(method: string | null | undefined): string {
 function SectionBanner({ title }: { title: string }) {
   return (
     <div
-      className="px-3 py-1.5 text-[11px] font-bold tracking-wide text-white"
+      className="registration-a4-banner px-2.5 py-1 text-[10px] font-bold tracking-wide text-white"
       style={{ backgroundColor: NAVY }}
     >
       {title}
@@ -79,32 +79,31 @@ function SectionBanner({ title }: { title: string }) {
 
 function FieldCell({
   label,
-  hint,
   children,
   full = false,
 }: {
   label: string;
-  hint?: string;
   children: ReactNode;
   full?: boolean;
 }) {
   return (
     <div
-      className={full ? "col-span-2 px-3 py-2" : "px-3 py-2"}
+      className={
+        full ? "registration-a4-cell col-span-2 px-2 py-1" : "registration-a4-cell px-2 py-1"
+      }
       style={{ border: `1px solid ${BORDER}` }}
     >
-      <div className="text-[11px] font-bold" style={{ color: NAVY }}>
+      <div className="text-[9px] font-bold uppercase tracking-wide" style={{ color: NAVY }}>
         {label}
       </div>
-      {hint ? <div className="text-[10px] text-slate-500">{hint}</div> : null}
-      <div className="mt-1 min-h-[1.25rem] text-[12px] leading-snug text-slate-900">{children}</div>
+      <div className="mt-0.5 min-h-[1rem] text-[11px] leading-snug text-slate-900">{children}</div>
     </div>
   );
 }
 
 function ChoiceRow({ options }: { options: { label: string; checked: boolean }[] }) {
   return (
-    <div className="flex flex-wrap gap-x-3 gap-y-1 text-[11px] text-slate-800">
+    <div className="flex flex-wrap gap-x-2.5 gap-y-0.5 text-[10px] text-slate-800">
       {options.map((o) => (
         <span key={o.label}>
           {mark(o.checked)} {o.label}
@@ -116,7 +115,7 @@ function ChoiceRow({ options }: { options: { label: string; checked: boolean }[]
 
 function ValueLine({ value }: { value: string | null | undefined }) {
   const v = value?.trim();
-  return <span className="break-words font-medium">{v || "_______________________________"}</span>;
+  return <span className="break-words font-medium">{v || "—"}</span>;
 }
 
 export function FrontDeskRegistrationFormA4({
@@ -145,58 +144,56 @@ export function FrontDeskRegistrationFormA4({
     <article
       className={
         mode === "print"
-          ? "registration-a4 mx-auto max-w-[210mm] bg-white text-slate-900 print:max-w-none"
+          ? "registration-a4 registration-a4--print mx-auto max-w-[210mm] bg-white text-slate-900"
           : "registration-a4 rounded-lg border border-border bg-white text-slate-900 shadow-sm"
       }
-      style={{ fontFamily: "Aptos, Calibri, 'Segoe UI', sans-serif" }}
+      style={{
+        fontFamily: "Aptos, Calibri, 'Segoe UI', sans-serif",
+        WebkitPrintColorAdjust: "exact",
+        printColorAdjust: "exact",
+      }}
     >
       <header
-        className="flex items-start justify-between gap-4 border-b px-4 pb-3 pt-4"
+        className="registration-a4-header flex items-start justify-between gap-3 border-b px-3 pb-2 pt-3"
         style={{ borderColor: BORDER }}
       >
-        <div>
-          <LogoMark className="h-11 w-auto" />
-          <p className="mt-1 text-[12px] font-semibold" style={{ color: NAVY }}>
+        <div className="min-w-0">
+          <LogoMark className="registration-a4-logo h-9 w-auto" />
+          <p className="mt-0.5 text-[11px] font-semibold" style={{ color: NAVY }}>
             GlobalRoots Consultants
           </p>
-          <h1 className="mt-1 text-[18px] font-bold tracking-tight" style={{ color: NAVY }}>
+          <h1 className="text-[15px] font-bold tracking-tight" style={{ color: NAVY }}>
             Student Registration Form
           </h1>
-          <p className="text-[11px] text-slate-600">
-            Front Desk intake · Counsellor assignment · Signup fee record
-          </p>
         </div>
         <div
-          className="min-w-[9rem] rounded border px-3 py-2 text-right"
+          className="registration-a4-idbox shrink-0 rounded border px-2.5 py-1.5 text-right"
           style={{ borderColor: BORDER, backgroundColor: WASH }}
         >
-          <div
-            className="text-[10px] font-semibold uppercase tracking-wide"
-            style={{ color: NAVY }}
-          >
-            Student / CRM ID
+          <div className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: NAVY }}>
+            Case ID
           </div>
-          <div className="text-[15px] font-bold" style={{ color: NAVY }}>
+          <div className="text-[13px] font-bold" style={{ color: NAVY }}>
             {row.caseId}
           </div>
-          <div className="mt-1 text-[10px] text-slate-500">Registered {fmtDate(row.createdAt)}</div>
+          <div className="text-[9px] text-slate-500">{fmtDate(row.createdAt)}</div>
         </div>
       </header>
 
-      <div className="space-y-3 p-4">
-        <section className="registration-a4-section">
-          <SectionBanner title="1.  STUDENT & CONTACT" />
+      <div className="registration-a4-body space-y-1.5 p-3">
+        <section>
+          <SectionBanner title="1. STUDENT & CONTACT" />
           <div className="grid grid-cols-2">
-            <FieldCell label="Full name *" hint="As per passport / official ID">
+            <FieldCell label="Full name *">
               <ValueLine value={row.fullName} />
             </FieldCell>
             <FieldCell label="Email *">
               <ValueLine value={row.email} />
             </FieldCell>
-            <FieldCell label="Phone number *" hint="+ country code">
+            <FieldCell label="Phone *">
               <ValueLine value={row.phone} />
             </FieldCell>
-            <FieldCell label="WhatsApp same as phone number">
+            <FieldCell label="WhatsApp same as phone">
               <ChoiceRow
                 options={[
                   { label: "Yes", checked: whatsappSame },
@@ -204,7 +201,7 @@ export function FrontDeskRegistrationFormA4({
                 ]}
               />
             </FieldCell>
-            <FieldCell label="WhatsApp number" hint="+ country code">
+            <FieldCell label="WhatsApp">
               <ValueLine value={row.whatsapp} />
             </FieldCell>
             <FieldCell label="City">
@@ -213,8 +210,8 @@ export function FrontDeskRegistrationFormA4({
           </div>
         </section>
 
-        <section className="registration-a4-section">
-          <SectionBanner title="2.  STUDY PREFERENCES" />
+        <section>
+          <SectionBanner title="2. STUDY PREFERENCES" />
           <div className="grid grid-cols-2">
             <FieldCell label="Preferred destination *">
               <ChoiceRow
@@ -228,12 +225,12 @@ export function FrontDeskRegistrationFormA4({
                 ]}
               />
               {dest === "other" || dest === "europe" ? (
-                <div className="mt-1 text-[11px] text-slate-700">
+                <div className="mt-0.5 text-[10px] text-slate-700">
                   Recorded: <ValueLine value={row.destination} />
                 </div>
               ) : null}
             </FieldCell>
-            <FieldCell label="Intended course / programme *">
+            <FieldCell label="Course / programme *">
               <ValueLine value={row.program} />
             </FieldCell>
             <FieldCell label="Study level">
@@ -246,13 +243,8 @@ export function FrontDeskRegistrationFormA4({
                   { label: "Other", checked: level === "other" },
                 ]}
               />
-              {row.studyLevel?.trim() ? (
-                <div className="mt-1 text-[11px] text-slate-700">
-                  Recorded: <ValueLine value={row.studyLevel} />
-                </div>
-              ) : null}
             </FieldCell>
-            <FieldCell label="Intake season">
+            <FieldCell label="Intake">
               <ChoiceRow
                 options={[
                   { label: "Winter", checked: intake.season === "Winter" },
@@ -262,47 +254,44 @@ export function FrontDeskRegistrationFormA4({
                   { label: "Other", checked: intake.season === "Other" },
                 ]}
               />
-            </FieldCell>
-            <FieldCell label="Intake year">
-              <ChoiceRow
-                options={["2026", "2027", "2028", "2029"].map((y) => ({
-                  label: y,
-                  checked: intake.year === y,
-                }))}
-              />
-              {intake.year && !["2026", "2027", "2028", "2029"].includes(intake.year) ? (
-                <div className="mt-1 text-[11px] text-slate-700">
-                  Recorded: <ValueLine value={intake.year} />
-                </div>
-              ) : null}
+              <div className="mt-0.5">
+                <ChoiceRow
+                  options={["2026", "2027", "2028", "2029"].map((y) => ({
+                    label: y,
+                    checked: intake.year === y,
+                  }))}
+                />
+              </div>
             </FieldCell>
             <FieldCell label="Inquiry channel">
               <ChoiceRow
                 options={[
-                  { label: "Physical visit", checked: channel === "physical" },
+                  { label: "Visit", checked: channel === "physical" },
                   { label: "Online", checked: channel === "online" },
                   { label: "Phone", checked: channel === "phone" },
                   { label: "WhatsApp", checked: channel === "whatsapp" },
                   { label: "Referral", checked: channel === "referral" },
-                  { label: "Education expo", checked: channel === "expo" },
-                  { label: "Social media", checked: channel === "social" },
+                  { label: "Expo", checked: channel === "expo" },
+                  { label: "Social", checked: channel === "social" },
                   { label: "Other", checked: channel === "other" },
                 ]}
               />
             </FieldCell>
-            <FieldCell label="Inquiry source" hint="How did the student hear about us?" full>
+            <FieldCell label="Inquiry source">
               <ValueLine value={row.inquirySource} />
             </FieldCell>
-            <FieldCell label="Registration notes" full>
-              <p className="min-h-[2.5rem] whitespace-pre-wrap">
-                {row.registrationNotes?.trim() || "_______________________________"}
-              </p>
-            </FieldCell>
+            {row.registrationNotes?.trim() ? (
+              <FieldCell label="Registration notes" full>
+                <p className="whitespace-pre-wrap text-[10px] leading-snug">
+                  {row.registrationNotes.trim()}
+                </p>
+              </FieldCell>
+            ) : null}
           </div>
         </section>
 
-        <section className="registration-a4-section">
-          <SectionBanner title="3.  SIGNUP FEE  |  Claimed is not Accounts-verified" />
+        <section>
+          <SectionBanner title="3. SIGNUP FEE — Claimed ≠ Verified" />
           <div className="grid grid-cols-2">
             <FieldCell label="Amount">
               <ValueLine value={feeAmount} />
@@ -311,38 +300,27 @@ export function FrontDeskRegistrationFormA4({
               <ChoiceRow
                 options={[
                   { label: "Cash", checked: pay === "cash" },
-                  { label: "Bank transfer", checked: pay === "bank" },
+                  { label: "Bank", checked: pay === "bank" },
                   { label: "Online", checked: pay === "online" },
                   { label: "Other", checked: pay === "other" },
                 ]}
               />
-              {row.signupFeeMethod?.trim() ? (
-                <div className="mt-1 text-[11px] text-slate-700">
-                  Recorded: <ValueLine value={row.signupFeeMethod} />
-                </div>
-              ) : null}
             </FieldCell>
             <FieldCell label="Receipt / reference">
               <ValueLine value={row.signupFeeReference} />
             </FieldCell>
-            <FieldCell label="Fee status (persisted)">
+            <FieldCell label="Fee status">
               <div className="font-semibold" style={{ color: NAVY }}>
                 {feeDisplay.label}
               </div>
               <ChoiceRow
                 options={[
-                  {
-                    label: "Not claimed",
-                    checked: feeDisplay.label === "Not claimed",
-                  },
+                  { label: "Not claimed", checked: feeDisplay.label === "Not claimed" },
                   {
                     label: "Claimed — awaiting Finance",
                     checked: feeDisplay.isClaimedAwaitingFinance,
                   },
-                  {
-                    label: "Verified / Waived by Accounts",
-                    checked: feeDisplay.isAuthorized,
-                  },
+                  { label: "Verified / Waived", checked: feeDisplay.isAuthorized },
                   {
                     label: "Rejected",
                     checked: normalize(row.signupFeeStatus) === "rejected",
@@ -350,29 +328,21 @@ export function FrontDeskRegistrationFormA4({
                 ]}
               />
             </FieldCell>
-            <FieldCell label="Office note" full>
-              <p className="text-[11px] text-slate-600">
-                Claimed is a reported payment only. Verified and Waived are Accounts decisions.
-                Front Desk does not verify fees.
-              </p>
-            </FieldCell>
           </div>
         </section>
 
-        <section className="registration-a4-section">
-          <SectionBanner title="4.  COUNSELLOR ASSIGNMENT" />
+        <section>
+          <SectionBanner title="4. COUNSELLOR ASSIGNMENT" />
           <div className="grid grid-cols-2">
             <FieldCell label="Assigned counsellor">
               <ChoiceRow
                 options={[
                   {
-                    label: "Pending assignment",
+                    label: "Pending",
                     checked: row.assignmentStatus === "pending",
                   },
                   {
-                    label: row.counsellorName
-                      ? `${row.counsellorName} — Counselling`
-                      : "Assigned counsellor",
+                    label: row.counsellorName || "Assigned",
                     checked: row.assignmentStatus === "assigned",
                   },
                 ]}
@@ -383,7 +353,7 @@ export function FrontDeskRegistrationFormA4({
                 value={row.assignmentStatus === "assigned" ? fmtDate(row.updatedAt) : null}
               />
             </FieldCell>
-            <FieldCell label="Registered / assigned by">
+            <FieldCell label="Registered by">
               <ValueLine value={displayOrBlank(row.registrarName, "") || null} />
             </FieldCell>
             <FieldCell label="Workflow stage">
@@ -392,67 +362,102 @@ export function FrontDeskRegistrationFormA4({
           </div>
         </section>
 
-        <div
-          className="rounded px-3 py-2 text-[10px] leading-relaxed"
-          style={{ backgroundColor: WASH, color: NAVY }}
-        >
-          <strong>WORKFLOW NOTE</strong> | This form captures initial intake details only.
-          University applications and visa work begin after counsellor assignment. Signup fee claims
-          are recorded only as reported; Accounts verification is separate and restricted to
-          Accounts staff.
-        </div>
-
-        <section className="registration-a4-section">
-          <SectionBanner title="5.  OFFICE USE ONLY" />
+        <section>
+          <SectionBanner title="5. OFFICE USE" />
           <div className="grid grid-cols-2">
-            <FieldCell label="Student / CRM ID">
+            <FieldCell label="Case ID">
               <ValueLine value={row.caseId} />
             </FieldCell>
             <FieldCell label="Registration date">
               <ValueLine value={fmtDate(row.createdAt)} />
             </FieldCell>
-            <FieldCell label="Record created by">
+            <FieldCell label="Created by">
               <ValueLine value={row.registrarName || row.registeredBy} />
             </FieldCell>
-            <FieldCell label="Next follow-up date">
+            <FieldCell label="Next follow-up">
               <ValueLine
                 value={row.nextFollowUpAt ? fmtDate(row.nextFollowUpAt.slice(0, 10)) : null}
               />
             </FieldCell>
           </div>
         </section>
+
+        <p
+          className="registration-a4-note rounded px-2 py-1 text-[9px] leading-snug"
+          style={{ backgroundColor: WASH, color: NAVY }}
+        >
+          Intake only. Claimed fees await Accounts verification. Applications begin after counsellor
+          assignment.
+        </p>
       </div>
 
-      <footer
-        className="registration-a4-footer flex items-center justify-between border-t px-4 py-2 text-[10px] text-slate-500"
-        style={{ borderColor: BORDER }}
-      >
-        <span>GlobalRoots Consultants · Confidential office record</span>
-        <span className="registration-a4-page" />
-      </footer>
-
       <style>{`
+        .registration-a4 {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          color-adjust: exact !important;
+        }
+        .registration-a4 *,
+        .registration-a4 *::before,
+        .registration-a4 *::after {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+          color-adjust: exact !important;
+          box-sizing: border-box;
+        }
+        .registration-a4-banner {
+          background-color: ${NAVY} !important;
+          color: #fff !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        .registration-a4-idbox {
+          background-color: ${WASH} !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        .registration-a4-note {
+          background-color: ${WASH} !important;
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+        .registration-a4-cell {
+          border-color: ${BORDER} !important;
+        }
+        .registration-a4-logo {
+          -webkit-print-color-adjust: exact !important;
+          print-color-adjust: exact !important;
+        }
+
         @media print {
           @page {
             size: A4 portrait;
-            margin: 12mm 12mm 16mm 12mm;
-            @bottom-center {
-              content: "Page " counter(page) " of " counter(pages);
-              font-size: 9pt;
-              color: #64748b;
-            }
+            margin: 8mm;
           }
           .registration-a4 {
+            width: 100% !important;
+            max-width: none !important;
+            margin: 0 !important;
             box-shadow: none !important;
             border: none !important;
-            max-width: none !important;
+            border-radius: 0 !important;
           }
-          .registration-a4-section {
-            break-inside: avoid;
-            page-break-inside: avoid;
+          .registration-a4-header {
+            padding: 0 0 6px 0 !important;
           }
-          .registration-a4-footer {
-            display: none !important;
+          .registration-a4-body {
+            padding: 6px 0 0 0 !important;
+            gap: 4px !important;
+          }
+          .registration-a4-body.space-y-1\\.5 > :not([hidden]) ~ :not([hidden]) {
+            margin-top: 4px !important;
+          }
+          .registration-a4-cell {
+            padding: 3px 6px !important;
+          }
+          .registration-a4-banner {
+            padding: 3px 8px !important;
+            font-size: 9px !important;
           }
         }
       `}</style>
