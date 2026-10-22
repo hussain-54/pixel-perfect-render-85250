@@ -13,6 +13,8 @@ import { specialtyOnlyPathAllowed } from "@/lib/specialty-desk-access";
 import { buildStaffNav } from "@/lib/staff-nav";
 import type { PermissionMatrix } from "@/lib/business-permissions";
 import { cloneDefaultPermissionMatrix } from "@/lib/business-permissions";
+import { STAFF_EFFECTIVE_ACCESS_QUERY_KEY } from "@/lib/permission-matrix-realtime-rules";
+import { usePermissionMatrixRealtime } from "@/lib/use-permission-matrix-realtime";
 import { workspaceDocumentTitle } from "@/lib/workspace-branding";
 import type { PublicSession } from "@/server/portal-data";
 import { getEffectiveStaffAccess } from "@/services";
@@ -87,12 +89,12 @@ function StaffPortalLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   /**
-   * Live effective-access query — same key Admin invalidates after matrix saves.
-   * Refetch on focus + short interval so grant/revoke propagates without logout.
+   * Effective-access query — Realtime + Admin invalidation are primary refresh;
+   * window focus + 30s interval remain reliability fallbacks.
    * Authorization still re-checked on every server mutation via requireModulePermission.
    */
   const accessQ = useQuery({
-    queryKey: ["staff", "effective-access"],
+    queryKey: [...STAFF_EFFECTIVE_ACCESS_QUERY_KEY],
     queryFn: getEffectiveStaffAccess,
     initialData: {
       businessRole: ctx.auth?.businessRole ?? null,
@@ -100,7 +102,7 @@ function StaffPortalLayout() {
       source: ctx.matrixSource,
       specialtyPaths: [] as string[],
     },
-    staleTime: 10_000,
+    staleTime: 0,
     refetchOnWindowFocus: true,
     refetchInterval: 30_000,
   });
@@ -108,6 +110,11 @@ function StaffPortalLayout() {
   const businessRole = accessQ.data?.businessRole ?? ctx.auth?.businessRole ?? null;
   const matrix = accessQ.data?.matrix ?? ctx.permissionMatrix;
   const nav = buildStaffNav(businessRole, matrix);
+
+  usePermissionMatrixRealtime({
+    enabled: ctx.auth?.source === "supabase" && Boolean(businessRole),
+    businessRole,
+  });
 
   useEffect(() => {
     if (!accessQ.isFetched && !accessQ.isSuccess) return;

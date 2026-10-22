@@ -109,9 +109,9 @@ export function isFrontDeskDeniedPath(
   // Bare /staff index is OK (layout); dashboard itself is denied and redirects to front-desk.
   if (path === "/staff" || path === "/staff/") return false;
 
-  // Reports + Digital Marketing stay hard-denied for Front Desk (product/server denies).
+  // Reports stay hard-denied for Front Desk (CRM analytics; server handlers deny).
+  // Digital Marketing / Banking / Fees / HR / Ops follow the Admin-persisted matrix.
   if (path === "/staff/reports" || path.startsWith("/staff/reports/")) return true;
-  if (path === "/staff/marketing" || path.startsWith("/staff/marketing/")) return true;
 
   const specialtyModule = specialtyModuleForPath(path);
   if (specialtyModule) {

@@ -247,7 +247,7 @@ export const portalUpdatePermissionMatrixCell = createServerFn({ method: "POST" 
       const nextLabel = PERMISSION_LEVEL_LABELS[validated.level];
       return {
         ok: true as const,
-        message: `Saved ${moduleLabel} for ${roleLabel}: ${prevLabel} → ${nextLabel}. Staff portals refresh on window focus or within ~30s (no logout required).`,
+        message: `Saved ${moduleLabel} for ${roleLabel}: ${prevLabel} → ${nextLabel}. Staff portals refresh via Realtime (typically 1–2s); focus/30s polling remain fallbacks.`,
         previousLevel,
         refreshPending: true as const,
         cell: {

@@ -97,14 +97,14 @@ describe("role security regression", () => {
     ).toBe(true);
   });
 
-  it("Front Desk cannot view/mutate marketing despite matrix View=1", () => {
+  it("Front Desk marketing follows matrix: default View allows view, not mutate", () => {
     expect(getPermissionLevel("front_desk_student_affairs", "digital_marketing")).toBe(1);
     expect(
       canViewMarketing({
         appRole: "consultant",
         businessRole: "front_desk_student_affairs",
       }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       canMutateMarketing({
         appRole: "consultant",
@@ -132,9 +132,7 @@ describe("role security regression", () => {
         businessRole: "counsellor_consultant",
       }),
     ).toBe(false);
-    expect(
-      canViewConsultantLeaderboard({ appRole: "admin", businessRole: "admin" }),
-    ).toBe(true);
+    expect(canViewConsultantLeaderboard({ appRole: "admin", businessRole: "admin" })).toBe(true);
   });
 
   it("documents default matrix: FD/counsellor Edit; student View; accounts none", () => {

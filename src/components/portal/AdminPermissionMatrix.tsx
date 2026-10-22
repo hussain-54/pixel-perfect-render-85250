@@ -11,6 +11,10 @@ import {
   type PermissionLevel,
 } from "@/lib/business-permissions";
 import { cn } from "@/lib/utils";
+import {
+  ADMIN_PERMISSION_MATRIX_QUERY_KEY,
+  STAFF_EFFECTIVE_ACCESS_QUERY_KEY,
+} from "@/lib/permission-matrix-realtime-rules";
 import { getPermissionMatrix, updatePermissionMatrixCell } from "@/services";
 
 const LEVELS: PermissionLevel[] = [0, 1, 2, 3];
@@ -59,7 +63,7 @@ export function AdminPermissionMatrix() {
   const [err, setErr] = useState<string | null>(null);
 
   const matrixQ = useQuery({
-    queryKey: ["admin", "permission-matrix"],
+    queryKey: [...ADMIN_PERMISSION_MATRIX_QUERY_KEY],
     queryFn: getPermissionMatrix,
     staleTime: 15_000,
   });
@@ -80,9 +84,11 @@ export function AdminPermissionMatrix() {
       setMsg(`${result.message}${pending}`);
       setEditing(null);
       // Refresh Admin matrix UI and staff shells that subscribe to effective-access.
+      // Immediate local refresh; other staff sessions rely on Realtime + refetch.
       await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["admin", "permission-matrix"] }),
-        queryClient.invalidateQueries({ queryKey: ["staff", "effective-access"] }),
+        queryClient.invalidateQueries({ queryKey: [...ADMIN_PERMISSION_MATRIX_QUERY_KEY] }),
+        queryClient.invalidateQueries({ queryKey: [...STAFF_EFFECTIVE_ACCESS_QUERY_KEY] }),
+        queryClient.refetchQueries({ queryKey: [...ADMIN_PERMISSION_MATRIX_QUERY_KEY] }),
         queryClient.invalidateQueries({ queryKey: ["portal", "auth-session"] }),
       ]);
     },

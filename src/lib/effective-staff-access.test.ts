@@ -9,12 +9,15 @@ import {
   specialtyNavFromEffectiveMatrix,
   isFrontDeskSpecialtyHardDenyPath,
 } from "./effective-staff-access";
-import { isFrontDeskDeniedPath } from "./staff-business-access";
+import { isFrontDeskDeniedPath, canVerifySignupFeeAction } from "./staff-business-access";
 import { buildStaffNav } from "./staff-nav";
-import { canVerifySignupFeeAction } from "./staff-business-access";
+import { canMutateMarketing, canViewMarketing } from "./marketing-rules";
+import { assertModulePermission } from "@/server/staff-access";
+import { AuthError } from "@/server/portal-auth";
+import type { TrustedSession } from "@/server/portal-auth";
 
 function withFrontDeskCell(
-  module: "fees_payments" | "banking_finance",
+  module: "fees_payments" | "banking_finance" | "digital_marketing",
   level: 0 | 1 | 2 | 3,
 ): PermissionMatrix {
   return mergePermissionMatrixCells(
@@ -23,7 +26,19 @@ function withFrontDeskCell(
   );
 }
 
-describe("effective staff access — Front Desk Finance grant/revoke", () => {
+function session(
+  businessRole: NonNullable<TrustedSession["businessRole"]> | null,
+): TrustedSession {
+  return {
+    email: "fd@example.com",
+    source: "demo",
+    userId: "u-fd",
+    role: "consultant",
+    businessRole,
+  };
+}
+
+describe("effective staff access — Front Desk grant/revoke + open-session semantics", () => {
   it("Scenario A: grant banking_finance View → nav + path allow; verify still denied", () => {
     const matrix = withFrontDeskCell("banking_finance", 1);
 
@@ -34,75 +49,121 @@ describe("effective staff access — Front Desk Finance grant/revoke", () => {
     const nav = specialtyNavFromEffectiveMatrix("front_desk_student_affairs", matrix).map(
       (i) => i.to,
     );
-    expect(nav).toContain("/staff/finance"); // default fees View
+    expect(nav).toContain("/staff/finance");
     expect(nav).toContain("/staff/banking");
-    expect(nav).not.toContain("/staff/reports"); // hard-deny
-    expect(nav).not.toContain("/staff/marketing"); // product deny
+    expect(nav).not.toContain("/staff/reports");
 
     expect(isFrontDeskDeniedPath("/staff/banking", matrix, "front_desk_student_affairs")).toBe(
       false,
     );
-    expect(isFrontDeskDeniedPath("/staff/finance", matrix, "front_desk_student_affairs")).toBe(
-      false,
+
+    expect(buildStaffNav("front_desk_student_affairs", matrix).map((i) => i.to)).toEqual(
+      expect.arrayContaining(["/staff/front-desk", "/staff/banking", "/staff/finance"]),
     );
 
-    const sidebar = buildStaffNav("front_desk_student_affairs", matrix).map((i) => i.to);
-    expect(sidebar).toEqual(
-      expect.arrayContaining([
-        "/staff/front-desk",
-        "/staff/register",
-        "/staff/intake",
-        "/staff/finance",
-        "/staff/banking",
-      ]),
-    );
-
-    // Verification remains a separate gate — matrix View does not unlock verify.
     expect(
       canVerifySignupFeeAction({
         appRole: "consultant",
         businessRole: "front_desk_student_affairs",
       }),
     ).toBe(false);
+
+    expect(() =>
+      assertModulePermission(
+        session("front_desk_student_affairs"),
+        "banking_finance",
+        1,
+        "banking",
+        matrix,
+      ),
+    ).not.toThrow();
   });
 
-  it("Scenario B: revoke banking_finance → nav + path deny", () => {
+  it("Scenario B: revoke banking_finance → nav + path + server deny", () => {
     const matrix = withFrontDeskCell("banking_finance", 0);
-
-    const nav = specialtyNavFromEffectiveMatrix("front_desk_student_affairs", matrix).map(
-      (i) => i.to,
+    expect(buildStaffNav("front_desk_student_affairs", matrix).map((i) => i.to)).not.toContain(
+      "/staff/banking",
     );
-    expect(nav).not.toContain("/staff/banking");
     expect(isFrontDeskDeniedPath("/staff/banking", matrix, "front_desk_student_affairs")).toBe(
       true,
     );
-
-    const sidebar = buildStaffNav("front_desk_student_affairs", matrix).map((i) => i.to);
-    expect(sidebar).not.toContain("/staff/banking");
-    expect(sidebar).toContain("/staff/front-desk");
+    expect(() =>
+      assertModulePermission(
+        session("front_desk_student_affairs"),
+        "banking_finance",
+        1,
+        "banking",
+        matrix,
+      ),
+    ).toThrow(AuthError);
   });
 
-  it("Scenario A2: grant fees_payments View when previously revoked → finance nav + path", () => {
-    const matrix = withFrontDeskCell("fees_payments", 1);
+  it("Scenario A3: grant digital_marketing View → nav + path; mutate still denied", () => {
+    const matrix = withFrontDeskCell("digital_marketing", 1);
     expect(
-      getPermissionLevelFromMatrix(matrix, "front_desk_student_affairs", "fees_payments"),
+      getPermissionLevelFromMatrix(matrix, "front_desk_student_affairs", "digital_marketing"),
     ).toBe(1);
-    expect(isFrontDeskDeniedPath("/staff/finance", matrix, "front_desk_student_affairs")).toBe(
+
+    expect(
+      specialtyNavFromEffectiveMatrix("front_desk_student_affairs", matrix).map((i) => i.to),
+    ).toContain("/staff/marketing");
+    expect(isFrontDeskDeniedPath("/staff/marketing", matrix, "front_desk_student_affairs")).toBe(
       false,
     );
     expect(buildStaffNav("front_desk_student_affairs", matrix).map((i) => i.to)).toContain(
-      "/staff/finance",
+      "/staff/marketing",
     );
+
+    expect(
+      canViewMarketing({
+        appRole: "consultant",
+        businessRole: "front_desk_student_affairs",
+      }),
+    ).toBe(true);
+    expect(
+      canMutateMarketing({
+        appRole: "consultant",
+        businessRole: "front_desk_student_affairs",
+      }),
+    ).toBe(false);
+
+    expect(() =>
+      assertModulePermission(
+        session("front_desk_student_affairs"),
+        "digital_marketing",
+        1,
+        "marketing",
+        matrix,
+      ),
+    ).not.toThrow();
+    expect(() =>
+      assertModulePermission(
+        session("front_desk_student_affairs"),
+        "digital_marketing",
+        2,
+        "marketing edit",
+        matrix,
+      ),
+    ).toThrow(AuthError);
   });
 
-  it("Scenario B2: revoke fees_payments → finance nav + path deny", () => {
-    const matrix = withFrontDeskCell("fees_payments", 0);
-    expect(isFrontDeskDeniedPath("/staff/finance", matrix, "front_desk_student_affairs")).toBe(
+  it("Scenario B3: revoke digital_marketing → nav + path deny", () => {
+    const matrix = withFrontDeskCell("digital_marketing", 0);
+    expect(buildStaffNav("front_desk_student_affairs", matrix).map((i) => i.to)).not.toContain(
+      "/staff/marketing",
+    );
+    expect(isFrontDeskDeniedPath("/staff/marketing", matrix, "front_desk_student_affairs")).toBe(
       true,
     );
-    expect(buildStaffNav("front_desk_student_affairs", matrix).map((i) => i.to)).not.toContain(
-      "/staff/finance",
-    );
+    expect(() =>
+      assertModulePermission(
+        session("front_desk_student_affairs"),
+        "digital_marketing",
+        1,
+        "marketing",
+        matrix,
+      ),
+    ).toThrow(AuthError);
   });
 
   it("Scenario C: one role's matrix cells do not invent another role's grants", () => {

@@ -23,10 +23,10 @@ describe("digital marketing rules", () => {
     expect(canViewMarketing({ appRole: "consultant", businessRole: "counsellor_consultant" })).toBe(
       false,
     );
-    // Product deny overrides matrix View=1 for Front Desk.
+    // Default matrix grants Front Desk View (not Edit) on digital_marketing.
     expect(
       canViewMarketing({ appRole: "consultant", businessRole: "front_desk_student_affairs" }),
-    ).toBe(false);
+    ).toBe(true);
     expect(
       canMutateMarketing({ appRole: "consultant", businessRole: "front_desk_student_affairs" }),
     ).toBe(false);

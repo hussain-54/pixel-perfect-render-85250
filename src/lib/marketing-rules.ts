@@ -16,8 +16,7 @@ export function canViewMarketing(input: {
   businessRole: BusinessRole | null;
 }): boolean {
   if (rolesAtLeastAdmin(input.appRole)) return true;
-  // Product deny: Front Desk must not use Digital Marketing (even if matrix View=1).
-  if (input.businessRole === "front_desk_student_affairs") return false;
+  // Compile-time defaults / UI hints — server uses requireModulePermission (DB matrix).
   return canViewModule(input.businessRole, "digital_marketing");
 }
 
@@ -26,8 +25,8 @@ export function canMutateMarketing(input: {
   businessRole: BusinessRole | null;
 }): boolean {
   if (rolesAtLeastAdmin(input.appRole)) return true;
-  if (input.businessRole === "front_desk_student_affairs") return false;
   if (input.businessRole === "digital_manager" || input.businessRole === "manager") return true;
+  // Front Desk (and others): Edit+ only — View never unlocks mutate / attribution.
   return canEditModule(input.businessRole, "digital_marketing");
 }
 

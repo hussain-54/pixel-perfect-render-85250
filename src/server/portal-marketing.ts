@@ -23,11 +23,7 @@ import {
   type BusinessRole,
 } from "@/lib/business-permissions";
 import { rolesAtLeastAdmin } from "@/lib/roles";
-import {
-  businessRoleFromSession,
-  denyFrontDeskConsultantWorkflows,
-  requireModulePermission,
-} from "@/server/staff-access";
+import { businessRoleFromSession, requireModulePermission } from "@/server/staff-access";
 import { loadAuthorizationMatrix } from "@/server/permission-matrix-store";
 
 function toError(error: unknown): never {
@@ -56,12 +52,12 @@ async function resolveSessionBusinessRole(session: TrustedSession): Promise<Busi
 }
 
 async function requireMarketingView(session: TrustedSession) {
-  denyFrontDeskConsultantWorkflows(session, "Digital Marketing");
+  // Matrix-driven: Admin may grant Front Desk View. Server loads DB matrix.
   await requireModulePermission(session, "digital_marketing", 1, "Digital Marketing");
 }
 
 async function requireMarketingMutate(session: TrustedSession) {
-  denyFrontDeskConsultantWorkflows(session, "Digital Marketing changes");
+  // View never unlocks mutate — Edit (2+) required via persisted matrix.
   await requireModulePermission(session, "digital_marketing", 2, "Digital Marketing changes");
 }
 
@@ -359,9 +355,14 @@ export const portalAttributeInquiryToCampaign = createServerFn({ method: "POST" 
     try {
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
-      denyFrontDeskConsultantWorkflows(session, "inquiry campaign attribution");
       const businessRole = await resolveSessionBusinessRole(session);
-      // Marketing Edit only — never open to every consultant / Front Desk.
+      // Marketing Edit only — View never unlocks attribution (matrix-backed).
+      await requireModulePermission(
+        session,
+        "digital_marketing",
+        2,
+        "inquiry campaign attribution",
+      );
       const allowed =
         (await marketingCanMutate(session, businessRole)) &&
         canAttributeInquiryCampaign({ appRole: session.role, businessRole });
