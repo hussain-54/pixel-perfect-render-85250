@@ -5,7 +5,6 @@
 import { AuthError, type TrustedSession } from "@/server/portal-auth";
 import { rolesAtLeastAdmin } from "@/lib/roles";
 import {
-  canEditModule,
   cloneDefaultPermissionMatrix,
   getPermissionLevelFromMatrix,
   type BusinessModule,
@@ -14,8 +13,6 @@ import {
   type PermissionMatrix,
 } from "@/lib/business-permissions";
 import {
-  canPerformFrontDeskIntake,
-  canRecordIntakeSignupFee,
   canVerifySignupFeeAction,
   isFrontDeskBusinessRole,
   normalizeTrustedBusinessRole,
@@ -56,38 +53,30 @@ export function requireConfiguredStaffBusinessRole(session: TrustedSession): Bus
   return br;
 }
 
-export function requireFrontDeskIntakePermission(session: TrustedSession): BusinessRole {
+export async function requireFrontDeskIntakePermission(
+  session: TrustedSession,
+): Promise<BusinessRole> {
   const businessRole = businessRoleFromSession(session);
-  if (
-    !canPerformFrontDeskIntake({
-      appRole: session.role,
-      businessRole,
-    }) &&
-    !rolesAtLeastAdmin(session.role)
-  ) {
-    // Counsellors / admission with students Edit may still register via intake.
-    if (session.role === "consultant" && businessRole && canEditModule(businessRole, "students")) {
-      return businessRole;
-    }
-    throw new AuthError("You do not have permission to register students.", 403);
-  }
   if (rolesAtLeastAdmin(session.role)) return businessRole ?? "admin";
   if (!businessRole) {
+    throw new AuthError("You do not have permission to register students.", 403);
+  }
+  // Persisted matrix Students Edit — Admin revoke must stop intake registration.
+  try {
+    await requireModulePermission(session, "students", 2, "registering students");
+  } catch (error) {
+    if (error instanceof AuthError && error.status === 503) throw error;
     throw new AuthError("You do not have permission to register students.", 403);
   }
   return businessRole;
 }
 
-export function requireSignupFeeRecordPermission(session: TrustedSession): void {
-  const businessRole = businessRoleFromSession(session);
-  if (
-    !canRecordIntakeSignupFee({
-      appRole: session.role,
-      businessRole,
-    })
-  ) {
-    throw new AuthError("You do not have permission to record signup fees.", 403);
-  }
+/**
+ * Fee *recording* (claim) — Edit on fees_payments from the persisted matrix.
+ * Does not grant verify/waive (Accounts workflow + requireSignupFeeVerifyPermission).
+ */
+export async function requireSignupFeeRecordPermission(session: TrustedSession): Promise<void> {
+  await requireModulePermission(session, "fees_payments", 2, "recording signup fees");
 }
 
 export function requireSignupFeeVerifyPermission(session: TrustedSession): void {

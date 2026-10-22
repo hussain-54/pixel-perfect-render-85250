@@ -1,24 +1,7 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
-import {
-  LayoutDashboard,
-  Users,
-  Calendar,
-  GraduationCap,
-  FileText,
-  ClipboardCheck,
-  ListTodo,
-  BarChart3,
-  UserPlus,
-  Activity,
-  UserRoundPlus,
-  ClipboardList,
-  IdCard,
-  Megaphone,
-  Wallet,
-  Landmark,
-  Package,
-} from "lucide-react";
-import { PortalShell, type PortalNavItem } from "@/components/portal/PortalShell";
+import { useEffect } from "react";
+import { createFileRoute, redirect, useNavigate, useRouterState } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { PortalShell } from "@/components/portal/PortalShell";
 import { requirePortalAccess } from "@/lib/portal-guard";
 import { pageHead } from "@/lib/seo";
 import {
@@ -26,78 +9,19 @@ import {
   isFrontDeskDeniedPath,
   staffHomeForBusinessRole,
 } from "@/lib/staff-business-access";
-import {
-  specialtyNavForBusinessRole,
-  specialtyOnlyPathAllowed,
-  shouldIncludeCounsellorCrmNav,
-  staffLandingPathForBusinessRole,
-  type SpecialtyStaffPath,
-} from "@/lib/specialty-desk-access";
-import type { BusinessRole } from "@/lib/business-permissions";
+import { specialtyOnlyPathAllowed } from "@/lib/specialty-desk-access";
+import { buildStaffNav } from "@/lib/staff-nav";
+import type { PermissionMatrix } from "@/lib/business-permissions";
+import { cloneDefaultPermissionMatrix } from "@/lib/business-permissions";
 import { workspaceDocumentTitle } from "@/lib/workspace-branding";
 import type { PublicSession } from "@/server/portal-data";
-import type { LucideIcon } from "lucide-react";
+import { getEffectiveStaffAccess } from "@/services";
 
-const consultantNav: PortalNavItem[] = [
-  { to: "/staff/dashboard", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/staff/students", label: "Students", icon: Users },
-  { to: "/staff/appointments", label: "Appointments", icon: Calendar },
-  { to: "/staff/applications", label: "Applications", icon: GraduationCap },
-  { to: "/staff/documents", label: "Documents", icon: FileText },
-  { to: "/staff/offers", label: "Offers & Visa", icon: ClipboardCheck },
-  { to: "/staff/tasks", label: "Tasks", icon: ListTodo },
-  { to: "/staff/leads", label: "Leads", icon: UserPlus },
-  { to: "/staff/reports", label: "Reports", icon: BarChart3 },
-  { to: "/staff/activity", label: "Activity", icon: Activity },
-];
-
-const frontDeskNav: PortalNavItem[] = [
-  { to: "/staff/front-desk", label: "Dashboard", icon: LayoutDashboard },
-  { to: "/staff/register", label: "Register Student", icon: UserRoundPlus },
-  { to: "/staff/intake", label: "My Registrations", icon: ClipboardList },
-];
-
-const SPECIALTY_ICONS: Record<SpecialtyStaffPath, LucideIcon> = {
-  "/staff/finance": Wallet,
-  "/staff/banking": Landmark,
-  "/staff/hr": IdCard,
-  "/staff/marketing": Megaphone,
-  "/staff/operations": Package,
-  "/staff/reports": BarChart3,
+export type StaffRouteContext = {
+  auth: PublicSession;
+  permissionMatrix: PermissionMatrix;
+  matrixSource: "database" | "defaults";
 };
-
-function buildStaffNav(businessRole: BusinessRole | null | undefined): PortalNavItem[] {
-  if (isFrontDeskBusinessRole(businessRole)) return frontDeskNav;
-
-  const specialtyItems: PortalNavItem[] = specialtyNavForBusinessRole(businessRole).map((item) => ({
-    to: item.to,
-    label: item.label,
-    icon: SPECIALTY_ICONS[item.to],
-    section: "Modules",
-  }));
-
-  if (shouldIncludeCounsellorCrmNav(businessRole)) {
-    // Manager: CRM + specialty modules (dedupe reports if present in both).
-    const crm = [...consultantNav];
-    const crmTos = new Set(crm.map((i) => i.to));
-    for (const item of specialtyItems) {
-      if (!crmTos.has(item.to)) crm.push(item);
-    }
-    return crm;
-  }
-
-  // Specialty-only desks: module nav only (no counsellor CRM).
-  if (!specialtyItems.length) {
-    return [
-      {
-        to: staffLandingPathForBusinessRole("consultant", businessRole) as PortalNavItem["to"],
-        label: "Home",
-        icon: LayoutDashboard,
-      },
-    ];
-  }
-  return specialtyItems;
-}
 
 export const Route = createFileRoute("/staff")({
   beforeLoad: async (ctx) => {
@@ -107,17 +31,39 @@ export const Route = createFileRoute("/staff")({
     const pathname =
       typeof window !== "undefined" ? window.location.pathname : (ctx.location?.pathname ?? "");
 
-    if (isFrontDeskBusinessRole(businessRole) && isFrontDeskDeniedPath(pathname)) {
+    let permissionMatrix = cloneDefaultPermissionMatrix();
+    let matrixSource: StaffRouteContext["matrixSource"] = "defaults";
+    try {
+      const access = await getEffectiveStaffAccess();
+      if (access?.matrix) {
+        permissionMatrix = access.matrix;
+        // portalGetEffectiveStaffAccess already maps unavailable → defaults.
+        matrixSource = access.source === "database" ? "database" : "defaults";
+      }
+    } catch {
+      permissionMatrix = cloneDefaultPermissionMatrix();
+      matrixSource = "defaults";
+    }
+
+    if (
+      isFrontDeskBusinessRole(businessRole) &&
+      isFrontDeskDeniedPath(pathname, permissionMatrix, businessRole)
+    ) {
       throw redirect({ to: "/staff/front-desk" });
     }
 
-    if (!specialtyOnlyPathAllowed(businessRole, pathname)) {
+    if (!specialtyOnlyPathAllowed(businessRole, pathname, permissionMatrix)) {
       throw redirect({
         href: staffHomeForBusinessRole(auth.role ?? "consultant", businessRole),
       });
     }
 
-    return result;
+    return {
+      ...result,
+      auth,
+      permissionMatrix,
+      matrixSource,
+    } satisfies StaffRouteContext & typeof result;
   },
   head: ({ match }) => {
     const auth = (match.context as { auth?: PublicSession }).auth;
@@ -136,9 +82,57 @@ export const Route = createFileRoute("/staff")({
 });
 
 function StaffPortalLayout() {
-  const { auth } = Route.useRouteContext() as {
-    auth: PublicSession;
-  };
-  const nav = buildStaffNav(auth?.businessRole);
-  return <PortalShell role="staff" nav={nav} session={auth} />;
+  const ctx = Route.useRouteContext() as StaffRouteContext;
+  const navigate = useNavigate();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  /**
+   * Live effective-access query — same key Admin invalidates after matrix saves.
+   * Refetch on focus + short interval so grant/revoke propagates without logout.
+   * Authorization still re-checked on every server mutation via requireModulePermission.
+   */
+  const accessQ = useQuery({
+    queryKey: ["staff", "effective-access"],
+    queryFn: getEffectiveStaffAccess,
+    initialData: {
+      businessRole: ctx.auth?.businessRole ?? null,
+      matrix: ctx.permissionMatrix,
+      source: ctx.matrixSource,
+      specialtyPaths: [] as string[],
+    },
+    staleTime: 10_000,
+    refetchOnWindowFocus: true,
+    refetchInterval: 30_000,
+  });
+
+  const businessRole = accessQ.data?.businessRole ?? ctx.auth?.businessRole ?? null;
+  const matrix = accessQ.data?.matrix ?? ctx.permissionMatrix;
+  const nav = buildStaffNav(businessRole, matrix);
+
+  useEffect(() => {
+    if (!accessQ.isFetched && !accessQ.isSuccess) return;
+    if (
+      isFrontDeskBusinessRole(businessRole) &&
+      isFrontDeskDeniedPath(pathname, matrix, businessRole)
+    ) {
+      void navigate({ to: "/staff/front-desk" });
+      return;
+    }
+    if (!specialtyOnlyPathAllowed(businessRole, pathname, matrix)) {
+      void navigate({
+        href: staffHomeForBusinessRole(ctx.auth?.role ?? "consultant", businessRole),
+      });
+    }
+  }, [
+    accessQ.dataUpdatedAt,
+    accessQ.isFetched,
+    accessQ.isSuccess,
+    businessRole,
+    matrix,
+    pathname,
+    navigate,
+    ctx.auth?.role,
+  ]);
+
+  return <PortalShell role="staff" nav={nav} session={ctx.auth} />;
 }

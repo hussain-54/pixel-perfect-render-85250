@@ -55,15 +55,19 @@ describe("role security regression", () => {
     );
   });
 
-  it("Front Desk product denials cover marketing/reports/settings modules and staff CRM paths", () => {
+  it("Front Desk product denials cover CRM/admin modules and staff CRM paths", () => {
     for (const mod of FRONT_DESK_DENIED_MODULES) {
       expect(moduleDeniedForFrontDesk(mod)).toBe(true);
     }
-    expect(moduleDeniedForFrontDesk("digital_marketing")).toBe(true);
+    // Specialty modules (marketing/banking/…) follow Admin matrix, not this hard list.
+    expect(moduleDeniedForFrontDesk("digital_marketing")).toBe(false);
+    expect(moduleDeniedForFrontDesk("admissions")).toBe(true);
     expect(isFrontDeskDeniedPath("/staff/reports")).toBe(true);
     expect(isFrontDeskDeniedPath("/staff/leads")).toBe(true);
     expect(isFrontDeskDeniedPath("/staff/dashboard")).toBe(true);
     expect(isFrontDeskDeniedPath("/staff/front-desk")).toBe(false);
+    // Default matrix grants FD fees_payments View/Edit — finance path not hard-denied.
+    expect(isFrontDeskDeniedPath("/staff/finance")).toBe(false);
   });
 
   it("inquiry attribution is not open to every consultant", () => {
@@ -140,15 +144,16 @@ describe("role security regression", () => {
     expect(getPermissionLevel("accounts_banking_finance", "documents")).toBe(0);
   });
 
-  it("reports portal view remains matrix-based (FD deny is enforced on server handlers)", () => {
-    // Matrix still grants FD reports View — handlers must denyFrontDesk separately.
+  it("reports portal view remains matrix-based (FD deny is enforced on path + server handlers)", () => {
+    // Matrix still grants FD reports View — path + handlers must denyFrontDesk separately.
     expect(
       canViewReportsPortal({
         appRole: "consultant",
         businessRole: "front_desk_student_affairs",
       }),
     ).toBe(true);
-    expect(moduleDeniedForFrontDesk("digital_marketing")).toBe(true);
+    expect(moduleDeniedForFrontDesk("digital_marketing")).toBe(false);
+    expect(isFrontDeskDeniedPath("/staff/reports")).toBe(true);
   });
 
   it("documents a complete default matrix for all 10 roles × 12 modules", () => {

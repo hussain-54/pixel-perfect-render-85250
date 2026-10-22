@@ -101,7 +101,9 @@ describe("Front Desk trusted business role", () => {
     expect(FRONT_DESK_INTAKE_SELECT_COLUMNS).toContain("case_id");
     expect(FRONT_DESK_INTAKE_SELECT_COLUMNS).not.toContain("dob");
     expect(moduleDeniedForFrontDesk("admissions")).toBe(true);
-    expect(moduleDeniedForFrontDesk("banking_finance")).toBe(true);
+    // banking_finance follows Admin matrix for View; not a hard CRM deny.
+    expect(moduleDeniedForFrontDesk("banking_finance")).toBe(false);
+    expect(moduleDeniedForFrontDesk("admissions")).toBe(true);
     expect(moduleDeniedForFrontDesk("students")).toBe(false);
   });
 

@@ -71,14 +71,25 @@ export function AdminPermissionMatrix() {
       level: PermissionLevel;
     }) => updatePermissionMatrixCell(input),
     onSuccess: async (result) => {
+      // Only show success after the server confirmed persistence (mutation resolved).
       setErr(null);
-      setMsg(result.message);
+      const pending =
+        "refreshPending" in result && result.refreshPending
+          ? " Staff access refresh is pending on open staff tabs."
+          : "";
+      setMsg(`${result.message}${pending}`);
       setEditing(null);
-      await queryClient.invalidateQueries({ queryKey: ["admin", "permission-matrix"] });
+      // Refresh Admin matrix UI and staff shells that subscribe to effective-access.
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["admin", "permission-matrix"] }),
+        queryClient.invalidateQueries({ queryKey: ["staff", "effective-access"] }),
+        queryClient.invalidateQueries({ queryKey: ["portal", "auth-session"] }),
+      ]);
     },
     onError: (e) => {
       setMsg(null);
-      setErr(portalErrorMessage(e, "Could not save permission."));
+      // Keep editing open so the Admin can retry with unsaved selection still visible.
+      setErr(portalErrorMessage(e, "Could not save permission. Changes were not persisted."));
     },
   });
 

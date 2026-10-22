@@ -10,6 +10,7 @@ import {
 import { assertModulePermission, requireModulePermission } from "@/server/staff-access";
 import type { TrustedSession } from "@/server/portal-auth";
 import { AuthError } from "@/server/portal-auth";
+import { canVerifySignupFeeAction } from "./staff-business-access";
 
 function session(partial: Partial<TrustedSession> & Pick<TrustedSession, "role">): TrustedSession {
   return {
@@ -363,6 +364,42 @@ describe("Phase 3 module permission gates (unit)", () => {
         cloneDefaultPermissionMatrix(),
       ),
     ).not.toThrow();
+  });
+
+  it("Front Desk banking_finance grant/revoke is enforced server-side via matrix", () => {
+    const granted = mergePermissionMatrixCells([
+      { businessRole: "front_desk_student_affairs", module: "banking_finance", level: 1 },
+    ]);
+    expect(() =>
+      assertModulePermission(
+        session({ role: "consultant", businessRole: "front_desk_student_affairs" }),
+        "banking_finance",
+        1,
+        "banking",
+        granted,
+      ),
+    ).not.toThrow();
+
+    const revoked = mergePermissionMatrixCells([
+      { businessRole: "front_desk_student_affairs", module: "banking_finance", level: 0 },
+    ]);
+    expect(() =>
+      assertModulePermission(
+        session({ role: "consultant", businessRole: "front_desk_student_affairs" }),
+        "banking_finance",
+        1,
+        "banking",
+        revoked,
+      ),
+    ).toThrow(AuthError);
+
+    // View ≠ verify (Accounts workflow stays separate).
+    expect(
+      canVerifySignupFeeAction({
+        appRole: "consultant",
+        businessRole: "front_desk_student_affairs",
+      }),
+    ).toBe(false);
   });
 
   it("requireModulePermission (async) uses defaults on demo sessions", async () => {

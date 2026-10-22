@@ -8,22 +8,40 @@ import type { AppRole } from "@/lib/roles";
 import { rolesAtLeastAdmin } from "@/lib/roles";
 import {
   canEditModule,
+  canViewModule,
+  canViewModuleInMatrix,
   isBusinessRole,
   type BusinessModule,
   type BusinessRole,
+  type PermissionMatrix,
 } from "@/lib/business-permissions";
-import { staffLandingPathForBusinessRole } from "@/lib/specialty-desk-access";
+import {
+  specialtyModuleForPath,
+  staffLandingPathForBusinessRole,
+} from "@/lib/specialty-desk-access";
 
-/** Consultant-desk modules Front Desk must not access (server + nav). */
+/**
+ * Modules Front Desk must not reach via counsellor CRM / admin workflows
+ * regardless of matrix View. Specialty desk modules (fees, banking, HR, …)
+ * are controlled by the persisted Admin matrix instead — see
+ * `frontDeskPathAllowedWithMatrix` / specialty nav.
+ */
 export const FRONT_DESK_DENIED_MODULES = [
   "admissions",
   "counselling", // view in matrix ≠ assessment / private notes / full counselling workspace
+  "users_roles",
+  "settings",
+] as const;
+
+/**
+ * Specialty modules that used to be hard-denied for Front Desk even when Admin
+ * granted View. Kept for regression documentation; runtime nav uses the matrix.
+ */
+export const FRONT_DESK_LEGACY_SPECIALTY_DENY_MODULES = [
   "banking_finance",
   "hr_attendance",
   "digital_marketing",
   "orders_sales_purchase",
-  "users_roles",
-  "settings",
 ] as const;
 
 export type FrontDeskDeniedModule = (typeof FRONT_DESK_DENIED_MODULES)[number];
@@ -77,10 +95,33 @@ export function frontDeskNavAllowed(path: string): boolean {
   return false;
 }
 
-export function isFrontDeskDeniedPath(path: string): boolean {
+/**
+ * Front Desk path deny list. When `matrix` is provided, specialty module paths
+ * (`/staff/finance`, `/staff/banking`, …) follow Admin-persisted View access
+ * except `/staff/reports` which remains hard-denied for Front Desk.
+ */
+export function isFrontDeskDeniedPath(
+  path: string,
+  matrix?: PermissionMatrix | null,
+  businessRole: BusinessRole | null | undefined = "front_desk_student_affairs",
+): boolean {
   if (frontDeskNavAllowed(path)) return false;
   // Bare /staff index is OK (layout); dashboard itself is denied and redirects to front-desk.
   if (path === "/staff" || path === "/staff/") return false;
+
+  // Reports + Digital Marketing stay hard-denied for Front Desk (product/server denies).
+  if (path === "/staff/reports" || path.startsWith("/staff/reports/")) return true;
+  if (path === "/staff/marketing" || path.startsWith("/staff/marketing/")) return true;
+
+  const specialtyModule = specialtyModuleForPath(path);
+  if (specialtyModule) {
+    if (matrix) {
+      return !canViewModuleInMatrix(matrix, businessRole, specialtyModule);
+    }
+    // Without a matrix, use compile-time defaults (FD already has fees_payments View).
+    return !canViewModule(businessRole, specialtyModule);
+  }
+
   return FRONT_DESK_DENIED_PATH_PREFIXES.some(
     (prefix) => path === prefix || path.startsWith(`${prefix}/`) || path.startsWith(prefix),
   );

@@ -12,8 +12,11 @@ import {
 } from "@/server/portal-auth";
 import {
   BUSINESS_MODULES,
+  BUSINESS_MODULE_LABELS,
   BUSINESS_ROLES,
+  BUSINESS_ROLE_LABELS,
   BUSINESS_PERMISSION_MATRIX,
+  PERMISSION_LEVEL_LABELS,
   cloneDefaultPermissionMatrix,
   flattenPermissionMatrix,
   validatePermissionMatrixChange,
@@ -25,8 +28,11 @@ import {
 } from "@/lib/business-permissions";
 import {
   invalidateAuthorizationMatrixCache,
+  loadAuthorizationMatrix,
   loadPermissionMatrixForDisplay,
 } from "@/server/permission-matrix-store";
+import { normalizeTrustedBusinessRole } from "@/lib/staff-business-access";
+import { specialtyNavFromEffectiveMatrix } from "@/lib/effective-staff-access";
 
 function toError(error: unknown): never {
   if (error instanceof AuthError) {
@@ -63,6 +69,49 @@ function snapshotFromMatrix(
     modules: BUSINESS_MODULES,
   };
 }
+
+/**
+ * Effective permission matrix for the signed-in staff/admin user.
+ * Used by the staff shell for nav + client route guards. Does not grant
+ * verification privileges — server mutations still call requireModulePermission.
+ */
+export type EffectiveStaffAccessSnapshot = {
+  businessRole: BusinessRole | null;
+  matrix: PermissionMatrix;
+  source: "database" | "defaults" | "unavailable";
+  specialtyPaths: string[];
+};
+
+export const portalGetEffectiveStaffAccess = createServerFn({ method: "GET" }).handler(async () => {
+  try {
+    const session = await requireTrustedSession();
+    if (session.role === "student") {
+      const matrix = cloneDefaultPermissionMatrix();
+      return {
+        businessRole: "student_portal" as BusinessRole,
+        matrix,
+        source: "defaults" as const,
+        specialtyPaths: [] as string[],
+      } satisfies EffectiveStaffAccessSnapshot;
+    }
+
+    const businessRole = normalizeTrustedBusinessRole(session.businessRole);
+    const loaded = await loadAuthorizationMatrix(session);
+    // unavailable → fail closed to defaults for nav (mutations still 503 via requireModulePermission)
+    const matrix = loaded.source === "unavailable" ? cloneDefaultPermissionMatrix() : loaded.matrix;
+    const source = loaded.source === "unavailable" ? ("defaults" as const) : loaded.source;
+    const specialtyPaths = specialtyNavFromEffectiveMatrix(businessRole, matrix).map((i) => i.to);
+
+    return {
+      businessRole,
+      matrix,
+      source,
+      specialtyPaths,
+    } satisfies EffectiveStaffAccessSnapshot;
+  } catch (error) {
+    toError(error);
+  }
+});
 
 export const portalGetPermissionMatrix = createServerFn({ method: "GET" }).handler(async () => {
   try {
@@ -192,9 +241,15 @@ export const portalUpdatePermissionMatrixCell = createServerFn({ method: "POST" 
 
       invalidateAuthorizationMatrixCache();
       const loaded = await loadPermissionMatrixForDisplay();
+      const roleLabel = BUSINESS_ROLE_LABELS[validated.businessRole];
+      const moduleLabel = BUSINESS_MODULE_LABELS[validated.module];
+      const prevLabel = PERMISSION_LEVEL_LABELS[previousLevel as PermissionLevel] ?? previousLevel;
+      const nextLabel = PERMISSION_LEVEL_LABELS[validated.level];
       return {
         ok: true as const,
-        message: "Permission saved.",
+        message: `Saved ${moduleLabel} for ${roleLabel}: ${prevLabel} → ${nextLabel}. Staff portals refresh on window focus or within ~30s (no logout required).`,
+        previousLevel,
+        refreshPending: true as const,
         cell: {
           businessRole: validated.businessRole,
           module: validated.module,

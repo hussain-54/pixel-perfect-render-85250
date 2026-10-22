@@ -304,7 +304,7 @@ export const portalIntakeRegisterStudent = createServerFn({ method: "POST" })
       let feeWarning: string | null = null;
       if (data.signupFee && data.signupFee.amount >= 0) {
         try {
-          requireSignupFeeRecordPermission(session);
+          await requireSignupFeeRecordPermission(session);
           const status = data.signupFee.markClaimed ? "claimed" : "unpaid";
           const { error: feeErr } = await client.from("signup_fee_payments").insert({
             student_id: created.id,
@@ -382,7 +382,7 @@ export const portalRecordSignupFee = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       session.businessRole = await resolveSessionBusinessRole(session);
-      requireSignupFeeRecordPermission(session);
+      await requireSignupFeeRecordPermission(session);
       const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb } =
         await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {

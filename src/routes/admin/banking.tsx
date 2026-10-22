@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
 import { useQuery } from "@tanstack/react-query";
 import {
   EmptyState,
@@ -18,6 +18,11 @@ export const Route = createFileRoute("/admin/banking")({
 
 /** Shared banking workspace — also mounted at `/staff/banking` for specialty desks. */
 export function BankingModulePage() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const onStaffShell = pathname.startsWith("/staff");
+  const financeTo = onStaffShell ? "/staff/finance" : "/admin/finance";
+  const operationsTo = onStaffShell ? "/staff/operations" : "/admin/operations";
+
   const opsQ = useQuery({
     queryKey: ["admin", "banking", "ops-dashboard"],
     queryFn: getOpsDashboard,
@@ -29,9 +34,13 @@ export function BankingModulePage() {
     staleTime: 15_000,
   });
 
-  const denied =
-    (opsQ.error && /403|permission|not authorized/i.test(portalErrorMessage(opsQ.error))) ||
-    (feesQ.error && /403|permission|not authorized/i.test(portalErrorMessage(feesQ.error)));
+  const opsDenied =
+    !!opsQ.error && /403|permission|not authorized/i.test(portalErrorMessage(opsQ.error));
+  const feesDenied =
+    !!feesQ.error && /403|permission|not authorized/i.test(portalErrorMessage(feesQ.error));
+  // Accounts / Front Desk with banking View may lack Ops module access — do not
+  // treat Ops 403 alone as a full banking denial when fee records are visible.
+  const fullyDenied = feesDenied && opsDenied;
 
   const feeCount = feesQ.data?.ok ? feesQ.data.fees.length : 0;
 
@@ -42,12 +51,12 @@ export function BankingModulePage() {
         subtitle="Accounts and finance workspace for banking-adjacent ledgers, expenses, and fee verification follow-up."
       />
 
-      {denied ? (
+      {fullyDenied ? (
         <PermissionDenied body="You do not have access to banking and finance records." />
       ) : null}
 
       {opsQ.isLoading || feesQ.isLoading ? <LoadingRows /> : null}
-      {opsQ.isError && !denied ? <ErrorState body={portalErrorMessage(opsQ.error)} /> : null}
+      {opsQ.isError && !opsDenied ? <ErrorState body={portalErrorMessage(opsQ.error)} /> : null}
 
       {opsQ.data ? (
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -58,6 +67,11 @@ export function BankingModulePage() {
             value={opsQ.data.canSeeExpenses ? (opsQ.data.expenses?.length ?? 0) : "N/A"}
           />
         </div>
+      ) : opsDenied && !fullyDenied ? (
+        <p className="text-sm text-muted-foreground">
+          Office Operations ledgers are outside this role&apos;s module access. Fee follow-up below
+          remains available when Fees &amp; Payments View is granted.
+        </p>
       ) : null}
 
       <Panel title="University fee follow-up">
@@ -65,14 +79,16 @@ export function BankingModulePage() {
           Fee obligations and verification actions live under Fees & Payments. Use this view for a
           quick finance queue count.
         </p>
-        {feesQ.isError && !denied ? (
+        {feesQ.isError && !feesDenied ? (
           <ErrorState body={portalErrorMessage(feesQ.error)} />
+        ) : feesDenied ? (
+          <PermissionDenied body="You do not have permission to view fee obligations." />
         ) : feeCount > 0 ? (
           <p className="text-sm text-navy">
             <span className="font-semibold">{feeCount}</span> fee obligation
             {feeCount === 1 ? "" : "s"} currently visible.{" "}
             <Link
-              to="/admin/finance"
+              to={financeTo}
               className="font-medium text-bright underline-offset-2 hover:underline"
             >
               Open Fees & Payments
@@ -90,7 +106,7 @@ export function BankingModulePage() {
         <p className="text-sm text-muted-foreground">
           Detailed purchase and expense mutations remain in{" "}
           <Link
-            to="/admin/operations"
+            to={operationsTo}
             className="font-medium text-bright underline-offset-2 hover:underline"
           >
             Orders / Sales / Purchase

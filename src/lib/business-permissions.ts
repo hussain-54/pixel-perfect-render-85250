@@ -191,6 +191,41 @@ export function getPermissionLevelFromMatrix(
   return matrix[businessRole][index] ?? 0;
 }
 
+/** Prefer this for runtime UI/nav when the persisted (or resolved) matrix is available. */
+export function hasMinPermissionInMatrix(
+  matrix: PermissionMatrix,
+  businessRole: BusinessRole | null | undefined,
+  module: BusinessModule | null | undefined,
+  minimum: PermissionLevel,
+): boolean {
+  if (minimum < 0 || minimum > 3) return false;
+  return getPermissionLevelFromMatrix(matrix, businessRole, module) >= minimum;
+}
+
+export function canViewModuleInMatrix(
+  matrix: PermissionMatrix,
+  businessRole: BusinessRole | null | undefined,
+  module: BusinessModule | null | undefined,
+): boolean {
+  return hasMinPermissionInMatrix(matrix, businessRole, module, 1);
+}
+
+export function canEditModuleInMatrix(
+  matrix: PermissionMatrix,
+  businessRole: BusinessRole | null | undefined,
+  module: BusinessModule | null | undefined,
+): boolean {
+  return hasMinPermissionInMatrix(matrix, businessRole, module, 2);
+}
+
+export function canFullyApproveModuleInMatrix(
+  matrix: PermissionMatrix,
+  businessRole: BusinessRole | null | undefined,
+  module: BusinessModule | null | undefined,
+): boolean {
+  return hasMinPermissionInMatrix(matrix, businessRole, module, 3);
+}
+
 /**
  * Validate a persisted permission cell change.
  * - Rejects unknown role/module/level.

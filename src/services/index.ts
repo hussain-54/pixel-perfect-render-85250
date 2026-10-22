@@ -150,6 +150,7 @@ import {
   type UpdateAccountBusinessRoleInput,
 } from "@/server/portal-accounts";
 import {
+  portalGetEffectiveStaffAccess,
   portalGetPermissionMatrix,
   portalUpdatePermissionMatrixCell,
   type UpdatePermissionMatrixInput,
@@ -230,11 +231,7 @@ import {
   portalImportUniversitiesCsv,
   portalPreviewCatalogImport,
 } from "@/server/portal-import-export";
-import type {
-  CatalogImportEntity,
-  CrmExportEntity,
-  DuplicatePolicy,
-} from "@/lib/crm-export";
+import type { CatalogImportEntity, CrmExportEntity, DuplicatePolicy } from "@/lib/crm-export";
 import {
   portalGetOrganizationSettings,
   portalUpdateOrganizationSettings,
@@ -322,8 +319,7 @@ export const listPublishedUniversities = (filters?: CatalogListFilters) =>
   portalListPublishedUniversities({ data: filters ?? {} });
 
 /** @deprecated Prefer listPublishedUniversities for source awareness. */
-export const getUniversities = () =>
-  listPublishedUniversities().then((payload) => payload.rows);
+export const getUniversities = () => listPublishedUniversities().then((payload) => payload.rows);
 
 /** Public programs — live catalog; labelled demo only in DEV when live unavailable. */
 export const listPublishedPrograms = (filters?: CatalogListFilters) =>
@@ -334,12 +330,10 @@ export const listPublishedScholarships = (filters?: ScholarshipListFilters) =>
   portalListPublishedScholarships({ data: filters ?? {} });
 
 /** @deprecated Prefer listPublishedScholarships for source/unavailable awareness. */
-export const getScholarships = () =>
-  listPublishedScholarships().then((payload) => payload.rows);
+export const getScholarships = () => listPublishedScholarships().then((payload) => payload.rows);
 
 /** Admin/staff admissions catalog — live universities when JWT plane is active. */
-export const getCatalogUniversities = () =>
-  withAuth((opts) => portalGetCatalogUniversities(opts));
+export const getCatalogUniversities = () => withAuth((opts) => portalGetCatalogUniversities(opts));
 
 /** Admin/staff admissions catalog — live programs when JWT plane is active. */
 export const getCatalogPrograms = () => withAuth((opts) => portalGetCatalogPrograms(opts));
@@ -673,9 +667,7 @@ export const requestFeeVerification = (data: { studentId: string; summary: strin
   withAuth((opts) => portalRequestFeeVerification({ ...opts, data }));
 
 export const listFeeVerificationRequests = (filters?: { includeResolved?: boolean }) =>
-  withAuth((opts) =>
-    portalListFeeVerificationRequests({ ...opts, data: filters ?? {} }),
-  );
+  withAuth((opts) => portalListFeeVerificationRequests({ ...opts, data: filters ?? {} }));
 
 export const forwardFeeVerificationRequest = (data: { requestId: string; note?: string }) =>
   withAuth((opts) => portalForwardFeeVerificationRequest({ ...opts, data }));
@@ -776,6 +768,10 @@ export const deletePortalAccount = (data: { userId: string; confirmEmail: string
 
 /** Admin RBAC permission matrix (persisted business_module_permissions). */
 export const getPermissionMatrix = () => withAuth((opts) => portalGetPermissionMatrix(opts));
+
+/** Staff/admin effective matrix for nav + client route guards. */
+export const getEffectiveStaffAccess = () =>
+  withAuth((opts) => portalGetEffectiveStaffAccess(opts));
 
 export const updatePermissionMatrixCell = (data: UpdatePermissionMatrixInput) =>
   withAuth((opts) => portalUpdatePermissionMatrixCell({ ...opts, data }));

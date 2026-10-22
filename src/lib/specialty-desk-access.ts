@@ -9,11 +9,18 @@
  */
 import {
   canViewModule,
+  canViewModuleInMatrix,
+  cloneDefaultPermissionMatrix,
   type BusinessModule,
   type BusinessRole,
+  type PermissionMatrix,
 } from "@/lib/business-permissions";
 import type { AppRole } from "@/lib/roles";
 import { rolesAtLeastAdmin } from "@/lib/roles";
+
+function matrixOrDefault(matrix: PermissionMatrix | null | undefined): PermissionMatrix {
+  return matrix ?? cloneDefaultPermissionMatrix();
+}
 
 export type SpecialtyStaffPath =
   | "/staff/hr"
@@ -23,10 +30,7 @@ export type SpecialtyStaffPath =
   | "/staff/operations"
   | "/staff/reports";
 
-export type StaffLandingPath =
-  | "/staff/dashboard"
-  | "/staff/front-desk"
-  | SpecialtyStaffPath;
+export type StaffLandingPath = "/staff/dashboard" | "/staff/front-desk" | SpecialtyStaffPath;
 
 /** Desks whose primary work is specialty modules (not counsellor CRM). */
 export const SPECIALTY_ONLY_BUSINESS_ROLES = [
@@ -65,10 +69,20 @@ export function isSpecialtyOnlyBusinessRole(
   );
 }
 
+/**
+ * Specialty nav from effective matrix when provided; otherwise compile-time defaults.
+ * Pass the persisted authorization matrix so Admin grants/revokes appear in staff nav.
+ */
 export function specialtyNavForBusinessRole(
   businessRole: BusinessRole | null | undefined,
+  matrix?: PermissionMatrix | null,
 ): SpecialtyNavDef[] {
   if (!businessRole) return [];
+  if (matrix) {
+    return SPECIALTY_STAFF_NAV.filter((item) =>
+      canViewModuleInMatrix(matrix, businessRole, item.module),
+    );
+  }
   return SPECIALTY_STAFF_NAV.filter((item) => canViewModule(businessRole, item.module));
 }
 
@@ -112,16 +126,32 @@ export function specialtyModuleForPath(path: string): BusinessModule | null {
 export function specialtyOnlyPathAllowed(
   businessRole: BusinessRole | null | undefined,
   path: string,
+  matrix?: PermissionMatrix | null,
 ): boolean {
   if (!isSpecialtyOnlyBusinessRole(businessRole)) return true;
   if (path === "/staff" || path === "/staff/") return true;
   if (path === "/change-password" || path.startsWith("/change-password")) return true;
 
   const module = specialtyModuleForPath(path);
-  if (module) return canViewModule(businessRole, module);
+  if (module) {
+    if (matrix) return canViewModuleInMatrix(matrix, businessRole, module);
+    return canViewModule(businessRole, module);
+  }
 
   // Deny counsellor CRM / FD paths for specialty-only desks.
   return false;
+}
+
+/** Whether a specialty module path is View-allowed for any staff business role. */
+export function specialtyPathViewAllowed(
+  businessRole: BusinessRole | null | undefined,
+  path: string,
+  matrix?: PermissionMatrix | null,
+): boolean {
+  const module = specialtyModuleForPath(path);
+  if (!module) return false;
+  if (matrix) return canViewModuleInMatrix(matrixOrDefault(matrix), businessRole, module);
+  return canViewModule(businessRole, module);
 }
 
 /** Manager keeps CRM nav and also receives specialty module links. */
