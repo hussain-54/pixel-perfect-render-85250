@@ -232,6 +232,12 @@ export const portalGetOfficerDashboard = createServerFn({ method: "GET" }).handl
         appsInProgress,
         docsToReview,
         deadlinesThisWeek,
+        counsellingCompleted: 0,
+        followUpsDue: todaysTasks.filter(
+          (t) => t.priority === "overdue" || t.priority === "due_today",
+        ).length,
+        awaitingResponse: 0,
+        actionRequired: 0,
       },
       todaysTasks,
       assignedOverview: students.slice(0, 8).map((s) => ({
@@ -240,6 +246,8 @@ export const portalGetOfficerDashboard = createServerFn({ method: "GET" }).handl
         destination: s.destination,
         stage: s.stage,
         stageLabel: stageLabel(s.stage),
+        caseId: s.caseId,
+        lastActivity: s.lastActivity,
       })),
       docsWaiting: docs
         .filter((d) => d.status === "Pending Review")
@@ -256,6 +264,17 @@ export const portalGetOfficerDashboard = createServerFn({ method: "GET" }).handl
           };
         }),
       upcomingDeadlines: deadlineRows.slice(0, 8),
+      needsAttention: [],
+      recentActivity: students.slice(0, 8).map((s) => ({
+        id: s.id,
+        name: s.name,
+        destination: s.destination,
+        stage: s.stage,
+        stageLabel: stageLabel(s.stage),
+        caseId: s.caseId,
+        lastActivity: s.lastActivity,
+      })),
+      fetchedAt: new Date().toISOString(),
     };
     return payload;
   } catch (error) {

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -10,6 +10,7 @@ import {
   PermissionDenied,
   portalErrorMessage,
   FilterSelect,
+  fmtDate,
 } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import {
 import { getStudentsDirectory, intakeRegisterStudent } from "@/services";
 import type { StudentDirectoryFilters } from "@/types/portal-officer";
 import type { InquiryChannelDb } from "@/types/database";
+import { useCounsellorWorkbenchRealtime } from "@/lib/use-counsellor-workbench-realtime";
 
 export const Route = createFileRoute("/staff/students")({
   component: StaffStudents,
@@ -37,9 +39,10 @@ function StaffStudents() {
 
 function StudentsDirectory() {
   const queryClient = useQueryClient();
+  useCounsellorWorkbenchRealtime(true);
   const [filters, setFilters] = useState<StudentDirectoryFilters>({
     page: 1,
-    pageSize: 6,
+    pageSize: 20,
     archived: false,
     q: "",
     country: "",
@@ -49,6 +52,7 @@ function StudentsDirectory() {
     dateFrom: "",
     dateTo: "",
   });
+  const [searchInput, setSearchInput] = useState("");
   const [registerOpen, setRegisterOpen] = useState(false);
   const [form, setForm] = useState({
     fullName: "",
@@ -67,10 +71,20 @@ function StudentsDirectory() {
     feeClaimed: false,
   });
 
+  useEffect(() => {
+    const t = setTimeout(() => {
+      setFilters((prev) => {
+        if ((prev.q ?? "") === searchInput) return prev;
+        return { ...prev, q: searchInput, page: 1 };
+      });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchInput]);
+
   const queryFilters = useMemo((): StudentDirectoryFilters => {
     const out: StudentDirectoryFilters = {
       page: filters.page ?? 1,
-      pageSize: filters.pageSize ?? 6,
+      pageSize: filters.pageSize ?? 20,
       archived: Boolean(filters.archived),
     };
     if (filters.q) out.q = filters.q;
@@ -87,6 +101,7 @@ function StudentsDirectory() {
     queryKey: ["officer", "students-directory", queryFilters],
     queryFn: () => getStudentsDirectory(queryFilters),
     staleTime: 30_000,
+    refetchOnWindowFocus: true,
   });
 
   const registerM = useMutation({
@@ -140,7 +155,7 @@ function StudentsDirectory() {
   const opts = dirQ.data?.filterOptions;
   const total = dirQ.data?.total ?? 0;
   const page = dirQ.data?.page ?? 1;
-  const pageSize = dirQ.data?.pageSize ?? 6;
+  const pageSize = dirQ.data?.pageSize ?? 20;
   const pageCount = Math.max(1, Math.ceil(total / pageSize));
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1;
   const to = Math.min(page * pageSize, total);
@@ -193,7 +208,7 @@ function StudentsDirectory() {
     () =>
       filters.archived
         ? "Archived student records in your authorized scope."
-        : "Manage assigned student records and monitor application progress.",
+        : "My assigned students — search, filter, and open the counselling workbench.",
     [filters.archived],
   );
 
@@ -202,13 +217,13 @@ function StudentsDirectory() {
     if (String(dirQ.error).includes("403") || msg.toLowerCase().includes("permission")) {
       return <PermissionDenied body={msg} />;
     }
-    return <ErrorState body={msg} />;
+    return <ErrorState body={msg} onRetry={() => void dirQ.refetch()} />;
   }
 
   return (
-    <div>
+    <div className="space-y-5">
       <PageHeader
-        title="Students"
+        title="My Students"
         subtitle={subtitle}
         actions={
           <>
@@ -219,29 +234,25 @@ function StudentsDirectory() {
             >
               {filters.archived ? "Active students" : "Archived students"}
             </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link to="/staff/dashboard">Workbench</Link>
+            </Button>
             {opts?.canRegister ? (
-              <Button size="sm" variant="navy" onClick={() => setRegisterOpen(true)}>
-                + Register new student
+              <Button size="sm" variant="outline" onClick={() => setRegisterOpen(true)}>
+                Quick register
               </Button>
             ) : null}
           </>
         }
       />
 
-      <div className="mb-4 flex flex-col gap-2 lg:flex-row lg:flex-wrap lg:items-center">
+      <div className="mb-1 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
         <Input
-          type="date"
-          aria-label="Date from"
-          className="h-11 w-full lg:w-40"
-          value={filters.dateFrom ?? ""}
-          onChange={(e) => patch({ dateFrom: e.target.value })}
-        />
-        <Input
-          type="date"
-          aria-label="Date to"
-          className="h-11 w-full lg:w-40"
-          value={filters.dateTo ?? ""}
-          onChange={(e) => patch({ dateTo: e.target.value })}
+          placeholder="Search name or case ID…"
+          aria-label="Search students"
+          className="h-10 sm:col-span-2"
+          value={searchInput}
+          onChange={(e) => setSearchInput(e.target.value)}
         />
         <FilterSelect
           label="Country"
@@ -256,10 +267,10 @@ function StudentsDirectory() {
           options={opts?.intakes ?? []}
         />
         <select
-          aria-label="Stage"
+          aria-label="Application / journey stage"
           value={filters.stage ?? ""}
           onChange={(e) => patch({ stage: e.target.value })}
-          className="h-11 rounded-md border border-input bg-white px-3 text-sm text-navy"
+          className="h-10 rounded-md border border-input bg-white px-3 text-sm text-navy"
         >
           <option value="">Stage: All</option>
           {(opts?.stages ?? []).map((s) => (
@@ -273,7 +284,7 @@ function StudentsDirectory() {
             aria-label="Consultant"
             value={filters.consultantId ?? ""}
             onChange={(e) => patch({ consultantId: e.target.value })}
-            className="h-11 rounded-md border border-input bg-white px-3 text-sm text-navy"
+            className="h-10 rounded-md border border-input bg-white px-3 text-sm text-navy"
           >
             <option value="">Consultant: All</option>
             {(opts.consultants ?? []).map((c) => (
@@ -283,63 +294,66 @@ function StudentsDirectory() {
             ))}
           </select>
         ) : null}
-        <Input
-          placeholder="Search name, ID, phone..."
-          aria-label="Search students"
-          className="h-11 w-full lg:min-w-[220px] lg:flex-1"
-          value={filters.q ?? ""}
-          onChange={(e) => patch({ q: e.target.value })}
-        />
       </div>
 
       {dirQ.isLoading ? (
-        <LoadingRows rows={6} />
-      ) : !(dirQ.data?.rows.length) ? (
+        <LoadingRows rows={8} />
+      ) : !dirQ.data?.rows.length ? (
         <EmptyState
           title={filters.archived ? "No archived students" : "No students found"}
-          body="Adjust filters or register a new student if you are authorized."
+          body="Adjust filters, or wait for Front Desk to assign students to your desk."
+          action={
+            <Button size="sm" variant="outline" onClick={() => void dirQ.refetch()}>
+              Retry
+            </Button>
+          }
         />
       ) : (
         <>
           <TableWrap>
             <thead>
               <tr>
-                <th>Student ID</th>
-                <th>Name</th>
-                <th>Destination</th>
-                <th>Intake</th>
-                <th>Consultant</th>
-                <th>Apps submitted</th>
+                <th>Case</th>
+                <th>Student</th>
+                <th className="hidden md:table-cell">Destination</th>
+                <th className="hidden lg:table-cell">Updated</th>
                 <th>Stage</th>
-                <th>Actions</th>
+                <th className="hidden xl:table-cell">Counselling</th>
+                <th>Next action</th>
+                <th> </th>
               </tr>
             </thead>
             <tbody>
               {dirQ.data.rows.map((r) => (
                 <tr key={r.id}>
                   <td className="font-medium text-navy">{r.caseId}</td>
-                  <td>{r.name}</td>
-                  <td>{r.destination}</td>
-                  <td>{r.intake}</td>
-                  <td>{r.consultantName}</td>
                   <td>
-                    {r.appsSubmitted} / {r.appsTotal}
+                    <div className="font-medium">{r.name}</div>
+                    <div className="text-xs text-muted-foreground md:hidden">{r.destination}</div>
+                  </td>
+                  <td className="hidden md:table-cell">{r.destination}</td>
+                  <td className="hidden text-muted-foreground lg:table-cell">
+                    {fmtDate(r.lastActivity.slice(0, 10))}
                   </td>
                   <td>
                     <StatusBadge status={r.stageLabel} />
                   </td>
+                  <td className="hidden text-xs xl:table-cell">
+                    {r.hasConsent ? "Consent recorded" : "Consent pending"}
+                  </td>
+                  <td className="max-w-[14rem] text-xs text-muted-foreground">
+                    {r.nextActionLabel ?? "—"}
+                  </td>
                   <td>
-                    <div className="flex flex-wrap gap-2">
-                      <Button asChild size="sm" variant="outline">
-                        <Link
-                          to="/staff/students/$studentId"
-                          params={{ studentId: r.id }}
-                          search={{ tab: "assessment" }}
-                        >
-                          View profile
-                        </Link>
-                      </Button>
-                    </div>
+                    <Button asChild size="sm" variant="navy">
+                      <Link
+                        to="/staff/students/$studentId"
+                        params={{ studentId: r.id }}
+                        search={{ tab: "assessment" }}
+                      >
+                        View record
+                      </Link>
+                    </Button>
                   </td>
                 </tr>
               ))}

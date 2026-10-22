@@ -340,19 +340,21 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
         <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.14em] text-muted-foreground">
-              Student profile
+              Counsellor workbench · Case {s.caseId}
             </p>
             <h1 className="font-display text-2xl font-semibold text-navy md:text-[1.75rem]">
-              {s.name}{" "}
-              <span className="text-lg font-medium text-muted-foreground">({s.caseId})</span>
+              {s.name}
             </h1>
             <div className="mt-2 flex flex-wrap items-center gap-2">
               <StatusBadge status={s.stageLabel} />
               <span className="text-xs text-muted-foreground">{docsLabel}</span>
+              <span className="text-xs text-muted-foreground">
+                Updated {s.lastActivity ? s.lastActivity.slice(0, 10) : "—"}
+              </span>
             </div>
             <p className="mt-2 text-sm text-muted-foreground">
-              Destination: {s.destination} · Intake: {s.intake} · Assigned consultant:{" "}
-              {s.consultantName}
+              Destination: {s.destination || "—"} · Programme: {s.program || "—"} · Intake:{" "}
+              {s.intake} · Assigned: {s.consultantName}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">

@@ -5,6 +5,14 @@ export type OfficerDashboardMetrics = {
   appsInProgress: number;
   docsToReview: number;
   deadlinesThisWeek: number;
+  /** Assigned students with counselling_agreements.consented = true. */
+  counsellingCompleted: number;
+  /** Open/in_progress tasks due today or earlier. */
+  followUpsDue: number;
+  /** Distinct students awaiting Admission handover and/or FD fee response. */
+  awaitingResponse: number;
+  /** Distinct students needing counsellor action (lifecycle / task / docs). */
+  actionRequired: number;
 };
 
 export type OfficerDashboardTask = {
@@ -23,6 +31,20 @@ export type OfficerDashboardStudent = {
   destination: string;
   stage: StageKey;
   stageLabel: string;
+  caseId?: string;
+  lastActivity?: string;
+  nextActionLabel?: string;
+};
+
+export type OfficerDashboardAttentionItem = {
+  id: string;
+  studentId: string;
+  caseId: string;
+  fullName: string;
+  kind: string;
+  title: string;
+  detail: string;
+  at: string;
 };
 
 export type OfficerDashboardDoc = {
@@ -52,6 +74,11 @@ export type OfficerDashboardPayload = {
   assignedOverview: OfficerDashboardStudent[];
   docsWaiting: OfficerDashboardDoc[];
   upcomingDeadlines: OfficerDashboardDeadline[];
+  /** Prioritized actionable items (not a full student table). */
+  needsAttention: OfficerDashboardAttentionItem[];
+  /** Recent assigned-student activity with next-action labels. */
+  recentActivity: OfficerDashboardStudent[];
+  fetchedAt: string;
 };
 
 export type StudentDirectoryRow = {
@@ -68,6 +95,9 @@ export type StudentDirectoryRow = {
   stageLabel: string;
   archived: boolean;
   lastActivity: string;
+  nextActionLabel?: string;
+  hasConsent?: boolean;
+  followUpDue?: boolean;
 };
 
 export type StudentDirectoryFilters = {

@@ -1,7 +1,15 @@
 import { useState } from "react";
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { CalendarClock, FileSearch, FolderKanban, Users } from "lucide-react";
+import { createFileRoute, Link, redirect, useRouter } from "@tanstack/react-router";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  AlertCircle,
+  Bell,
+  ClipboardCheck,
+  Clock3,
+  FolderKanban,
+  Hourglass,
+  Users,
+} from "lucide-react";
 import {
   PageHeader,
   Panel,
@@ -15,20 +23,32 @@ import {
   portalErrorMessage,
 } from "@/components/common";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useData } from "@/lib/useData";
-import { getOfficerDashboard, reviewStudentDocument } from "@/services";
+import {
+  getNotifications,
+  getOfficerDashboard,
+  markNotificationRead,
+  reviewStudentDocument,
+} from "@/services";
 import { cn } from "@/lib/utils";
 import { isFrontDeskBusinessRole, staffHomeForBusinessRole } from "@/lib/staff-business-access";
 import { isSpecialtyOnlyBusinessRole } from "@/lib/specialty-desk-access";
 import { workspaceTitleForSession } from "@/lib/workspace-branding";
+import { COUNSELLOR_METRIC_DEFINITIONS } from "@/lib/counsellor-workspace";
+import { resolveCounsellorNotificationHref } from "@/lib/counsellor-workspace";
+import { shouldOfferMarkAsRead } from "@/lib/notification-rules";
+import {
+  COUNSELLOR_DASHBOARD_KEY,
+  useCounsellorWorkbenchRealtime,
+} from "@/lib/use-counsellor-workbench-realtime";
 import type { BusinessRole } from "@/lib/business-permissions";
 import type { AppRole } from "@/lib/roles";
 
 export const Route = createFileRoute("/staff/dashboard")({
   beforeLoad: ({ context }) => {
-    const auth = (
-      context as { auth?: { role?: AppRole; businessRole?: BusinessRole | null } }
-    ).auth;
+    const auth = (context as { auth?: { role?: AppRole; businessRole?: BusinessRole | null } })
+      .auth;
     if (isFrontDeskBusinessRole(auth?.businessRole)) {
       throw redirect({ to: "/staff/front-desk" });
     }
@@ -45,21 +65,39 @@ function StaffDashboard() {
   const { auth } = Route.useRouteContext() as {
     auth?: { businessRole?: BusinessRole | null; role?: AppRole };
   };
+  const router = useRouter();
   const queryClient = useQueryClient();
-  const dashQ = useData(["officer", "dashboard"], getOfficerDashboard);
+  const dashQ = useData([...COUNSELLOR_DASHBOARD_KEY], getOfficerDashboard);
+  const liveStatus = useCounsellorWorkbenchRealtime(true);
+  const [notifOpen, setNotifOpen] = useState(false);
+  const [reviewError, setReviewError] = useState<string | null>(null);
+
+  const notifQ = useQuery({
+    queryKey: ["notifications", "staff"],
+    queryFn: () => getNotifications("staff"),
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+  });
+
   const workspaceTitle = workspaceTitleForSession({
     portal: "staff",
     businessRole: auth?.businessRole,
     appRole: auth?.role,
   });
-  const [reviewError, setReviewError] = useState<string | null>(null);
+
+  const markM = useMutation({
+    mutationFn: (id: string) => markNotificationRead(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["notifications", "staff"] });
+    },
+  });
 
   const reviewM = useMutation({
     mutationFn: ({ id, action }: { id: string; action: "Approved" | "Rejected" }) =>
       reviewStudentDocument(id, action),
     onSuccess: async () => {
       setReviewError(null);
-      await queryClient.invalidateQueries({ queryKey: ["officer", "dashboard"] });
+      await queryClient.invalidateQueries({ queryKey: [...COUNSELLOR_DASHBOARD_KEY] });
       await queryClient.invalidateQueries({ queryKey: ["officer", "documents-queue"] });
       await queryClient.invalidateQueries({ queryKey: ["documents"] });
     },
@@ -73,53 +111,230 @@ function StaffDashboard() {
     if (msg.toLowerCase().includes("permission") || String(dashQ.error).includes("403")) {
       return <PermissionDenied body={msg} />;
     }
-    return <ErrorState body={msg} />;
+    return <ErrorState body={msg} onRetry={() => void dashQ.refetch()} />;
   }
 
   const data = dashQ.data;
-  if (!data) return <EmptyState title="No dashboard data" body="No authorized records available." />;
+  if (!data)
+    return <EmptyState title="No dashboard data" body="No authorized records available." />;
+
+  const unreadCount = (notifQ.data ?? []).filter((n) => !n.read).length;
+  const lastSync = data.fetchedAt ? new Date(data.fetchedAt).toLocaleTimeString() : null;
+  const m = data.metrics;
+
+  async function openNotification(n: {
+    id: string;
+    read: boolean;
+    linkPath?: string | null;
+    studentId?: string | null;
+  }) {
+    const href = resolveCounsellorNotificationHref({
+      linkPath: n.linkPath,
+      studentId: n.studentId,
+    });
+    if (shouldOfferMarkAsRead(n) && !n.read) {
+      try {
+        await markM.mutateAsync(n.id);
+      } catch {
+        // Best-effort mark-read.
+      }
+    }
+    setNotifOpen(false);
+    void router.navigate({ to: href });
+  }
 
   return (
-    <div>
+    <div className="space-y-5 md:space-y-6">
       <PageHeader
-        title={`Good day, ${data.greetingName}`}
-        subtitle={workspaceTitle}
+        title={`Counsellor Workbench`}
+        subtitle={`${workspaceTitle} · Signed in as ${data.greetingName}`}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <LiveBadge status={liveStatus} lastSync={lastSync} />
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              className="relative"
+              aria-label={
+                unreadCount > 0 ? `Notifications, ${unreadCount} unread` : "Notifications"
+              }
+              onClick={() => setNotifOpen(true)}
+            >
+              <Bell className="mr-2 h-4 w-4" aria-hidden />
+              Alerts
+              {unreadCount > 0 ? (
+                <span className="ml-1.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-navy px-1.5 text-[10px] font-semibold text-white">
+                  {unreadCount > 99 ? "99+" : unreadCount}
+                </span>
+              ) : null}
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link to="/staff/students">My Students</Link>
+            </Button>
+            <Button asChild size="sm" variant="outline">
+              <Link to="/staff/tasks">Tasks</Link>
+            </Button>
+          </div>
+        }
       />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
         <StatCard
-          label="Assigned students"
-          value={data.metrics.assignedStudents}
+          label="My Assigned Students"
+          value={String(m.assignedStudents)}
+          hint={COUNSELLOR_METRIC_DEFINITIONS.assignedStudents}
           icon={<Users />}
         />
         <StatCard
-          label="Apps in progress"
-          value={data.metrics.appsInProgress}
+          label="Counselling Completed"
+          value={String(m.counsellingCompleted ?? 0)}
+          hint="Consent recorded (not registration alone)"
+          icon={<ClipboardCheck />}
+        />
+        <StatCard
+          label="Follow-ups Due"
+          value={String(m.followUpsDue ?? 0)}
+          hint={COUNSELLOR_METRIC_DEFINITIONS.followUpsDue}
+          icon={<Clock3 />}
+        />
+        <StatCard
+          label="Applications In Progress"
+          value={String(m.appsInProgress)}
+          hint={COUNSELLOR_METRIC_DEFINITIONS.applicationsInProgress}
           icon={<FolderKanban />}
         />
         <StatCard
-          label="Docs to review"
-          value={data.metrics.docsToReview}
-          icon={<FileSearch />}
+          label="Awaiting Response"
+          value={String(m.awaitingResponse ?? 0)}
+          hint="Admission handover and/or Front Desk fee queue"
+          icon={<Hourglass />}
         />
         <StatCard
-          label="Deadlines this week"
-          value={data.metrics.deadlinesThisWeek}
-          icon={<CalendarClock />}
+          label="Action Required"
+          value={String(m.actionRequired ?? 0)}
+          hint={COUNSELLOR_METRIC_DEFINITIONS.actionRequired}
+          icon={<AlertCircle />}
         />
       </div>
 
-      <div className="mb-6 grid gap-6 lg:grid-cols-2">
+      <Panel
+        title="Needs My Attention"
+        action={
+          <Button asChild size="sm" variant="outline">
+            <Link to="/staff/students">Open directory</Link>
+          </Button>
+        }
+      >
+        {(data.needsAttention ?? []).length === 0 ? (
+          <EmptyState
+            title="Nothing needs attention"
+            body="Lifecycle steps, returned cases, overdue tasks, and pending documents will appear here."
+          />
+        ) : (
+          <ul className="divide-y divide-border">
+            {(data.needsAttention ?? []).map((item) => (
+              <li
+                key={item.id}
+                className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+              >
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-navy">
+                    {item.fullName}{" "}
+                    <span className="font-normal text-muted-foreground">· {item.caseId}</span>
+                  </p>
+                  <p className="text-sm text-navy/90">{item.title}</p>
+                  <p className="text-xs text-muted-foreground line-clamp-2">{item.detail}</p>
+                </div>
+                <Button
+                  asChild
+                  size="sm"
+                  variant="navy"
+                  className="shrink-0 self-start sm:self-center"
+                >
+                  <Link
+                    to="/staff/students/$studentId"
+                    params={{ studentId: item.studentId }}
+                    search={{ tab: "assessment" }}
+                  >
+                    Open record
+                  </Link>
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </Panel>
+
+      <div className="grid gap-5 lg:grid-cols-2">
         <Panel
-          title="Today's Tasks"
+          title="Recent Student Activity"
           action={
-            <Link to="/staff/activity" className="text-xs font-semibold text-royal hover:underline">
+            <Link to="/staff/students" className="text-xs font-semibold text-royal hover:underline">
+              All students »
+            </Link>
+          }
+        >
+          {(data.recentActivity ?? data.assignedOverview).length === 0 ? (
+            <EmptyState
+              title="No assigned students"
+              body="Students appear here once Front Desk assigns them to your desk."
+            />
+          ) : (
+            <TableWrap compact>
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th className="hidden md:table-cell">Stage</th>
+                  <th>Next</th>
+                  <th> </th>
+                </tr>
+              </thead>
+              <tbody>
+                {(data.recentActivity ?? data.assignedOverview).map((s) => (
+                  <tr key={s.id}>
+                    <td>
+                      <div className="font-medium text-navy">{s.name}</div>
+                      <div className="text-xs text-muted-foreground">
+                        {s.caseId ?? s.destination}
+                        {s.lastActivity ? ` · ${fmtDate(s.lastActivity.slice(0, 10))}` : ""}
+                      </div>
+                    </td>
+                    <td className="hidden text-xs md:table-cell">{s.stageLabel}</td>
+                    <td className="max-w-[12rem] text-xs text-muted-foreground">
+                      {s.nextActionLabel ?? "—"}
+                    </td>
+                    <td>
+                      <Button asChild size="sm" variant="outline">
+                        <Link
+                          to="/staff/students/$studentId"
+                          params={{ studentId: s.id }}
+                          search={{ tab: "assessment" }}
+                        >
+                          View record
+                        </Link>
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </TableWrap>
+          )}
+        </Panel>
+
+        <Panel
+          title="Follow-ups Due"
+          action={
+            <Link to="/staff/tasks" className="text-xs font-semibold text-royal hover:underline">
               All tasks »
             </Link>
           }
         >
           {!data.todaysTasks.length ? (
-            <EmptyState title="No open tasks" body="You have no overdue or due tasks right now." />
+            <EmptyState
+              title="No open tasks"
+              body="Overdue and due tasks for your desk appear here."
+            />
           ) : (
             <ul className="space-y-3">
               {data.todaysTasks.map((t) => (
@@ -140,134 +355,200 @@ function StaffDashboard() {
                       {t.studentName ?? "General"}
                       {" · "}
                       {t.priority === "overdue"
-                        ? "Overdue"
+                        ? "Overdue / due"
                         : t.priority === "due_today"
                           ? "Due today"
                           : fmtDate(t.dueAt.slice(0, 10))}
                     </p>
                   </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-
-        <Panel
-          title="Assigned Students"
-          action={
-            <Link to="/staff/students" className="text-xs font-semibold text-royal hover:underline">
-              All students »
-            </Link>
-          }
-        >
-          {!data.assignedOverview.length ? (
-            <EmptyState
-              title="No assigned students"
-              body="Students appear here once they are assigned to you."
-            />
-          ) : (
-            <TableWrap>
-              <thead>
-                <tr>
-                  <th>Student</th>
-                  <th>Dest.</th>
-                  <th>Stage</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.assignedOverview.map((s) => (
-                  <tr key={s.id}>
-                    <td>
+                  {t.studentId ? (
+                    <Button asChild size="sm" variant="ghost">
                       <Link
                         to="/staff/students/$studentId"
-                        params={{ studentId: s.id }}
-                        search={{ tab: "assessment" }}
-                        className="font-medium text-navy hover:text-royal hover:underline"
+                        params={{ studentId: t.studentId }}
+                        search={{ tab: "overview" }}
                       >
-                        {s.name}
+                        Open
                       </Link>
-                    </td>
-                    <td>{s.destination}</td>
-                    <td className="text-xs">{s.stageLabel}</td>
-                  </tr>
+                    </Button>
+                  ) : null}
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </div>
+
+      {(data.docsWaiting.length > 0 || data.upcomingDeadlines.length > 0) && (
+        <div className="grid gap-5 lg:grid-cols-2">
+          {data.docsWaiting.length > 0 ? (
+            <Panel
+              title="Documents to review"
+              action={
+                <Link
+                  to="/staff/documents"
+                  className="text-xs font-semibold text-royal hover:underline"
+                >
+                  Documents »
+                </Link>
+              }
+            >
+              {reviewError ? (
+                <div className="mb-3">
+                  <ErrorState body={reviewError} />
+                </div>
+              ) : null}
+              <ul className="space-y-3">
+                {data.docsWaiting.slice(0, 5).map((d) => (
+                  <li
+                    key={d.id}
+                    className="flex flex-col gap-2 border-t border-border/70 pt-3 first:border-0 first:pt-0 sm:flex-row sm:items-center sm:justify-between"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-navy">
+                        {d.studentName} · {d.category}
+                      </p>
+                      <p className="text-xs text-muted-foreground">
+                        Uploaded {fmtDate(d.uploaded)}
+                      </p>
+                    </div>
+                    <div className="flex gap-2">
+                      <Button asChild size="sm" variant="outline">
+                        <Link
+                          to="/staff/students/$studentId"
+                          params={{ studentId: d.studentId }}
+                          search={{ tab: "documents" }}
+                        >
+                          Review
+                        </Link>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="navy"
+                        disabled={reviewM.isPending}
+                        onClick={() => reviewM.mutate({ id: d.id, action: "Approved" })}
+                      >
+                        Approve
+                      </Button>
+                    </div>
+                  </li>
                 ))}
-              </tbody>
-            </TableWrap>
-          )}
-        </Panel>
-      </div>
+              </ul>
+            </Panel>
+          ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-2">
-        <Panel title="Documents Waiting for Review">
-          {reviewError ? <div className="mb-3"><ErrorState body={reviewError} /></div> : null}
-          {!data.docsWaiting.length ? (
-            <EmptyState title="Inbox clear" body="No documents awaiting your review." />
-          ) : (
-            <ul className="space-y-4">
-              {data.docsWaiting.map((d) => (
-                <li
-                  key={d.id}
-                  className="flex flex-col gap-2 border-t border-border/70 pt-3 first:border-0 first:pt-0 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-navy">
-                      {d.studentName} · {d.category}
-                    </p>
-                    <p className="text-xs text-muted-foreground">Uploaded {fmtDate(d.uploaded)}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="navy"
-                      disabled={reviewM.isPending}
-                      onClick={() => reviewM.mutate({ id: d.id, action: "Approved" })}
-                    >
-                      Approve
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={reviewM.isPending}
-                      onClick={() => reviewM.mutate({ id: d.id, action: "Rejected" })}
-                    >
-                      Reject
-                    </Button>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
+          {data.upcomingDeadlines.length > 0 ? (
+            <Panel title="Upcoming deadlines">
+              <ul className="space-y-3">
+                {data.upcomingDeadlines.slice(0, 5).map((d) => (
+                  <li
+                    key={d.id}
+                    className="flex items-center justify-between gap-3 border-t border-border/70 pt-3 first:border-0 first:pt-0"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-navy">{d.label}</p>
+                      <p className="text-xs text-muted-foreground">{d.studentName}</p>
+                    </div>
+                    <div className="shrink-0 text-right text-xs">
+                      <p className="font-semibold text-navy">{fmtDate(d.deadline)}</p>
+                      <p
+                        className={cn(
+                          d.daysLeft <= 3 ? "font-bold text-danger" : "text-muted-foreground",
+                        )}
+                      >
+                        {d.daysLeft === 0 ? "Today" : `${d.daysLeft} days left`}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          ) : null}
+        </div>
+      )}
 
-        <Panel title="Upcoming Deadlines">
-          {!data.upcomingDeadlines.length ? (
-            <EmptyState
-              title="No deadlines in the next 14 days"
-              body="Application and offer deadlines for your students will show here."
-            />
-          ) : (
-            <ul className="space-y-3">
-              {data.upcomingDeadlines.map((d) => (
-                <li
-                  key={d.id}
-                  className="flex items-center justify-between gap-3 border-t border-border/70 pt-3 first:border-0 first:pt-0"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-semibold text-navy">{d.label}</p>
-                    <p className="text-xs text-muted-foreground">{d.studentName}</p>
-                  </div>
-                  <div className="shrink-0 text-right text-xs">
-                    <p className="font-semibold text-navy">{fmtDate(d.deadline)}</p>
-                    <p className={cn(d.daysLeft <= 3 ? "font-bold text-danger" : "text-muted-foreground")}>
-                      {d.daysLeft === 0 ? "Today" : `${d.daysLeft} days left`}
-                    </p>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-      </div>
+      <Sheet open={notifOpen} onOpenChange={setNotifOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>Notifications</SheetTitle>
+          </SheetHeader>
+          <div className="mt-4 space-y-3">
+            {notifQ.isLoading ? (
+              <p className="text-sm text-muted-foreground">Loading notifications…</p>
+            ) : notifQ.isError ? (
+              <div className="space-y-2">
+                <p className="text-sm text-danger">Could not load notifications.</p>
+                <Button size="sm" variant="outline" onClick={() => void notifQ.refetch()}>
+                  Retry
+                </Button>
+              </div>
+            ) : !(notifQ.data ?? []).length ? (
+              <EmptyState
+                title="No notifications"
+                body="Assignment, fee, Admission, and document alerts for your account appear here."
+              />
+            ) : (
+              <ul className="space-y-2">
+                {(notifQ.data ?? []).map((n) => (
+                  <li key={n.id}>
+                    <button
+                      type="button"
+                      className={cn(
+                        "w-full rounded-md border border-border px-3 py-2.5 text-left transition-colors hover:bg-accent/40 focus:outline-none focus:ring-2 focus:ring-ring",
+                        !n.read && "border-navy/25 bg-navy/[0.03]",
+                      )}
+                      onClick={() => void openNotification(n)}
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <p className="text-sm font-medium text-navy">{n.title}</p>
+                        <span className="shrink-0 text-[11px] text-muted-foreground">{n.time}</span>
+                      </div>
+                      {n.body ? (
+                        <p className="mt-1 line-clamp-3 text-xs text-muted-foreground">{n.body}</p>
+                      ) : null}
+                      <p className="mt-1 text-[11px] uppercase tracking-wide text-muted-foreground">
+                        {n.read ? "Read" : "Unread"}
+                      </p>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
+  );
+}
+
+function LiveBadge({
+  status,
+  lastSync,
+}: {
+  status: "live" | "reconnecting" | "offline" | "connecting";
+  lastSync: string | null;
+}) {
+  const label =
+    status === "live"
+      ? "Live"
+      : status === "reconnecting" || status === "connecting"
+        ? "Reconnecting"
+        : lastSync
+          ? `Last updated ${lastSync}`
+          : "Offline";
+  return (
+    <span
+      className={cn(
+        "rounded px-2 py-1 text-[11px] font-semibold uppercase tracking-wide",
+        status === "live"
+          ? "bg-emerald-50 text-emerald-800"
+          : status === "offline"
+            ? "bg-slate-100 text-slate-600"
+            : "bg-amber-50 text-amber-800",
+      )}
+      title={lastSync ? `Synced ${lastSync}` : undefined}
+    >
+      {label}
+    </span>
   );
 }

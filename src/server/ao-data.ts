@@ -17,11 +17,7 @@ import type {
   VisaMilestoneRow,
 } from "@/types/database";
 import { rolesAtLeastAdmin } from "@/lib/roles";
-import {
-  inferActionType,
-  inferOutcome,
-  toneFor,
-} from "@/data/immutable-audit";
+import { inferActionType, inferOutcome, toneFor } from "@/data/immutable-audit";
 import {
   mapApplicationRow,
   mapDocumentRow,
@@ -33,6 +29,7 @@ import { AuthError, type TrustedSession } from "@/server/portal-auth";
 import { createServerSupabase } from "@/server/supabase";
 import * as dbSvc from "@/services/db";
 import type { OfficerDashboardPayload } from "@/types/portal-officer";
+import type { CounsellorWorkbenchStudentSnap } from "@/lib/counsellor-workspace";
 import type { ApplicationStageHistoryRecord } from "@/types/applications-pipeline";
 import {
   CAS_I20_STATUS_LABELS,
@@ -217,12 +214,14 @@ export async function buildOfficerDashboardFromDb(
   ]);
   if (profileRes.error) throw new Error(profileRes.error.message);
 
-  const inProgress = new Set([
-    "Docs Pending",
-    "Under Review",
-    "Ready to Submit",
-    "Submitted",
-  ]);
+  const {
+    IN_PROGRESS_APPLICATION_UI_STATUSES,
+    buildCounsellorAttentionItems,
+    computeCounsellorWorkbenchMetrics,
+    isTaskDueOnOrBeforeToday,
+    nextActionLabelForSnap,
+  } = await import("@/lib/counsellor-workspace");
+  const inProgress = new Set<string>([...IN_PROGRESS_APPLICATION_UI_STATUSES]);
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const weekEnd = new Date(today);
@@ -255,20 +254,129 @@ export async function buildOfficerDashboardFromDb(
       .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
       .join(" ");
 
+  // Lifecycle artefacts for assigned students (bounded IN queries — no N+1).
+  type LifecycleBundle = {
+    consentedIds: Set<string>;
+    assessedIds: Set<string>;
+    feeByStudent: Map<string, string | null>;
+    openFeeByStudent: Map<string, string | null>;
+    handoverByStudent: Map<string, string | null>;
+  };
+  const lifecycle: LifecycleBundle = {
+    consentedIds: new Set(),
+    assessedIds: new Set(),
+    feeByStudent: new Map(),
+    openFeeByStudent: new Map(),
+    handoverByStudent: new Map(),
+  };
+  if (ids.length) {
+    const [agreementsRes, assessmentsRes, feesRes, feeReqRes, handoverRes] = await Promise.all([
+      client
+        .from("counselling_agreements")
+        .select("student_id, consented")
+        .in("student_id", ids)
+        .eq("consented", true),
+      client.from("student_assessments").select("student_id").in("student_id", ids),
+      client.from("signup_fee_payments").select("student_id, status").in("student_id", ids),
+      client
+        .from("counselling_fee_verification_requests")
+        .select("student_id, status, updated_at")
+        .in("student_id", ids)
+        .order("updated_at", { ascending: false }),
+      client
+        .from("admission_handovers")
+        .select("student_id, status, handed_over_at")
+        .in("student_id", ids)
+        .order("handed_over_at", { ascending: false }),
+    ]);
+    // Fail soft on optional tables so a missing migration does not blank the whole dashboard.
+    for (const row of agreementsRes.data ?? []) {
+      if (row.student_id) lifecycle.consentedIds.add(row.student_id);
+    }
+    for (const row of assessmentsRes.data ?? []) {
+      if (row.student_id) lifecycle.assessedIds.add(row.student_id);
+    }
+    for (const row of feesRes.data ?? []) {
+      if (row.student_id) lifecycle.feeByStudent.set(row.student_id, row.status ?? null);
+    }
+    for (const row of feeReqRes.data ?? []) {
+      if (!row.student_id || lifecycle.openFeeByStudent.has(row.student_id)) continue;
+      const st = String(row.status ?? "").toLowerCase();
+      if (st === "open" || st === "in_progress" || st === "cancelled") {
+        lifecycle.openFeeByStudent.set(row.student_id, st);
+      } else {
+        lifecycle.openFeeByStudent.set(row.student_id, null);
+      }
+    }
+    for (const row of handoverRes.data ?? []) {
+      if (!row.student_id || lifecycle.handoverByStudent.has(row.student_id)) continue;
+      lifecycle.handoverByStudent.set(row.student_id, String(row.status ?? "").toLowerCase());
+    }
+  }
+
+  const overdueStudentIds = new Set<string>();
+  const followUpsDue = tasks.filter((t) => {
+    const due = isTaskDueOnOrBeforeToday(t.due_at ?? t.created_at, today);
+    if (due && t.student_id) overdueStudentIds.add(t.student_id);
+    return due;
+  }).length;
+
+  const docsPendingByStudent = new Map<string, number>();
+  for (const d of docs) {
+    if (d.status !== "Pending Review") continue;
+    docsPendingByStudent.set(d.studentId, (docsPendingByStudent.get(d.studentId) ?? 0) + 1);
+  }
+
+  const snaps: CounsellorWorkbenchStudentSnap[] = students.map((s) => ({
+    id: s.id,
+    caseId: s.caseId,
+    name: s.name,
+    destination: s.destination,
+    stageLabel: stageLabel(s.stage),
+    lastActivity: s.lastActivity,
+    hasAssessment: lifecycle.assessedIds.has(s.id),
+    hasConsent: lifecycle.consentedIds.has(s.id),
+    signupFeeStatus: lifecycle.feeByStudent.get(s.id) ?? null,
+    openFeeRequestStatus: lifecycle.openFeeByStudent.get(s.id) ?? null,
+    handoverStatus: lifecycle.handoverByStudent.get(s.id) ?? null,
+    docsPendingReview: docsPendingByStudent.get(s.id) ?? 0,
+    hasOverdueTask: overdueStudentIds.has(s.id),
+  }));
+
+  const appsInProgress = apps.filter((a) => inProgress.has(a.status)).length;
+  const docsToReview = docs.filter((d) => d.status === "Pending Review").length;
+  const deadlinesThisWeek = deadlineRows.filter((d) => {
+    const dt = new Date(d.deadline);
+    return dt >= today && dt < weekEnd;
+  }).length;
+
+  const workbenchMetrics = computeCounsellorWorkbenchMetrics({
+    students: snaps,
+    applicationsInProgressCount: appsInProgress,
+    followUpsDueCount: followUpsDue,
+    docsToReviewCount: docsToReview,
+    deadlinesThisWeekCount: deadlinesThisWeek,
+  });
+
+  const attention = buildCounsellorAttentionItems(snaps, 10);
+  const recentSnaps = [...snaps].sort((a, b) => b.lastActivity.localeCompare(a.lastActivity));
+
   return {
     greetingName: profileGreeting(profileRes.data, session.email),
-    deskLabel: rolesAtLeastAdmin(session.role) ? "Admin overview" : "Admission Officer",
+    deskLabel: rolesAtLeastAdmin(session.role) ? "Admin overview" : "Counsellor Workbench",
     metrics: {
-      assignedStudents: students.length,
-      appsInProgress: apps.filter((a) => inProgress.has(a.status)).length,
-      docsToReview: docs.filter((d) => d.status === "Pending Review").length,
-      deadlinesThisWeek: deadlineRows.filter((d) => {
-        const dt = new Date(d.deadline);
-        return dt >= today && dt < weekEnd;
-      }).length,
+      assignedStudents: workbenchMetrics.assignedStudents,
+      appsInProgress: workbenchMetrics.applicationsInProgress,
+      docsToReview: workbenchMetrics.docsToReview,
+      deadlinesThisWeek: workbenchMetrics.deadlinesThisWeek,
+      counsellingCompleted: workbenchMetrics.counsellingCompleted,
+      followUpsDue: workbenchMetrics.followUpsDue,
+      awaitingResponse: workbenchMetrics.awaitingResponse,
+      actionRequired: workbenchMetrics.actionRequired,
     },
     todaysTasks: tasks.slice(0, 8).map((t) => {
       const st = t.student_id ? students.find((s) => s.id === t.student_id) : undefined;
+      const due = isTaskDueOnOrBeforeToday(t.due_at ?? t.created_at, today);
       return {
         id: t.id,
         title: t.title,
@@ -276,18 +384,22 @@ export async function buildOfficerDashboardFromDb(
         studentName: st?.name ?? null,
         dueAt: t.due_at ?? t.created_at,
         priority:
-          t.priority === "high" || t.priority === "overdue"
+          t.priority === "high" || t.priority === "overdue" || due
             ? ("overdue" as const)
             : ("normal" as const),
         ...(t.reminder_ref ? { reminderRef: t.reminder_ref } : {}),
       };
     }),
-    assignedOverview: students.slice(0, 8).map((s) => ({
+    assignedOverview: recentSnaps.slice(0, 8).map((s) => ({
       id: s.id,
       name: s.name,
       destination: s.destination,
-      stage: s.stage,
-      stageLabel: stageLabel(s.stage),
+      stage: (students.find((x) => x.id === s.id)?.stage ??
+        "profile_submitted") as Student["stage"],
+      stageLabel: s.stageLabel,
+      caseId: s.caseId,
+      lastActivity: s.lastActivity,
+      nextActionLabel: nextActionLabelForSnap(s),
     })),
     docsWaiting: docs
       .filter((d) => d.status === "Pending Review")
@@ -304,6 +416,28 @@ export async function buildOfficerDashboardFromDb(
         };
       }),
     upcomingDeadlines: deadlineRows.slice(0, 8),
+    needsAttention: attention.map((a) => ({
+      id: a.id,
+      studentId: a.studentId,
+      caseId: a.caseId,
+      fullName: a.fullName,
+      kind: a.kind,
+      title: a.title,
+      detail: a.detail,
+      at: a.at,
+    })),
+    recentActivity: recentSnaps.slice(0, 8).map((s) => ({
+      id: s.id,
+      name: s.name,
+      destination: s.destination,
+      stage: (students.find((x) => x.id === s.id)?.stage ??
+        "profile_submitted") as Student["stage"],
+      stageLabel: s.stageLabel,
+      caseId: s.caseId,
+      lastActivity: s.lastActivity,
+      nextActionLabel: nextActionLabelForSnap(s),
+    })),
+    fetchedAt: new Date().toISOString(),
   };
 }
 
@@ -369,19 +503,85 @@ export async function buildStudentsDirectoryFromDb(
     : { data: [] as { id: string; full_name: string }[] };
 
   const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name]));
-  const pageSize = Math.min(Math.max(filters.pageSize ?? 6, 1), 50);
+  const pageSize = Math.min(Math.max(filters.pageSize ?? 20, 1), 50);
   const page = Math.max(filters.page ?? 1, 1);
   const total = students.length;
   const pageRows = students.slice((page - 1) * pageSize, page * pageSize);
+  const pageIds = pageRows.map((s) => s.id);
 
   const allApps = await listAppsForStudents(
     client,
     allVisible.map((s) => s.id),
   );
 
+  const { nextActionLabelForSnap } = await import("@/lib/counsellor-workspace");
+  const consentedIds = new Set<string>();
+  const assessedIds = new Set<string>();
+  const feeByStudent = new Map<string, string | null>();
+  const openFeeByStudent = new Map<string, string | null>();
+  const handoverByStudent = new Map<string, string | null>();
+  if (pageIds.length) {
+    const [agreementsRes, assessmentsRes, feesRes, feeReqRes, handoverRes] = await Promise.all([
+      client
+        .from("counselling_agreements")
+        .select("student_id")
+        .in("student_id", pageIds)
+        .eq("consented", true),
+      client.from("student_assessments").select("student_id").in("student_id", pageIds),
+      client.from("signup_fee_payments").select("student_id, status").in("student_id", pageIds),
+      client
+        .from("counselling_fee_verification_requests")
+        .select("student_id, status, updated_at")
+        .in("student_id", pageIds)
+        .order("updated_at", { ascending: false }),
+      client
+        .from("admission_handovers")
+        .select("student_id, status, handed_over_at")
+        .in("student_id", pageIds)
+        .order("handed_over_at", { ascending: false }),
+    ]);
+    for (const row of agreementsRes.data ?? []) {
+      if (row.student_id) consentedIds.add(row.student_id);
+    }
+    for (const row of assessmentsRes.data ?? []) {
+      if (row.student_id) assessedIds.add(row.student_id);
+    }
+    for (const row of feesRes.data ?? []) {
+      if (row.student_id) feeByStudent.set(row.student_id, row.status ?? null);
+    }
+    for (const row of feeReqRes.data ?? []) {
+      if (!row.student_id || openFeeByStudent.has(row.student_id)) continue;
+      const st = String(row.status ?? "").toLowerCase();
+      openFeeByStudent.set(
+        row.student_id,
+        st === "open" || st === "in_progress" || st === "cancelled" ? st : null,
+      );
+    }
+    for (const row of handoverRes.data ?? []) {
+      if (!row.student_id || handoverByStudent.has(row.student_id)) continue;
+      handoverByStudent.set(row.student_id, String(row.status ?? "").toLowerCase());
+    }
+  }
+
   return {
     rows: pageRows.map((s) => {
       const studentApps = apps.filter((a) => a.studentId === s.id);
+      const hasConsent = consentedIds.has(s.id);
+      const nextActionLabel = nextActionLabelForSnap({
+        id: s.id,
+        caseId: s.caseId,
+        name: s.name,
+        destination: s.destination,
+        stageLabel: stageLabel(s.stage),
+        lastActivity: s.lastActivity,
+        hasAssessment: assessedIds.has(s.id),
+        hasConsent,
+        signupFeeStatus: feeByStudent.get(s.id) ?? null,
+        openFeeRequestStatus: openFeeByStudent.get(s.id) ?? null,
+        handoverStatus: handoverByStudent.get(s.id) ?? null,
+        docsPendingReview: 0,
+        hasOverdueTask: false,
+      });
       return {
         id: s.id,
         caseId: s.caseId,
@@ -396,6 +596,8 @@ export async function buildStudentsDirectoryFromDb(
         stageLabel: stageLabel(s.stage),
         archived: Boolean(s.archived),
         lastActivity: s.lastActivity,
+        nextActionLabel,
+        hasConsent,
       };
     }),
     total,
@@ -477,7 +679,10 @@ export async function getScopedDocumentRow(
   client: AoDb,
   session: TrustedSession,
   documentId: string,
-): Promise<{ row: NonNullable<Awaited<ReturnType<typeof dbSvc.getStudentDocumentById>>>; student: Student }> {
+): Promise<{
+  row: NonNullable<Awaited<ReturnType<typeof dbSvc.getStudentDocumentById>>>;
+  student: Student;
+}> {
   const row = await dbSvc.getStudentDocumentById(client, documentId);
   if (!row) throw new AuthError("Document not found.", 404);
   const student = await assertStudentVisibleDb(client, session, row.student_id);
@@ -692,7 +897,9 @@ export async function saveStudentAssessmentDb(
     preferred_intake: assessment.targetIntake.trim() || null,
     budget_range: assessment.annualBudget.trim() || null,
     work_experience_years:
-      workExperienceYears != null && !Number.isNaN(workExperienceYears) ? workExperienceYears : null,
+      workExperienceYears != null && !Number.isNaN(workExperienceYears)
+        ? workExperienceYears
+        : null,
     notes: JSON.stringify(extras),
   });
 
@@ -941,7 +1148,10 @@ export async function listCasI20RecordsForStudents(
   studentIds: string[],
 ): Promise<CasI20Record[]> {
   if (!studentIds.length) return [];
-  const { data, error } = await client.from("cas_i20_records").select("*").in("student_id", studentIds);
+  const { data, error } = await client
+    .from("cas_i20_records")
+    .select("*")
+    .in("student_id", studentIds);
   if (error) throw new Error(error.message);
   return (data ?? []).map(mapCasI20Row);
 }
@@ -951,7 +1161,10 @@ export async function listVisaMilestonesForStudents(
   studentIds: string[],
 ): Promise<VisaMilestoneRecord[]> {
   if (!studentIds.length) return [];
-  const { data, error } = await client.from("visa_milestones").select("*").in("student_id", studentIds);
+  const { data, error } = await client
+    .from("visa_milestones")
+    .select("*")
+    .in("student_id", studentIds);
   if (error) throw new Error(error.message);
   return (data ?? []).map(mapVisaMilestoneRow);
 }
@@ -1017,9 +1230,15 @@ export function mapTaskRow(row: TaskRow): PortalTaskRecord {
 }
 
 /** Tasks visible to this session: admin/super_admin see all; consultants see their own desk's tasks + tasks tied to their students. */
-export async function listVisibleTasksDb(client: AoDb, session: TrustedSession): Promise<PortalTaskRecord[]> {
+export async function listVisibleTasksDb(
+  client: AoDb,
+  session: TrustedSession,
+): Promise<PortalTaskRecord[]> {
   if (rolesAtLeastAdmin(session.role)) {
-    const { data, error } = await client.from("tasks").select("*").order("due_at", { ascending: true });
+    const { data, error } = await client
+      .from("tasks")
+      .select("*")
+      .order("due_at", { ascending: true });
     if (error) throw new Error(error.message);
     return (data ?? []).map(mapTaskRow);
   }
@@ -1096,7 +1315,12 @@ function mapAuditEventRow(row: AuditEventRow, namesById: Map<string, string>): P
 function formatDayHeadingUtc(dayKey: string): string {
   const d = new Date(`${dayKey}T12:00:00.000Z`);
   return d
-    .toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })
+    .toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      timeZone: "UTC",
+    })
     .toUpperCase();
 }
 
@@ -1125,7 +1349,16 @@ export async function listScopedAuditEvents(
   const q = filters.q?.trim().toLowerCase();
   if (q) {
     mapped = mapped.filter((ev) => {
-      const hay = [ev.action, ev.actorName, ev.outcome, ev.entityId, ev.applicationId, ev.documentId, ev.detail, ev.studentId]
+      const hay = [
+        ev.action,
+        ev.actorName,
+        ev.outcome,
+        ev.entityId,
+        ev.applicationId,
+        ev.documentId,
+        ev.detail,
+        ev.studentId,
+      ]
         .filter(Boolean)
         .join(" ")
         .toLowerCase();
@@ -1172,7 +1405,10 @@ export async function buildActivityLogFromDb(
     }));
 
   const students = await listVisibleStudentsDb(client, session, { includeArchived: true });
-  const apps = await listAppsForStudents(client, students.map((s) => s.id));
+  const apps = await listAppsForStudents(
+    client,
+    students.map((s) => s.id),
+  );
 
   return {
     groups,
@@ -1182,7 +1418,11 @@ export async function buildActivityLogFromDb(
     hasMore: offset + limit < all.length,
     filterOptions: {
       students: students.map((s) => ({ id: s.id, name: s.name, caseId: s.caseId })),
-      applications: apps.map((a) => ({ id: a.id, studentId: a.studentId, label: `${a.id} · ${a.university}` })),
+      applications: apps.map((a) => ({
+        id: a.id,
+        studentId: a.studentId,
+        label: `${a.id} · ${a.university}`,
+      })),
     },
     immutable: true as const,
   };
