@@ -192,6 +192,7 @@ import {
   portalArchiveFrontDeskIntake,
   portalForwardFeeVerificationRequest,
   portalGetFrontDeskDashboard,
+  portalGetFrontDeskIntakeRecord,
   portalListCounsellorDesks,
   portalListFeeVerificationRequests,
   portalListFrontDeskArchivedIntake,
@@ -611,6 +612,9 @@ export const intakeRegisterStudent = (data: IntakeRegisterInput) =>
   withAuth((opts) => portalIntakeRegisterStudent({ ...opts, data }));
 
 export const getFrontDeskDashboard = () => withAuth((opts) => portalGetFrontDeskDashboard(opts));
+
+export const getFrontDeskIntakeRecord = (studentId: string) =>
+  withAuth((opts) => portalGetFrontDeskIntakeRecord({ ...opts, data: { studentId } }));
 
 export const listFrontDeskIntake = () => withAuth((opts) => portalListFrontDeskIntake(opts));
 export const listFrontDeskArchivedIntake = () =>

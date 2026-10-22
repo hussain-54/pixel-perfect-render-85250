@@ -1,4 +1,4 @@
-import { createFileRoute, Link, redirect } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, redirect, useRouterState } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import {
@@ -63,6 +63,13 @@ export const Route = createFileRoute("/staff/intake")({
 type SortKey = "createdAt" | "fullName" | "nextFollowUpAt" | "updatedAt";
 
 function FrontDeskIntakeListPage() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  if (pathname !== "/staff/intake") return <Outlet />;
+
+  return <FrontDeskIntakeListContent />;
+}
+
+function FrontDeskIntakeListContent() {
   const queryClient = useQueryClient();
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -480,7 +487,6 @@ function FrontDeskIntakeListPage() {
                       <th className="hidden px-3 py-2 md:table-cell">Registered</th>
                       <th className="px-2 py-2 sm:px-3">Counsellor</th>
                       <th className="px-2 py-2 sm:px-3">Fee</th>
-                      <th className="hidden px-3 py-2 lg:table-cell">Follow-up</th>
                       <th className="hidden px-3 py-2 xl:table-cell">Updated</th>
                       <th className="hidden px-3 py-2 lg:table-cell">Portal</th>
                       <th className="px-2 py-2 sm:px-3">Actions</th>
@@ -539,9 +545,6 @@ function FrontDeskIntakeListPage() {
                           <td className="px-2 py-2 text-xs sm:px-3">
                             {describePersistedSignupFeeStatus(row.signupFeeStatus).label}
                           </td>
-                          <td className="hidden px-3 py-2 text-muted-foreground lg:table-cell">
-                            {row.nextFollowUpAt || "—"}
-                          </td>
                           <td className="hidden px-3 py-2 text-muted-foreground xl:table-cell">
                             {fmtDate(row.updatedAt)}
                           </td>
@@ -564,6 +567,11 @@ function FrontDeskIntakeListPage() {
                           </td>
                           <td className="px-2 py-2 sm:px-3">
                             <div className="flex min-w-[7.5rem] flex-col gap-1 sm:min-w-[9rem]">
+                              <Button asChild size="sm" variant="navy">
+                                <Link to="/staff/intake/$studentId" params={{ studentId: row.id }}>
+                                  View record
+                                </Link>
+                              </Button>
                               <Button
                                 type="button"
                                 size="sm"

@@ -37,6 +37,7 @@ describe("Front Desk trusted business role", () => {
     expect(staffHomeForBusinessRole("consultant", "digital_manager")).toBe("/staff/marketing");
     expect(frontDeskNavAllowed("/staff/register")).toBe(true);
     expect(frontDeskNavAllowed("/staff/intake")).toBe(true);
+    expect(frontDeskNavAllowed("/staff/intake/abc-123")).toBe(true);
     expect(isFrontDeskDeniedPath("/staff/applications")).toBe(true);
     expect(isFrontDeskDeniedPath("/staff/offers")).toBe(true);
     expect(isFrontDeskDeniedPath("/staff/documents")).toBe(true);

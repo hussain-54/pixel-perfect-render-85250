@@ -209,6 +209,12 @@ export interface Notification {
   body: string;
   time: string;
   read: boolean;
+  /** Absolute ISO timestamp when available (for sorting / realtime dedupe). */
+  createdAt?: string;
+  /** Deep-link path from notifications.link_path (may be remapped per role in UI). */
+  linkPath?: string | null;
+  /** Related student when notifications.student_id is set. */
+  studentId?: string | null;
 }
 
 export interface ActivityItem {

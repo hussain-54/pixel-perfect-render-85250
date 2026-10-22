@@ -12,6 +12,7 @@ export type NotificationRow = {
   read_at: string | null;
   created_at: string;
   link_path?: string | null;
+  student_id?: string | null;
 };
 
 export function audienceForAppRole(role: AppRole): Notification["audience"] | null {
@@ -49,5 +50,8 @@ export function mapNotificationRow(
     body: row.body?.trim() || "",
     time: formatNotificationTime(row.created_at, nowMs),
     read: Boolean(row.read_at),
+    createdAt: row.created_at,
+    linkPath: row.link_path ?? null,
+    studentId: row.student_id ?? null,
   };
 }

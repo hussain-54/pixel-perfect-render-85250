@@ -60,8 +60,14 @@ export type FrontDeskDashboardPayload = {
   assignedStudents: number;
   /** Signup fees still unpaid or claimed (not yet verified/waived/rejected). */
   feesAwaitingFinance: number;
+  /** Students with journey_stage at/after application_submitted (not applications.stage). */
+  applicationsInProgress: number;
+  /** Distinct students needing FD attention (unassigned and/or open/stuck fee requests). */
+  actionRequired: number;
   recentAssigned: FrontDeskIntakeRow[];
   recentRegistrations: FrontDeskIntakeRow[];
+  /** Full authorized intake list for client-side search / attention (ownership via RPC). */
+  intakeRows: FrontDeskIntakeRow[];
 };
 
 export type CounsellorDeskOption = {
@@ -188,14 +194,42 @@ export const portalGetFrontDeskDashboard = createServerFn({ method: "GET" }).han
       return s === "unpaid" || s === "claimed";
     }).length;
 
+    const { computeFrontDeskDashboardMetrics } = await import("@/lib/front-desk-workspace");
+
+    // Fee-request metrics for actionRequired — same RPC as the queue (FD org-wide).
+    let feeRows: ReturnType<typeof mapFeeVerificationRow>[] = [];
+    try {
+      const feeList = await client.rpc("list_counselling_fee_verification_requests", {
+        p_include_resolved: true,
+      });
+      if (!feeList.error) {
+        const { normalizeRpcRowList } = await import("@/lib/fee-verification-workflow");
+        feeRows = normalizeRpcRowList(feeList.data).map(mapFeeVerificationRow);
+      }
+    } catch {
+      feeRows = [];
+    }
+
+    const metrics = computeFrontDeskDashboardMetrics({
+      intakeRows: rows,
+      feeRequests: feeRows,
+    });
+
+    const recentSorted = [...rows].sort((a, b) =>
+      String(b.createdAt).localeCompare(String(a.createdAt)),
+    );
+
     return {
       greetingName,
-      myRegistrations: rows.length,
-      awaitingAssignment: awaiting.length,
+      myRegistrations: metrics.totalRegistrations,
+      awaitingAssignment: metrics.awaitingCounsellor,
       assignedStudents: assigned.length,
       feesAwaitingFinance,
+      applicationsInProgress: metrics.applicationsInProgress,
+      actionRequired: metrics.actionRequired,
       recentAssigned: assigned.slice(0, 8),
-      recentRegistrations: rows.slice(0, 12),
+      recentRegistrations: recentSorted.slice(0, 12),
+      intakeRows: rows,
     } satisfies FrontDeskDashboardPayload;
   } catch (error) {
     toError(error);
@@ -221,6 +255,86 @@ export const portalListFrontDeskIntake = createServerFn({ method: "GET" }).handl
     toError(error);
   }
 });
+
+export type FrontDeskIntakeRecordPayload = {
+  student: FrontDeskIntakeRow;
+  feeRequests: FeeVerificationRequestRow[];
+  nextAction: {
+    code: string;
+    label: string;
+    priority: number;
+  };
+  timeline: {
+    id: string;
+    kind: string;
+    title: string;
+    detail?: string;
+    at: string;
+  }[];
+};
+
+/** Single owned intake record + related fee-verification requests (FD-safe detail). */
+export const portalGetFrontDeskIntakeRecord = createServerFn({ method: "GET" })
+  .validator((data: { studentId: string }) => data)
+  .handler(async ({ data }) => {
+    try {
+      const session = await requireTrustedSession();
+      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      assertFrontDeskOrAdmin(session);
+
+      const studentId = data.studentId?.trim();
+      if (!studentId) throw new AuthError("Student id is required.", 400);
+
+      const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
+      if (!usesSupabaseDataPlane(session)) {
+        throw new AuthError("Intake record requires the live data plane.", 400);
+      }
+      const client = requireAoSupabaseClient();
+      const rows = await listFrontDeskIntakeRows(client, false);
+      const student = rows.find((r) => r.id === studentId);
+      if (!student) {
+        throw new AuthError("Registration not found or not authorized for Front Desk.", 404);
+      }
+
+      let feeRequests: FeeVerificationRequestRow[] = [];
+      try {
+        const feeList = await client.rpc("list_counselling_fee_verification_requests", {
+          p_include_resolved: true,
+        });
+        if (!feeList.error) {
+          const { normalizeRpcRowList } = await import("@/lib/fee-verification-workflow");
+          feeRequests = normalizeRpcRowList(feeList.data)
+            .map(mapFeeVerificationRow)
+            .filter((r) => r.studentId === studentId);
+        }
+      } catch {
+        feeRequests = [];
+      }
+
+      const openFeeRequest =
+        feeRequests.find((r) => r.status === "open" || r.status === "in_progress") ??
+        feeRequests.find((r) => r.status === "cancelled") ??
+        null;
+
+      const { buildFrontDeskRecordTimeline, deriveFrontDeskNextAction } =
+        await import("@/lib/front-desk-workspace");
+      const nextAction = deriveFrontDeskNextAction({
+        assignmentStatus: student.assignmentStatus,
+        signupFeeStatus: student.signupFeeStatus,
+        openFeeRequest,
+      });
+      const timeline = buildFrontDeskRecordTimeline({ student, feeRequests });
+
+      return {
+        student,
+        feeRequests,
+        nextAction,
+        timeline,
+      } satisfies FrontDeskIntakeRecordPayload;
+    } catch (error) {
+      toError(error);
+    }
+  });
 
 /** Admin-only archived intake review. */
 export const portalListFrontDeskArchivedIntake = createServerFn({ method: "GET" }).handler(
@@ -329,9 +443,13 @@ export const portalProvisionStudentPortalAccount = createServerFn({ method: "POS
         throw new AuthError("Student portal provisioning requires the live data plane.", 400);
       }
       const userClient = requireAoSupabaseClient();
-      const { data: owned, error: ownedErr } = await userClient.rpc("list_front_desk_intake_summaries");
+      const { data: owned, error: ownedErr } = await userClient.rpc(
+        "list_front_desk_intake_summaries",
+      );
       if (ownedErr) throw new Error(ownedErr.message);
-      const row = ((owned ?? []) as Record<string, unknown>[]).find((r) => str(r["id"]) === studentId);
+      const row = ((owned ?? []) as Record<string, unknown>[]).find(
+        (r) => str(r["id"]) === studentId,
+      );
       if (!row) throw new AuthError("Student record not found.", 404);
 
       const studentEmail = str(row["email"]).trim().toLowerCase();
@@ -516,9 +634,8 @@ export const portalProvisionStudentPortalAccount = createServerFn({ method: "POS
           .maybeSingle();
         if (linkedErr) throw new Error(linkedErr.message);
 
-        const { decideStudentPortalLink, studentPortalAccountStatus } = await import(
-          "@/lib/student-portal-account"
-        );
+        const { decideStudentPortalLink, studentPortalAccountStatus } =
+          await import("@/lib/student-portal-account");
         const decision = decideStudentPortalLink({
           studentId,
           studentEmail,
@@ -702,7 +819,9 @@ export const portalUpdateFrontDeskIntake = createServerFn({ method: "POST" })
         const mapped = mapFrontDeskIntakeManageRpcError(rpcErr.message);
         throw new AuthError(mapped.message, mapped.status);
       }
-      const updated = (rpcRows as { id: string; case_id: string; updated_at: string }[] | null)?.[0];
+      const updated = (
+        rpcRows as { id: string; case_id: string; updated_at: string }[] | null
+      )?.[0];
       if (!updated) throw new AuthError("Update did not return a row.", 500);
 
       const afterSnapshot = {
@@ -781,16 +900,17 @@ export const portalArchiveFrontDeskIntake = createServerFn({ method: "POST" })
       const studentId = data.studentId?.trim();
       if (!studentId) throw new AuthError("Student id is required.", 400);
 
-      const { validateArchiveReason, mapFrontDeskIntakeManageRpcError, canRestoreArchivedRegistration } =
-        await import("@/lib/front-desk-intake-manage");
+      const {
+        validateArchiveReason,
+        mapFrontDeskIntakeManageRpcError,
+        canRestoreArchivedRegistration,
+      } = await import("@/lib/front-desk-intake-manage");
       const { rolesAtLeastAdmin } = await import("@/lib/roles");
 
       if (data.archive) {
         const reasonCheck = validateArchiveReason(data.reason ?? "");
         if (!reasonCheck.ok) throw new AuthError(reasonCheck.error, 400);
-      } else if (
-        !canRestoreArchivedRegistration({ isAdmin: rolesAtLeastAdmin(session.role) })
-      ) {
+      } else if (!canRestoreArchivedRegistration({ isAdmin: rolesAtLeastAdmin(session.role) })) {
         throw new AuthError("Only an administrator can restore an archived registration.", 403);
       }
 
@@ -809,13 +929,17 @@ export const portalArchiveFrontDeskIntake = createServerFn({ method: "POST" })
         const mapped = mapFrontDeskIntakeManageRpcError(rpcErr.message);
         throw new AuthError(mapped.message, mapped.status);
       }
-      const row = (rpcRows as { id: string; case_id: string; archived_at: string | null }[] | null)?.[0];
+      const row = (
+        rpcRows as { id: string; case_id: string; archived_at: string | null }[] | null
+      )?.[0];
       if (!row) throw new AuthError("Archive action did not return a row.", 500);
 
       try {
         const { writeAudit } = await import("@/services/db");
         await writeAudit(client, {
-          action: data.archive ? "student.intake_registration_archived" : "student.intake_registration_restored",
+          action: data.archive
+            ? "student.intake_registration_archived"
+            : "student.intake_registration_restored",
           entity_type: "students",
           entity_id: studentId,
           student_id: studentId,
@@ -958,9 +1082,12 @@ export const portalListFeeVerificationRequests = createServerFn({ method: "GET" 
         throw new Error(probe.error.message);
       }
 
-      const { data: rpcData, error } = await client.rpc("list_counselling_fee_verification_requests", {
-        p_include_resolved: includeResolved,
-      });
+      const { data: rpcData, error } = await client.rpc(
+        "list_counselling_fee_verification_requests",
+        {
+          p_include_resolved: includeResolved,
+        },
+      );
       if (error) {
         if (/does not exist|function|PGRST202/i.test(error.message)) {
           logFeeQueueDiag("rpc_missing", {
@@ -972,7 +1099,10 @@ export const portalListFeeVerificationRequests = createServerFn({ method: "GET" 
             503,
           );
         }
-        logFeeQueueDiag("rpc_error", { userId: session.userId ?? null, message: "list_rpc_failed" });
+        logFeeQueueDiag("rpc_error", {
+          userId: session.userId ?? null,
+          message: "list_rpc_failed",
+        });
         throw new Error(error.message);
       }
 
@@ -1156,7 +1286,11 @@ export const portalReconcileFeeVerificationFromFee = createServerFn({ method: "P
           entity_type: "counselling_fee_verification_requests",
           entity_id: studentId,
           student_id: studentId,
-          metadata: { feeStatus, requestsResolved, via: "reconcile_counselling_fee_request_from_fee" },
+          metadata: {
+            feeStatus,
+            requestsResolved,
+            via: "reconcile_counselling_fee_request_from_fee",
+          },
         });
       } catch {
         /* best-effort */

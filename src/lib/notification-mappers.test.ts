@@ -33,6 +33,9 @@ describe("notification mappers (Phase 4)", () => {
       body: "",
       time: "2 hours ago",
       read: false,
+      createdAt: "2026-10-14T10:00:00.000Z",
+      linkPath: null,
+      studentId: null,
     });
   });
 
