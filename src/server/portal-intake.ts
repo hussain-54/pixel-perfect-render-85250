@@ -1118,6 +1118,34 @@ export const portalHandoverToAdmission = createServerFn({ method: "POST" })
         metadata: { status: "submitted" },
       });
 
+      // Notify Admission Team desks (and optional to_owner) — best-effort.
+      try {
+        const body = `Counsellor handed over ${student.name || "a student"} (${student.caseId || data.studentId}) for admissions review.`;
+        const recipientIds = new Set<string>();
+        if (handover.to_owner_id) recipientIds.add(handover.to_owner_id);
+        const { data: admissionProfiles } = await client
+          .from("profiles")
+          .select("id")
+          .eq("business_role", "admission_team")
+          .limit(25);
+        for (const p of admissionProfiles ?? []) {
+          if (p.id) recipientIds.add(p.id);
+        }
+        if (recipientIds.size) {
+          await client.from("notifications").insert(
+            [...recipientIds].map((userId) => ({
+              user_id: userId,
+              title: "Admission handover submitted",
+              body,
+              link_path: "/staff/applications",
+              student_id: data.studentId,
+            })),
+          );
+        }
+      } catch {
+        /* notification best-effort */
+      }
+
       return {
         ok: true as const,
         alreadySubmitted: false as const,
@@ -1349,8 +1377,7 @@ export const portalUpdateAdmissionHandover = createServerFn({ method: "POST" })
         HANDOVER_QUEUE_MUTATE_MINIMUM,
         "admission handover queue",
       );
-      const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb } =
-        await import("@/server/ao-data");
+      const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {
         throw new AuthError("Admission handover updates require the live data plane.", 400);
       }
@@ -1362,9 +1389,16 @@ export const portalUpdateAdmissionHandover = createServerFn({ method: "POST" })
         .maybeSingle();
       if (loadErr) throw new Error(loadErr.message);
       if (!existing) throw new AuthError("Handover not found.", 404);
-      await assertStudentVisibleDb(client, session, existing.student_id);
+      // Visibility: RLS admission_handovers_select (submitted queue for Admission Team /
+      // can_access_student after migration 20261023120000). Do not require prior assignment.
       if (existing.status !== "submitted") {
         throw new AuthError("Only submitted handovers can be accepted or returned.", 400);
+      }
+      if (data.action === "return") {
+        const reason = data.note?.trim() ?? "";
+        if (reason.length < 5) {
+          throw new AuthError("Provide a return note for the counsellor (min 5 characters).", 400);
+        }
       }
 
       const nextStatus = data.action === "accept" ? "accepted" : "returned";
@@ -1406,6 +1440,33 @@ export const portalUpdateAdmissionHandover = createServerFn({ method: "POST" })
         student_id: row.student_id,
         metadata: { status: nextStatus },
       });
+
+      // Notify originating counsellor — best-effort.
+      try {
+        const counsellorId = existing.from_consultant_id;
+        if (counsellorId) {
+          const { data: stu } = await client
+            .from("students")
+            .select("full_name, case_id")
+            .eq("id", row.student_id)
+            .maybeSingle();
+          const outcome = data.action === "accept" ? "accepted" : "returned";
+          await client.from("notifications").insert({
+            user_id: counsellorId,
+            title: `Admission handover ${outcome}`,
+            body:
+              data.action === "accept"
+                ? `Admission accepted ${stu?.full_name || "student"} (${stu?.case_id || row.student_id}).`
+                : `Admission returned ${stu?.full_name || "student"} (${stu?.case_id || row.student_id})${
+                    note ? `: ${note}` : "."
+                  }`,
+            link_path: "/staff/students",
+            student_id: row.student_id,
+          });
+        }
+      } catch {
+        /* best-effort */
+      }
 
       return {
         ok: true as const,

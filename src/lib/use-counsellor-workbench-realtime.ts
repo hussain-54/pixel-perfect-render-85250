@@ -6,6 +6,8 @@ export const COUNSELLOR_DASHBOARD_KEY = ["officer", "dashboard"] as const;
 export const COUNSELLOR_STUDENTS_KEY = ["officer", "students-directory"] as const;
 export const COUNSELLOR_NOTIFICATIONS_KEY = ["notifications", "staff"] as const;
 export const COUNSELLOR_PROFILE_KEY = ["officer", "student-profile"] as const;
+export const APPLICATIONS_PIPELINE_KEY = ["officer", "applications-pipeline"] as const;
+export const ADMISSION_HANDOVERS_KEY = ["officer", "admission-handovers"] as const;
 
 export type CounsellorLiveStatus = "connecting" | "live" | "reconnecting" | "offline";
 
@@ -45,6 +47,9 @@ export function useCounsellorWorkbenchRealtime(enabled: boolean): CounsellorLive
         void queryClient.invalidateQueries({ queryKey: [...COUNSELLOR_PROFILE_KEY] });
         void queryClient.invalidateQueries({ queryKey: ["officer", "student-profile"] });
         void queryClient.invalidateQueries({ queryKey: ["officer", "signup-fee"] });
+        void queryClient.invalidateQueries({ queryKey: [...APPLICATIONS_PIPELINE_KEY] });
+        void queryClient.invalidateQueries({ queryKey: [...ADMISSION_HANDOVERS_KEY] });
+        void queryClient.invalidateQueries({ queryKey: ["officer", "application-detail"] });
       }, 250);
     };
 
@@ -70,6 +75,8 @@ export function useCounsellorWorkbenchRealtime(enabled: boolean): CounsellorLive
             path.startsWith("/staff/dashboard") ||
             path.startsWith("/staff/tasks") ||
             path.startsWith("/staff/documents") ||
+            path.startsWith("/staff/applications") ||
+            path.startsWith("/staff/offers") ||
             Boolean(row?.student_id)
           ) {
             reconcile(`notif:${row?.id ?? ""}`);
@@ -105,13 +112,44 @@ export function useCounsellorWorkbenchRealtime(enabled: boolean): CounsellorLive
       .on(
         "postgres_changes",
         {
+          event: "*",
+          schema: "public",
+          table: "applications",
+        },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as {
+            id?: string;
+            updated_at?: string;
+            student_id?: string;
+          } | null;
+          reconcile(`app:${payload.eventType}:${row?.id ?? ""}:${row?.updated_at ?? ""}`);
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "application_stage_history",
+        },
+        (payload) => {
+          const row = (payload.new ?? payload.old) as {
+            id?: string;
+            application_id?: string;
+          } | null;
+          reconcile(`apphist:${payload.eventType}:${row?.id ?? ""}`);
+        },
+      )
+      .on(
+        "postgres_changes",
+        {
           event: "UPDATE",
           schema: "public",
           table: "students",
         },
         (payload) => {
           const row = payload.new as { id?: string; updated_at?: string } | null;
-          // RLS limits to assigned students; still refetch via authorized APIs.
+          // RLS limits to authorized students; still refetch via authorized APIs.
           reconcile(`stu:${row?.id ?? ""}:${row?.updated_at ?? ""}`);
         },
       )

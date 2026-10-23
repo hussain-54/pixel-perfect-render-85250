@@ -6,8 +6,11 @@ import {
   Bell,
   ClipboardCheck,
   Clock3,
+  FileWarning,
   FolderKanban,
   Hourglass,
+  RotateCcw,
+  Send,
   Users,
 } from "lucide-react";
 import {
@@ -32,11 +35,21 @@ import {
   reviewStudentDocument,
 } from "@/services";
 import { cn } from "@/lib/utils";
-import { isFrontDeskBusinessRole, staffHomeForBusinessRole } from "@/lib/staff-business-access";
+import {
+  isAdmissionBusinessRole,
+  isFrontDeskBusinessRole,
+  staffHomeForBusinessRole,
+} from "@/lib/staff-business-access";
 import { isSpecialtyOnlyBusinessRole } from "@/lib/specialty-desk-access";
 import { workspaceTitleForSession } from "@/lib/workspace-branding";
-import { COUNSELLOR_METRIC_DEFINITIONS } from "@/lib/counsellor-workspace";
-import { resolveCounsellorNotificationHref } from "@/lib/counsellor-workspace";
+import {
+  COUNSELLOR_METRIC_DEFINITIONS,
+  resolveCounsellorNotificationHref,
+} from "@/lib/counsellor-workspace";
+import {
+  ADMISSION_METRIC_DEFINITIONS,
+  resolveAdmissionNotificationHref,
+} from "@/lib/admission-workspace";
 import { shouldOfferMarkAsRead } from "@/lib/notification-rules";
 import {
   COUNSELLOR_DASHBOARD_KEY,
@@ -85,6 +98,9 @@ function StaffDashboard() {
     appRole: auth?.role,
   });
 
+  const isAdmission =
+    isAdmissionBusinessRole(auth?.businessRole) || dashQ.data?.workbenchKind === "admission";
+
   const markM = useMutation({
     mutationFn: (id: string) => markNotificationRead(id),
     onSuccess: async () => {
@@ -121,6 +137,7 @@ function StaffDashboard() {
   const unreadCount = (notifQ.data ?? []).filter((n) => !n.read).length;
   const lastSync = data.fetchedAt ? new Date(data.fetchedAt).toLocaleTimeString() : null;
   const m = data.metrics;
+  const am = data.admissionMetrics;
 
   async function openNotification(n: {
     id: string;
@@ -128,10 +145,15 @@ function StaffDashboard() {
     linkPath?: string | null;
     studentId?: string | null;
   }) {
-    const href = resolveCounsellorNotificationHref({
-      linkPath: n.linkPath,
-      studentId: n.studentId,
-    });
+    const href = isAdmission
+      ? resolveAdmissionNotificationHref({
+          linkPath: n.linkPath,
+          studentId: n.studentId,
+        })
+      : resolveCounsellorNotificationHref({
+          linkPath: n.linkPath,
+          studentId: n.studentId,
+        });
     if (shouldOfferMarkAsRead(n) && !n.read) {
       try {
         await markM.mutateAsync(n.id);
@@ -146,7 +168,7 @@ function StaffDashboard() {
   return (
     <div className="space-y-5 md:space-y-6">
       <PageHeader
-        title={`Counsellor Workbench`}
+        title={isAdmission ? "Admissions Workbench" : "Counsellor Workbench"}
         subtitle={`${workspaceTitle} · Signed in as ${data.greetingName}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -169,67 +191,139 @@ function StaffDashboard() {
                 </span>
               ) : null}
             </Button>
-            <Button asChild size="sm" variant="outline">
-              <Link to="/staff/students">My Students</Link>
-            </Button>
-            <Button asChild size="sm" variant="outline">
-              <Link to="/staff/tasks">Tasks</Link>
-            </Button>
+            {isAdmission ? (
+              <>
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/staff/applications">Applications</Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/staff/documents">Documents</Link>
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/staff/students">My Students</Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/staff/tasks">Tasks</Link>
+                </Button>
+              </>
+            )}
           </div>
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-        <StatCard
-          label="My Assigned Students"
-          value={String(m.assignedStudents)}
-          hint={COUNSELLOR_METRIC_DEFINITIONS.assignedStudents}
-          icon={<Users />}
-        />
-        <StatCard
-          label="Counselling Completed"
-          value={String(m.counsellingCompleted ?? 0)}
-          hint="Consent recorded (not registration alone)"
-          icon={<ClipboardCheck />}
-        />
-        <StatCard
-          label="Follow-ups Due"
-          value={String(m.followUpsDue ?? 0)}
-          hint={COUNSELLOR_METRIC_DEFINITIONS.followUpsDue}
-          icon={<Clock3 />}
-        />
-        <StatCard
-          label="Applications In Progress"
-          value={String(m.appsInProgress)}
-          hint={COUNSELLOR_METRIC_DEFINITIONS.applicationsInProgress}
-          icon={<FolderKanban />}
-        />
-        <StatCard
-          label="Awaiting Response"
-          value={String(m.awaitingResponse ?? 0)}
-          hint="Admission handover and/or Front Desk fee queue"
-          icon={<Hourglass />}
-        />
-        <StatCard
-          label="Action Required"
-          value={String(m.actionRequired ?? 0)}
-          hint={COUNSELLOR_METRIC_DEFINITIONS.actionRequired}
-          icon={<AlertCircle />}
-        />
-      </div>
+      {isAdmission && am ? (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4">
+          <StatCard
+            label="Assigned to Me"
+            value={String(am.assignedToMe)}
+            hint={ADMISSION_METRIC_DEFINITIONS.assignedToMe}
+            icon={<Users />}
+          />
+          <StatCard
+            label="Awaiting Initial Review"
+            value={String(am.awaitingInitialReview)}
+            hint={ADMISSION_METRIC_DEFINITIONS.awaitingInitialReview}
+            icon={<Hourglass />}
+          />
+          <StatCard
+            label="Documents Missing"
+            value={String(am.documentsMissing)}
+            hint={ADMISSION_METRIC_DEFINITIONS.documentsMissing}
+            icon={<FileWarning />}
+          />
+          <StatCard
+            label="In Progress"
+            value={String(am.inProgress)}
+            hint={ADMISSION_METRIC_DEFINITIONS.inProgress}
+            icon={<FolderKanban />}
+          />
+          <StatCard
+            label="Returned for Correction"
+            value={String(am.returnedForCorrection)}
+            hint={ADMISSION_METRIC_DEFINITIONS.returnedForCorrection}
+            icon={<RotateCcw />}
+          />
+          <StatCard
+            label="Submitted to University"
+            value={String(am.submittedToUniversity)}
+            hint={ADMISSION_METRIC_DEFINITIONS.submittedToUniversity}
+            icon={<Send />}
+          />
+          <StatCard
+            label="Offers / Decisions"
+            value={String(am.offersDecisionsReceived)}
+            hint={ADMISSION_METRIC_DEFINITIONS.offersDecisionsReceived}
+            icon={<ClipboardCheck />}
+          />
+          <StatCard
+            label="Action Required"
+            value={String(am.actionRequired)}
+            hint={ADMISSION_METRIC_DEFINITIONS.actionRequired}
+            icon={<AlertCircle />}
+          />
+        </div>
+      ) : (
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <StatCard
+            label="My Assigned Students"
+            value={String(m.assignedStudents)}
+            hint={COUNSELLOR_METRIC_DEFINITIONS.assignedStudents}
+            icon={<Users />}
+          />
+          <StatCard
+            label="Counselling Completed"
+            value={String(m.counsellingCompleted ?? 0)}
+            hint="Consent recorded (not registration alone)"
+            icon={<ClipboardCheck />}
+          />
+          <StatCard
+            label="Follow-ups Due"
+            value={String(m.followUpsDue ?? 0)}
+            hint={COUNSELLOR_METRIC_DEFINITIONS.followUpsDue}
+            icon={<Clock3 />}
+          />
+          <StatCard
+            label="Applications In Progress"
+            value={String(m.appsInProgress)}
+            hint={COUNSELLOR_METRIC_DEFINITIONS.applicationsInProgress}
+            icon={<FolderKanban />}
+          />
+          <StatCard
+            label="Awaiting Response"
+            value={String(m.awaitingResponse ?? 0)}
+            hint="Admission handover and/or Front Desk fee queue"
+            icon={<Hourglass />}
+          />
+          <StatCard
+            label="Action Required"
+            value={String(m.actionRequired ?? 0)}
+            hint={COUNSELLOR_METRIC_DEFINITIONS.actionRequired}
+            icon={<AlertCircle />}
+          />
+        </div>
+      )}
 
       <Panel
         title="Needs My Attention"
         action={
           <Button asChild size="sm" variant="outline">
-            <Link to="/staff/students">Open directory</Link>
+            <Link to={isAdmission ? "/staff/applications" : "/staff/students"}>
+              {isAdmission ? "Open applications" : "Open directory"}
+            </Link>
           </Button>
         }
       >
         {(data.needsAttention ?? []).length === 0 ? (
           <EmptyState
             title="Nothing needs attention"
-            body="Lifecycle steps, returned cases, overdue tasks, and pending documents will appear here."
+            body={
+              isAdmission
+                ? "Handovers awaiting review, document gaps, and approaching deadlines will appear here."
+                : "Lifecycle steps, returned cases, overdue tasks, and pending documents will appear here."
+            }
           />
         ) : (
           <ul className="divide-y divide-border">
@@ -252,13 +346,17 @@ function StaffDashboard() {
                   variant="navy"
                   className="shrink-0 self-start sm:self-center"
                 >
-                  <Link
-                    to="/staff/students/$studentId"
-                    params={{ studentId: item.studentId }}
-                    search={{ tab: "assessment" }}
-                  >
-                    Open record
-                  </Link>
+                  {isAdmission ? (
+                    <Link to="/staff/applications">Open application</Link>
+                  ) : (
+                    <Link
+                      to="/staff/students/$studentId"
+                      params={{ studentId: item.studentId }}
+                      search={{ tab: "assessment" }}
+                    >
+                      Open record
+                    </Link>
+                  )}
                 </Button>
               </li>
             ))}
@@ -268,31 +366,38 @@ function StaffDashboard() {
 
       <div className="grid gap-5 lg:grid-cols-2">
         <Panel
-          title="Recent Student Activity"
+          title={isAdmission ? "Recent Application Activity" : "Recent Student Activity"}
           action={
-            <Link to="/staff/students" className="text-xs font-semibold text-royal hover:underline">
-              All students »
+            <Link
+              to={isAdmission ? "/staff/applications" : "/staff/students"}
+              className="text-xs font-semibold text-royal hover:underline"
+            >
+              {isAdmission ? "All applications »" : "All students »"}
             </Link>
           }
         >
           {(data.recentActivity ?? data.assignedOverview).length === 0 ? (
             <EmptyState
-              title="No assigned students"
-              body="Students appear here once Front Desk assigns them to your desk."
+              title={isAdmission ? "No applications yet" : "No assigned students"}
+              body={
+                isAdmission
+                  ? "Applications appear after counsellor handover acceptance or when you create a pipeline row."
+                  : "Students appear here once Front Desk assigns them to your desk."
+              }
             />
           ) : (
             <TableWrap compact>
               <thead>
                 <tr>
-                  <th>Student</th>
-                  <th className="hidden md:table-cell">Stage</th>
+                  <th>{isAdmission ? "Student / destination" : "Student"}</th>
+                  <th className="hidden md:table-cell">{isAdmission ? "App stage" : "Stage"}</th>
                   <th>Next</th>
                   <th> </th>
                 </tr>
               </thead>
               <tbody>
                 {(data.recentActivity ?? data.assignedOverview).map((s) => (
-                  <tr key={s.id}>
+                  <tr key={`${s.id}-${s.destination}`}>
                     <td>
                       <div className="font-medium text-navy">{s.name}</div>
                       <div className="text-xs text-muted-foreground">
@@ -306,13 +411,17 @@ function StaffDashboard() {
                     </td>
                     <td>
                       <Button asChild size="sm" variant="outline">
-                        <Link
-                          to="/staff/students/$studentId"
-                          params={{ studentId: s.id }}
-                          search={{ tab: "assessment" }}
-                        >
-                          View record
-                        </Link>
+                        {isAdmission ? (
+                          <Link to="/staff/applications">Open</Link>
+                        ) : (
+                          <Link
+                            to="/staff/students/$studentId"
+                            params={{ studentId: s.id }}
+                            search={{ tab: "assessment" }}
+                          >
+                            View record
+                          </Link>
+                        )}
                       </Button>
                     </td>
                   </tr>
@@ -323,14 +432,54 @@ function StaffDashboard() {
         </Panel>
 
         <Panel
-          title="Follow-ups Due"
+          title={isAdmission ? "Upcoming Deadlines" : "Follow-ups Due"}
           action={
-            <Link to="/staff/tasks" className="text-xs font-semibold text-royal hover:underline">
-              All tasks »
-            </Link>
+            isAdmission ? (
+              <Link
+                to="/staff/applications"
+                className="text-xs font-semibold text-royal hover:underline"
+              >
+                Applications »
+              </Link>
+            ) : (
+              <Link to="/staff/tasks" className="text-xs font-semibold text-royal hover:underline">
+                All tasks »
+              </Link>
+            )
           }
         >
-          {!data.todaysTasks.length ? (
+          {isAdmission ? (
+            !data.upcomingDeadlines.length ? (
+              <EmptyState
+                title="No upcoming deadlines"
+                body="Application deadlines within two weeks appear here."
+              />
+            ) : (
+              <ul className="space-y-3">
+                {data.upcomingDeadlines.slice(0, 8).map((d) => (
+                  <li
+                    key={d.id}
+                    className="flex items-center justify-between gap-3 border-t border-border/70 pt-3 first:border-0 first:pt-0"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-navy">{d.label}</p>
+                      <p className="text-xs text-muted-foreground">{d.studentName}</p>
+                    </div>
+                    <div className="shrink-0 text-right text-xs">
+                      <p className="font-semibold text-navy">{fmtDate(d.deadline)}</p>
+                      <p
+                        className={cn(
+                          d.daysLeft <= 3 ? "font-bold text-danger" : "text-muted-foreground",
+                        )}
+                      >
+                        {d.daysLeft === 0 ? "Today" : `${d.daysLeft} days left`}
+                      </p>
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            )
+          ) : !data.todaysTasks.length ? (
             <EmptyState
               title="No open tasks"
               body="Overdue and due tasks for your desk appear here."
@@ -379,7 +528,7 @@ function StaffDashboard() {
         </Panel>
       </div>
 
-      {(data.docsWaiting.length > 0 || data.upcomingDeadlines.length > 0) && (
+      {(data.docsWaiting.length > 0 || (!isAdmission && data.upcomingDeadlines.length > 0)) && (
         <div className="grid gap-5 lg:grid-cols-2">
           {data.docsWaiting.length > 0 ? (
             <Panel
@@ -409,7 +558,7 @@ function StaffDashboard() {
                         {d.studentName} · {d.category}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        Uploaded {fmtDate(d.uploaded)}
+                        Uploaded {fmtDate(d.uploaded)} · {d.status}
                       </p>
                     </div>
                     <div className="flex gap-2">
@@ -422,14 +571,16 @@ function StaffDashboard() {
                           Review
                         </Link>
                       </Button>
-                      <Button
-                        size="sm"
-                        variant="navy"
-                        disabled={reviewM.isPending}
-                        onClick={() => reviewM.mutate({ id: d.id, action: "Approved" })}
-                      >
-                        Approve
-                      </Button>
+                      {!isAdmission ? (
+                        <Button
+                          size="sm"
+                          variant="navy"
+                          disabled={reviewM.isPending}
+                          onClick={() => reviewM.mutate({ id: d.id, action: "Approved" })}
+                        >
+                          Approve
+                        </Button>
+                      ) : null}
                     </div>
                   </li>
                 ))}
@@ -437,7 +588,7 @@ function StaffDashboard() {
             </Panel>
           ) : null}
 
-          {data.upcomingDeadlines.length > 0 ? (
+          {!isAdmission && data.upcomingDeadlines.length > 0 ? (
             <Panel title="Upcoming deadlines">
               <ul className="space-y-3">
                 {data.upcomingDeadlines.slice(0, 5).map((d) => (
@@ -485,7 +636,11 @@ function StaffDashboard() {
             ) : !(notifQ.data ?? []).length ? (
               <EmptyState
                 title="No notifications"
-                body="Assignment, fee, Admission, and document alerts for your account appear here."
+                body={
+                  isAdmission
+                    ? "Handover, document, and decision alerts for your account appear here."
+                    : "Assignment, fee, Admission, and document alerts for your account appear here."
+                }
               />
             ) : (
               <ul className="space-y-2">

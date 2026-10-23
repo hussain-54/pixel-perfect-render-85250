@@ -71,6 +71,10 @@ export function isCounsellorBusinessRole(businessRole: BusinessRole | null | und
   return businessRole === "counsellor_consultant";
 }
 
+export function isAdmissionBusinessRole(businessRole: BusinessRole | null | undefined): boolean {
+  return businessRole === "admission_team";
+}
+
 /**
  * Trusted profiles.business_role only. Invalid/missing → null (fail closed for FD gates).
  * Does not map technical consultant → counsellor.

@@ -137,9 +137,15 @@ export async function listVisibleStudentsDb(
   let q = client.from("students").select("*").order("updated_at", { ascending: false });
   if (!opts?.includeArchived) q = q.is("archived_at", null);
   if (session.role === "consultant") {
-    const desk = await resolveConsultantDeskId(client, session);
-    if (!desk) return [];
-    q = q.eq("assigned_consultant_id", desk);
+    const { businessRoleFromSession } = await import("@/server/staff-access");
+    const br = businessRoleFromSession(session);
+    // Admission Team / Manager: rely on RLS can_access_student (assignment + handovers).
+    // Counsellors remain scoped to assigned_consultant_id.
+    if (br !== "admission_team" && br !== "manager") {
+      const desk = await resolveConsultantDeskId(client, session);
+      if (!desk) return [];
+      q = q.eq("assigned_consultant_id", desk);
+    }
   }
   const { data, error } = await q;
   if (error) throw new Error(error.message);
@@ -198,6 +204,244 @@ export async function listOpenTasksForDesk(
   return data ?? [];
 }
 
+async function buildAdmissionOfficerDashboardFromDb(input: {
+  session: TrustedSession;
+  client: AoDb;
+  students: Student[];
+  apps: Application[];
+  docs: StudentDocument[];
+  tasks: TaskRow[];
+  profile: Database["public"]["Tables"]["profiles"]["Row"] | null;
+}): Promise<OfficerDashboardPayload> {
+  const { session, client, students, apps, docs, tasks, profile } = input;
+  const {
+    buildAdmissionAttentionItems,
+    computeAdmissionWorkbenchMetrics,
+    deriveAdmissionNextAction,
+  } = await import("@/lib/admission-workspace");
+  const { isTaskDueOnOrBeforeToday } = await import("@/lib/counsellor-workspace");
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  const studentById = new Map(students.map((s) => [s.id, s]));
+  const ids = students.map((s) => s.id);
+
+  type HandoverSelect = {
+    id: string;
+    student_id: string;
+    status: string;
+    summary: string | null;
+    missing_information: string | null;
+    handed_over_at: string;
+    to_owner_id: string | null;
+  };
+
+  // Handovers visible via RLS (submitted queue + accepted linked students).
+  let handoverRows: HandoverSelect[] = [];
+  if (ids.length) {
+    const { data } = await client
+      .from("admission_handovers")
+      .select("id, student_id, status, summary, missing_information, handed_over_at, to_owner_id")
+      .in("student_id", ids)
+      .order("handed_over_at", { ascending: false });
+    handoverRows = (data ?? []) as HandoverSelect[];
+  }
+
+  // Also pull org-wide submitted queue (Admission select policy) not yet in ids.
+  const { data: submittedQueue } = await client
+    .from("admission_handovers")
+    .select("id, student_id, status, summary, missing_information, handed_over_at, to_owner_id")
+    .eq("status", "submitted")
+    .order("handed_over_at", { ascending: false })
+    .limit(100);
+
+  const handoverById = new Map<string, HandoverSelect>();
+  for (const row of [...handoverRows, ...((submittedQueue ?? []) as HandoverSelect[])]) {
+    if (row?.id) handoverById.set(row.id, row);
+  }
+  const handovers = [...handoverById.values()].map((h) => {
+    const st = studentById.get(h.student_id);
+    return {
+      id: h.id,
+      studentId: h.student_id,
+      studentName: st?.name ?? null,
+      studentCaseId: st?.caseId ?? null,
+      status: String(h.status ?? "").toLowerCase(),
+      summary: h.summary,
+      missingInformation: h.missing_information,
+      handedOverAt: h.handed_over_at,
+      toOwnerId: h.to_owner_id,
+    };
+  });
+
+  const latestHandoverByStudent = new Map<string, (typeof handovers)[0]>();
+  for (const h of handovers) {
+    if (!latestHandoverByStudent.has(h.studentId)) latestHandoverByStudent.set(h.studentId, h);
+  }
+
+  const appSnaps = apps.map((a) => {
+    const st = studentById.get(a.studentId);
+    let daysLeft: number | null = null;
+    if (a.deadline) {
+      const d = new Date(a.deadline);
+      if (!Number.isNaN(d.getTime())) {
+        daysLeft = Math.round((d.getTime() - today.getTime()) / 86_400_000);
+      }
+    }
+    return {
+      id: a.id,
+      studentId: a.studentId,
+      studentName: st?.name ?? "Student",
+      studentCaseId: st?.caseId ?? "",
+      university: a.university,
+      program: a.program,
+      stage: a.status,
+      officerId: a.officerId,
+      deadline: a.deadline,
+      daysLeft,
+      deadlineWarning: daysLeft !== null && daysLeft >= 0 && daysLeft < 7,
+    };
+  });
+
+  const docSnaps = docs.map((d) => ({
+    studentId: d.studentId,
+    status: d.awaitingUpload ? "awaiting_upload" : d.status,
+  }));
+
+  const admissionMetrics = computeAdmissionWorkbenchMetrics({
+    viewerUserId: session.userId ?? null,
+    applications: appSnaps,
+    handovers,
+    documents: docSnaps,
+  });
+
+  const attention = buildAdmissionAttentionItems({
+    applications: appSnaps,
+    handovers,
+    limit: 12,
+  });
+
+  const deadlineRows = appSnaps
+    .filter((a) => a.daysLeft !== null && a.daysLeft >= 0 && a.daysLeft <= 14)
+    .sort((a, b) => (a.daysLeft ?? 99) - (b.daysLeft ?? 99))
+    .slice(0, 8)
+    .map((a) => ({
+      id: a.id,
+      kind: "application" as const,
+      label: a.university,
+      studentId: a.studentId,
+      studentName: a.studentName,
+      deadline: a.deadline,
+      daysLeft: a.daysLeft ?? 0,
+    }));
+
+  const recentApps = [...appSnaps].sort((a, b) =>
+    (b.deadline || "").localeCompare(a.deadline || ""),
+  );
+
+  return {
+    greetingName: profileGreeting(profile, session.email),
+    deskLabel: "Admissions Workbench",
+    workbenchKind: "admission",
+    metrics: {
+      assignedStudents: students.length,
+      appsInProgress: admissionMetrics.inProgress,
+      docsToReview: docs.filter((d) => d.status === "Pending Review").length,
+      deadlinesThisWeek: admissionMetrics.upcomingDeadlines,
+      counsellingCompleted: 0,
+      followUpsDue: tasks.filter((t) => isTaskDueOnOrBeforeToday(t.due_at ?? t.created_at, today))
+        .length,
+      awaitingResponse: admissionMetrics.awaitingInitialReview,
+      actionRequired: admissionMetrics.actionRequired,
+    },
+    admissionMetrics,
+    todaysTasks: tasks.slice(0, 8).map((t) => {
+      const st = t.student_id ? studentById.get(t.student_id) : undefined;
+      const due = isTaskDueOnOrBeforeToday(t.due_at ?? t.created_at, today);
+      return {
+        id: t.id,
+        title: t.title,
+        studentId: t.student_id,
+        studentName: st?.name ?? null,
+        dueAt: t.due_at ?? t.created_at,
+        priority:
+          t.priority === "high" || t.priority === "overdue" || due
+            ? ("overdue" as const)
+            : ("normal" as const),
+        ...(t.reminder_ref ? { reminderRef: t.reminder_ref } : {}),
+      };
+    }),
+    assignedOverview: recentApps.slice(0, 8).map((a) => {
+      const hand = latestHandoverByStudent.get(a.studentId);
+      const next = deriveAdmissionNextAction({
+        stage: a.stage,
+        handoverStatus: hand?.status ?? null,
+        docsNeedingAttention: a.stage === "Docs Pending",
+        deadlineWarning: a.deadlineWarning,
+      });
+      const st = studentById.get(a.studentId);
+      const lastActivity = a.deadline || st?.lastActivity;
+      return {
+        id: a.studentId,
+        name: a.studentName,
+        destination: a.university,
+        stage: (st?.stage ?? "university_shortlisting") as Student["stage"],
+        stageLabel: a.stage,
+        caseId: a.studentCaseId,
+        ...(lastActivity ? { lastActivity } : {}),
+        nextActionLabel: next.label,
+      };
+    }),
+    docsWaiting: docs
+      .filter((d) => d.status === "Pending Review" || d.status === "Needs Correction")
+      .slice(0, 10)
+      .map((d) => {
+        const st = studentById.get(d.studentId);
+        return {
+          id: d.id,
+          studentId: d.studentId,
+          studentName: st?.name ?? "Student",
+          category: d.category,
+          uploaded: d.uploaded,
+          status: d.status,
+        };
+      }),
+    upcomingDeadlines: deadlineRows,
+    needsAttention: attention.map((a) => ({
+      id: a.id,
+      studentId: a.studentId,
+      caseId: a.caseId,
+      fullName: a.fullName,
+      kind: a.kind,
+      title: a.title,
+      detail: a.detail,
+      at: a.at,
+    })),
+    recentActivity: recentApps.slice(0, 8).map((a) => {
+      const hand = latestHandoverByStudent.get(a.studentId);
+      const next = deriveAdmissionNextAction({
+        stage: a.stage,
+        handoverStatus: hand?.status ?? null,
+        docsNeedingAttention: a.stage === "Docs Pending",
+        deadlineWarning: a.deadlineWarning,
+      });
+      const st = studentById.get(a.studentId);
+      return {
+        id: a.studentId,
+        name: a.studentName,
+        destination: `${a.university} · ${a.program}`,
+        stage: (st?.stage ?? "university_shortlisting") as Student["stage"],
+        stageLabel: a.stage,
+        caseId: a.studentCaseId,
+        ...(st?.lastActivity ? { lastActivity: st.lastActivity } : {}),
+        nextActionLabel: next.label,
+      };
+    }),
+    fetchedAt: new Date().toISOString(),
+  };
+}
+
 export async function buildOfficerDashboardFromDb(
   session: TrustedSession,
 ): Promise<OfficerDashboardPayload> {
@@ -213,6 +457,20 @@ export async function buildOfficerDashboardFromDb(
       : Promise.resolve({ data: null, error: null as null }),
   ]);
   if (profileRes.error) throw new Error(profileRes.error.message);
+
+  const { businessRoleFromSession } = await import("@/server/staff-access");
+  const businessRole = businessRoleFromSession(session);
+  if (businessRole === "admission_team") {
+    return buildAdmissionOfficerDashboardFromDb({
+      session,
+      client,
+      students,
+      apps,
+      docs,
+      tasks,
+      profile: profileRes.data,
+    });
+  }
 
   const {
     IN_PROGRESS_APPLICATION_UI_STATUSES,
@@ -364,6 +622,7 @@ export async function buildOfficerDashboardFromDb(
   return {
     greetingName: profileGreeting(profileRes.data, session.email),
     deskLabel: rolesAtLeastAdmin(session.role) ? "Admin overview" : "Counsellor Workbench",
+    workbenchKind: "counsellor",
     metrics: {
       assignedStudents: workbenchMetrics.assignedStudents,
       appsInProgress: workbenchMetrics.applicationsInProgress,

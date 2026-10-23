@@ -66,10 +66,27 @@ export type OfficerDashboardDeadline = {
   daysLeft: number;
 };
 
+/** Admission Team KPIs — distinct from counsellor student-lifecycle metrics. */
+export type AdmissionDashboardMetrics = {
+  assignedToMe: number;
+  awaitingInitialReview: number;
+  documentsMissing: number;
+  inProgress: number;
+  returnedForCorrection: number;
+  submittedToUniversity: number;
+  offersDecisionsReceived: number;
+  actionRequired: number;
+  upcomingDeadlines: number;
+};
+
 export type OfficerDashboardPayload = {
   greetingName: string;
   deskLabel: string;
+  /** Counsellor vs Admission Team workbench presentation. */
+  workbenchKind?: "counsellor" | "admission";
   metrics: OfficerDashboardMetrics;
+  /** Populated when workbenchKind === "admission". */
+  admissionMetrics?: AdmissionDashboardMetrics;
   todaysTasks: OfficerDashboardTask[];
   assignedOverview: OfficerDashboardStudent[];
   docsWaiting: OfficerDashboardDoc[];
