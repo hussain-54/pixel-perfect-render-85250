@@ -4,6 +4,7 @@ import { PortalShell, type PortalNavItem } from "@/components/portal/PortalShell
 import { requirePortalAccess } from "@/lib/portal-guard";
 import { pageHead } from "@/lib/seo";
 import { workspaceDocumentTitle } from "@/lib/workspace-branding";
+import { useStudentPortalRealtime } from "@/lib/use-student-portal-realtime";
 import type { PublicSession } from "@/server/portal-data";
 
 const studentNav: PortalNavItem[] = [
@@ -35,5 +36,7 @@ export const Route = createFileRoute("/student")({
 
 function StudentPortalLayout() {
   const { auth } = Route.useRouteContext() as { auth: PublicSession };
+  // Shell-level subscription: dashboard/apps/docs/notifications invalidate on reconnect.
+  useStudentPortalRealtime(true);
   return <PortalShell role="student" nav={studentNav} session={auth} />;
 }

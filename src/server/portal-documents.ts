@@ -701,6 +701,37 @@ export const portalReviewQueueDocument = createServerFn({ method: "POST" })
           })
           .reverse();
 
+        // Notify linked student — student-safe wording only (no internal staff notes beyond action).
+        try {
+          const { notifyLinkedStudent } = await import("@/lib/notify-linked-student");
+          const label = refreshedDoc.label || "document";
+          if (data.action === "approve") {
+            await notifyLinkedStudent(client, student.id, {
+              title: "Document approved",
+              body: `Your ${label} was approved.`,
+              linkPath: "/student/documents",
+            });
+          } else if (data.action === "reject") {
+            await notifyLinkedStudent(client, student.id, {
+              title: "Document rejected",
+              body: note
+                ? `Your ${label} was rejected: ${note.slice(0, 180)}`
+                : `Your ${label} was rejected. Please contact your counsellor.`,
+              linkPath: "/student/documents",
+            });
+          } else {
+            await notifyLinkedStudent(client, student.id, {
+              title: "Document correction requested",
+              body: note
+                ? `Please re-upload ${label}: ${note.slice(0, 180)}`
+                : `Please re-upload ${label}.`,
+              linkPath: "/student/documents",
+            });
+          }
+        } catch {
+          /* best-effort */
+        }
+
         return {
           ok: true as const,
           unchanged: false as const,

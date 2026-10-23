@@ -790,11 +790,11 @@ export const portalVerifySignupFee = createServerFn({ method: "POST" })
         },
       });
 
-      // Notify Front Desk registrar + assigned counsellor (durable).
+      // Notify Front Desk registrar + assigned counsellor + linked student (durable).
       try {
         const { data: stu } = await client
           .from("students")
-          .select("registered_by, assigned_consultant_id, full_name, case_id")
+          .select("registered_by, assigned_consultant_id, full_name, case_id, profile_id")
           .eq("id", data.studentId)
           .maybeSingle();
         const outcome = String(rpcRow.status ?? data.action);
@@ -813,6 +813,18 @@ export const portalVerifySignupFee = createServerFn({ method: "POST" })
             })),
           );
         }
+        const { notifyLinkedStudent } = await import("@/lib/notify-linked-student");
+        const studentSafe =
+          outcome === "verified" || outcome === "waived"
+            ? "Your signup fee has been verified. Portal access should now be available."
+            : outcome === "rejected"
+              ? "Your signup fee needs correction. Please contact Front Desk with updated payment evidence."
+              : `Your signup fee status was updated to ${outcome}.`;
+        await notifyLinkedStudent(client, data.studentId, {
+          title: `Signup fee ${outcome}`,
+          body: studentSafe,
+          linkPath: "/student/dashboard",
+        });
       } catch {
         /* best-effort */
       }
@@ -872,6 +884,16 @@ export const portalAssignCounsellor = createServerFn({ method: "POST" })
           throw new AuthError("Student not found or not owned by registrar.", 404);
         }
         const { mapStudentRow } = await import("@/lib/ao-mappers");
+        try {
+          const { notifyLinkedStudent } = await import("@/lib/notify-linked-student");
+          await notifyLinkedStudent(client, data.studentId, {
+            title: "Counsellor assigned",
+            body: "A counsellor has been assigned to your case. You can request an appointment when ready.",
+            linkPath: "/student/appointments",
+          });
+        } catch {
+          /* best-effort */
+        }
         // Narrow RPC omits DOB/activation/archive — map with safe empties for UI shape.
         return {
           ok: true as const,
@@ -906,6 +928,16 @@ export const portalAssignCounsellor = createServerFn({ method: "POST" })
       const { assignConsultant } = await import("@/services/db");
       const row = await assignConsultant(client, data.studentId, data.consultantId);
       const { mapStudentRow } = await import("@/lib/ao-mappers");
+      try {
+        const { notifyLinkedStudent } = await import("@/lib/notify-linked-student");
+        await notifyLinkedStudent(client, data.studentId, {
+          title: "Counsellor assigned",
+          body: "A counsellor has been assigned to your case. You can request an appointment when ready.",
+          linkPath: "/student/appointments",
+        });
+      } catch {
+        /* best-effort */
+      }
       return { ok: true as const, student: mapStudentRow(row) };
     } catch (error) {
       toError(error);
@@ -1249,10 +1281,23 @@ export const portalGetSignupFeeStatus = createServerFn({ method: "GET" })
           : null,
       };
 
+      const isStudentViewer = session.role === "student";
+      // Students receive status + activation only — no amount / receipt / method.
+      const redactStudentFee = (view: SignupFeeView): SignupFeeView =>
+        isStudentViewer
+          ? {
+              ...view,
+              amount: 0,
+              currency: view.currency || "PKR",
+              paymentMethod: null,
+              referenceReceipt: null,
+            }
+          : view;
+
       if (!fee) {
         return {
           ok: true as const,
-          fee: {
+          fee: redactStudentFee({
             studentId,
             status: "unpaid" as const,
             amount: 0,
@@ -1261,14 +1306,26 @@ export const portalGetSignupFeeStatus = createServerFn({ method: "GET" })
             referenceReceipt: null,
             verifiedAt: null,
             portalActivatedAt: stu?.portal_activated_at ?? null,
-          } satisfies SignupFeeView,
-          lifecycle,
+          }),
+          lifecycle: isStudentViewer
+            ? {
+                hasConsent: lifecycle.hasConsent,
+                feeRequest: null,
+                handover: lifecycle.handover
+                  ? {
+                      id: lifecycle.handover.id,
+                      status: lifecycle.handover.status,
+                      handedOverAt: lifecycle.handover.handedOverAt,
+                    }
+                  : null,
+              }
+            : lifecycle,
         };
       }
 
       return {
         ok: true as const,
-        fee: {
+        fee: redactStudentFee({
           studentId: fee.student_id,
           status: fee.status,
           amount: Number(fee.amount),
@@ -1277,9 +1334,21 @@ export const portalGetSignupFeeStatus = createServerFn({ method: "GET" })
           referenceReceipt: fee.reference_receipt,
           verifiedAt: fee.verified_at,
           portalActivatedAt: stu?.portal_activated_at ?? null,
-        } satisfies SignupFeeView,
+        }),
         feeVerified: isSignupFeeVerified(fee.status),
-        lifecycle,
+        lifecycle: isStudentViewer
+          ? {
+              hasConsent: lifecycle.hasConsent,
+              feeRequest: null,
+              handover: lifecycle.handover
+                ? {
+                    id: lifecycle.handover.id,
+                    status: lifecycle.handover.status,
+                    handedOverAt: lifecycle.handover.handedOverAt,
+                  }
+                : null,
+            }
+          : lifecycle,
       };
     } catch (error) {
       toError(error);

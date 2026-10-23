@@ -387,6 +387,42 @@ export const portalChangeApplicationStage = createServerFn({ method: "POST" })
         );
 
         const refreshed = await getScopedApplication(client, session, data.applicationId);
+
+        // Student-safe stage alerts — only for consequential / visible milestones.
+        try {
+          const notifyStages = new Set([
+            "Docs Pending",
+            "Submitted",
+            "Offer Received",
+            "Rejected",
+            "Withdrawn",
+          ]);
+          if (notifyStages.has(data.toStage)) {
+            const { notifyLinkedStudent } = await import("@/lib/notify-linked-student");
+            const title =
+              data.toStage === "Submitted"
+                ? "Application submitted to university"
+                : data.toStage === "Offer Received"
+                  ? "Admission decision / offer update"
+                  : data.toStage === "Docs Pending"
+                    ? "Documents needed for your application"
+                    : `Application ${data.toStage.toLowerCase()}`;
+            const body =
+              data.toStage === "Submitted"
+                ? `${app.university} · ${app.program} has been submitted to the university.`
+                : data.toStage === "Docs Pending"
+                  ? `${app.university}: please upload or correct required documents.`
+                  : `${app.university} · ${app.program} is now marked ${data.toStage}.`;
+            await notifyLinkedStudent(client, app.studentId, {
+              title,
+              body,
+              linkPath: "/student/applications",
+            });
+          }
+        } catch {
+          /* best-effort */
+        }
+
         return {
           ok: true as const,
           unchanged: false as const,

@@ -91,6 +91,7 @@ function StudentDocuments() {
       setActiveDocId(null);
       pendingDocRef.current = null;
       await queryClient.invalidateQueries({ queryKey: ["student", sid, "docs"] });
+      await queryClient.invalidateQueries({ queryKey: ["student", sid, "timeline"] });
       await queryClient.invalidateQueries({ queryKey: ["documents"] });
       await queryClient.invalidateQueries({ queryKey: ["officer", "documents-queue"] });
       setTimeout(() => setProgress(0), 600);
@@ -102,7 +103,24 @@ function StudentDocuments() {
   });
 
   if (studentQ.isLoading) return <LoadingRows rows={5} />;
-  if (studentQ.isError || !studentQ.data) return <ErrorState />;
+  if (studentQ.isError || !studentQ.data) {
+    return (
+      <div>
+        <PageHeader
+          title="Documents"
+          subtitle="Upload files into private storage. Officers review authorized copies only."
+        />
+        <ErrorState
+          body={
+            studentQ.isError
+              ? portalErrorMessage(studentQ.error, "Could not load your profile.")
+              : "No student profile is linked to this account."
+          }
+          onRetry={() => void studentQ.refetch()}
+        />
+      </div>
+    );
+  }
 
   const docs = docsQ.data ?? [];
 
@@ -110,7 +128,7 @@ function StudentDocuments() {
     <div>
       <PageHeader
         title="Documents"
-        subtitle="Upload files into private storage. Officers review authorized copies only."
+        subtitle="Upload into existing requirements only. Officers review authorized copies — you cannot create new document types here."
       />
       <ActionRequiredBanner docs={docs} />
       <input
@@ -150,13 +168,22 @@ function StudentDocuments() {
         </div>
       ) : null}
       <p className="mb-4 text-xs text-muted-foreground">
-        Allowed: PDF, JPEG, PNG, WebP, DOC, DOCX. Max {Math.floor(DOCUMENT_UPLOAD_MAX_BYTES / (1024 * 1024))}{" "}
-        MB. Files are stored privately; public passport/transcript/bank URLs are never created.
+        Allowed: PDF, JPEG, PNG, WebP, DOC, DOCX. Max{" "}
+        {Math.floor(DOCUMENT_UPLOAD_MAX_BYTES / (1024 * 1024))} MB. Files are stored privately;
+        public passport/transcript/bank URLs are never created.
       </p>
       {docsQ.isLoading ? (
         <LoadingRows />
+      ) : docsQ.isError ? (
+        <ErrorState
+          body={portalErrorMessage(docsQ.error, "Could not load documents.")}
+          onRetry={() => void docsQ.refetch()}
+        />
       ) : !docs.length ? (
-        <EmptyState title="No documents" />
+        <EmptyState
+          title="No document requirements yet"
+          body="When your counsellor or Admission Team requests a file, it will appear here for upload."
+        />
       ) : (
         <TableWrap>
           <thead>
