@@ -38,8 +38,11 @@ import type {
   VerifySignupFeeInput,
 } from "@/types/intake";
 import {
+  aggregateVerifiedSignupFeeCash,
   clampSignupFeeLedgerPage,
-  signupFeeLedgerRowMatchesSearch,
+  expectedStatusForSignupFeeAction,
+  isTerminalSignupFeeStatus,
+  sanitizeSignupFeeSearchTerm,
   signupFeeStatusesForLedgerFilter,
   type SignupFeeLedgerStatusFilter,
 } from "@/lib/signup-fee-ledger";
@@ -511,7 +514,7 @@ export const portalListSignupFeeQueue = createServerFn({ method: "GET" })
       if (typeof data?.limit === "number") pageInput.limit = data.limit;
       if (typeof data?.offset === "number") pageInput.offset = data.offset;
       const { limit, offset } = clampSignupFeeLedgerPage(pageInput);
-      const search = (data?.search ?? "").trim();
+      const search = sanitizeSignupFeeSearchTerm(data?.search ?? "");
 
       // Overview counts across the ledger (authorized fee-verifier SELECT).
       const countFor = async (
@@ -529,13 +532,38 @@ export const portalListSignupFeeQueue = createServerFn({ method: "GET" })
       let verifiedCount = 0;
       let rejectedCount = 0;
       let waivedCount = 0;
+      let verifiedByCurrency: { currency: string; total: number }[] = [];
+      let verifiedTodayByCurrency: { currency: string; total: number }[] = [];
       try {
-        [pendingCount, verifiedCount, rejectedCount, waivedCount] = await Promise.all([
+        const todayStart = new Date();
+        todayStart.setHours(0, 0, 0, 0);
+        const [p, v, r, w, verifiedSnaps] = await Promise.all([
           countFor(["unpaid", "claimed"]),
           countFor(["verified"]),
           countFor(["rejected"]),
           countFor(["waived"]),
+          client
+            .from("signup_fee_payments")
+            .select("status, amount, currency, verified_at")
+            .eq("status", "verified")
+            .limit(5000),
         ]);
+        pendingCount = p;
+        verifiedCount = v;
+        rejectedCount = r;
+        waivedCount = w;
+        if (verifiedSnaps.error) throw new Error(verifiedSnaps.error.message);
+        const cash = aggregateVerifiedSignupFeeCash(
+          (verifiedSnaps.data ?? []).map((row) => ({
+            status: row.status,
+            amount: Number(row.amount),
+            currency: row.currency ?? "PKR",
+            verifiedAt: row.verified_at,
+          })),
+          { todayStartIso: todayStart.toISOString() },
+        );
+        verifiedByCurrency = cash.verifiedByCurrency;
+        verifiedTodayByCurrency = cash.verifiedTodayByCurrency;
       } catch (countErr) {
         if (
           countErr instanceof Error &&
@@ -546,17 +574,43 @@ export const portalListSignupFeeQueue = createServerFn({ method: "GET" })
         throw countErr;
       }
 
+      // Search before pagination: resolve matching student IDs, then filter fees.
+      let searchStudentIds: string[] | null = null;
+      if (search) {
+        const [{ data: byName }, { data: byCase }] = await Promise.all([
+          client.from("students").select("id").ilike("full_name", `%${search}%`).limit(300),
+          client.from("students").select("id").ilike("case_id", `%${search}%`).limit(300),
+        ]);
+        searchStudentIds = [
+          ...new Set([...(byName ?? []), ...(byCase ?? [])].map((s) => s.id).filter(Boolean)),
+        ];
+      }
+
       let query = client
         .from("signup_fee_payments")
         .select(
           "id, student_id, status, amount, currency, payment_method, reference_receipt, notes, verified_at, created_at, updated_at",
           { count: "exact" },
         )
-        .order("updated_at", { ascending: false })
-        .range(offset, offset + limit - 1);
+        .order("updated_at", { ascending: false });
       if (statuses) {
         query = query.in("status", statuses);
       }
+      if (search) {
+        const parts: string[] = [
+          `reference_receipt.ilike.%${search}%`,
+          `payment_method.ilike.%${search}%`,
+        ];
+        if (searchStudentIds && searchStudentIds.length) {
+          parts.unshift(`student_id.in.(${searchStudentIds.join(",")})`);
+        }
+        // Also allow exact student UUID paste.
+        if (/^[0-9a-f-]{36}$/i.test(search)) {
+          parts.push(`student_id.eq.${search}`);
+        }
+        query = query.or(parts.join(","));
+      }
+      query = query.range(offset, offset + limit - 1);
 
       const { data: fees, error, count: matchedCount } = await query;
       if (error) {
@@ -604,7 +658,7 @@ export const portalListSignupFeeQueue = createServerFn({ method: "GET" })
         }
       }
 
-      let rows: SignupFeeQueueRow[] = (fees ?? []).map((f) => {
+      const rows: SignupFeeQueueRow[] = (fees ?? []).map((f) => {
         const stu = nameById.get(f.student_id);
         const req = requestByStudent.get(f.student_id);
         return {
@@ -627,10 +681,6 @@ export const portalListSignupFeeQueue = createServerFn({ method: "GET" })
         };
       });
 
-      if (search) {
-        rows = rows.filter((r) => signupFeeLedgerRowMatchesSearch(r, search));
-      }
-
       console.info(
         JSON.stringify({
           scope: "signup_fee_queue",
@@ -640,6 +690,7 @@ export const portalListSignupFeeQueue = createServerFn({ method: "GET" })
           statusFilter,
           offset,
           limit,
+          search: Boolean(search),
         }),
       );
 
@@ -650,6 +701,8 @@ export const portalListSignupFeeQueue = createServerFn({ method: "GET" })
         verifiedCount,
         rejectedCount,
         waivedCount,
+        verifiedByCurrency,
+        verifiedTodayByCurrency,
         matchedCount: matchedCount ?? rows.length,
         limit,
         offset,
@@ -699,6 +752,51 @@ export const portalVerifySignupFee = createServerFn({ method: "POST" })
         .maybeSingle();
       if (loadFeeErr) throw new Error(loadFeeErr.message);
       if (!existingFee) throw new AuthError("Signup fee record not found.", 404);
+
+      // Concurrent / stale UI: do not re-process terminal fees via a second decision.
+      if (isTerminalSignupFeeStatus(existingFee.status)) {
+        const expected = expectedStatusForSignupFeeAction(data.action);
+        if (existingFee.status === expected) {
+          const { data: stu } = await client
+            .from("students")
+            .select("portal_activated_at")
+            .eq("id", data.studentId)
+            .maybeSingle();
+          return {
+            ok: true as const,
+            unchanged: true as const,
+            fee: {
+              studentId: existingFee.student_id,
+              status: existingFee.status,
+              amount: Number(existingFee.amount),
+              currency: existingFee.currency,
+              paymentMethod: existingFee.payment_method,
+              referenceReceipt: existingFee.reference_receipt,
+              verifiedAt: existingFee.verified_at,
+              portalActivatedAt: stu?.portal_activated_at ?? null,
+            } satisfies SignupFeeView,
+            requestsResolved: 0,
+            requestSyncWarning: null,
+            message: `This fee is already ${existingFee.status}. Refresh the ledger if the row still looks pending.`,
+          };
+        }
+        throw new AuthError(
+          `This signup fee was already marked ${existingFee.status}. Refresh the ledger — another officer may have acted first.`,
+          409,
+        );
+      }
+
+      if (
+        (data.action === "reject" || data.action === "waive") &&
+        (data.notes?.trim().length ?? 0) < 3
+      ) {
+        throw new AuthError(
+          data.action === "reject"
+            ? "Add a short rejection reason (at least 3 characters)."
+            : "Add a short waiver reason (at least 3 characters).",
+          400,
+        );
+      }
 
       const { mapVerifySignupFeeRpcError } = await import("@/lib/signup-fee-gate");
       const { data: rpcRows, error: rpcErr } = await client.rpc("verify_signup_fee_and_activate", {

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   EmptyState,
@@ -34,6 +34,8 @@ import type {
 } from "@/types/database";
 import { isSignupFeeVerified } from "@/lib/signup-fee-gate";
 import { FEE_QUEUE_KEY } from "@/lib/use-fee-verification-queue-realtime";
+import { useFinanceWorkspaceRealtime } from "@/lib/use-finance-workspace-realtime";
+import { cn } from "@/lib/utils";
 
 type SignupFeeQueueStatusFilter = "pending" | "verified" | "waived" | "rejected" | "all";
 
@@ -63,6 +65,7 @@ const SIGNUP_STATUS_TABS: { id: SignupFeeQueueStatusFilter; label: string }[] = 
 /** Shared fees workspace — also mounted at `/staff/finance` for specialty desks. */
 export function FinanceModulePage() {
   const queryClient = useQueryClient();
+  const liveStatus = useFinanceWorkspaceRealtime(true);
   const [ledgerTab, setLedgerTab] = useState<LedgerTab>("signup");
   const [signupStatus, setSignupStatus] = useState<SignupFeeQueueStatusFilter>("pending");
   const [signupSearch, setSignupSearch] = useState("");
@@ -74,8 +77,11 @@ export function FinanceModulePage() {
   const [signupNotes, setSignupNotes] = useState("");
   const [confirmSignup, setConfirmSignup] = useState<{
     studentId: string;
+    feeId: string;
     action: "verify" | "waive" | "reject";
     label: string;
+    amountLabel: string;
+    status: string;
   } | null>(null);
   const [createForm, setCreateForm] = useState({
     studentId: "",
@@ -213,20 +219,34 @@ export function FinanceModulePage() {
         ...(signupNotes.trim() ? { notes: signupNotes.trim() } : {}),
       }),
     onSuccess: async (data, vars) => {
+      const unchanged =
+        data && typeof data === "object" && "unchanged" in data
+          ? Boolean((data as { unchanged?: boolean }).unchanged)
+          : false;
       const warn =
         data && typeof data === "object" && "requestSyncWarning" in data
           ? (data as { requestSyncWarning?: string | null }).requestSyncWarning
           : null;
+      const serverMsg =
+        data && typeof data === "object" && "message" in data
+          ? String((data as { message?: string | null }).message ?? "")
+          : "";
       setMsg(
-        warn
-          ? `Signup fee ${vars.action} recorded. ${warn}`
-          : `Signup fee ${vars.action} recorded. Front Desk request closed when present. Claimed is never treated as verified.`,
+        unchanged
+          ? serverMsg || `Already ${vars.action}d — ledger refreshed.`
+          : warn
+            ? `Signup fee ${vars.action} recorded. ${warn}`
+            : `Signup fee ${vars.action} recorded. Front Desk request closed when present. Claimed is never treated as verified.`,
       );
       setSignupNotes("");
       setConfirmSignup(null);
       await invalidateSignup();
     },
-    onError: (err) => setMsg(portalErrorMessage(err, "Signup fee verification denied or failed.")),
+    onError: (err) => {
+      setConfirmSignup(null);
+      setMsg(portalErrorMessage(err, "Signup fee verification denied or failed."));
+      void invalidateSignup();
+    },
   });
 
   const fees = feesQ.data?.fees ?? [];
@@ -268,15 +288,38 @@ export function FinanceModulePage() {
   const verifiedCount = signupQ.data?.verifiedCount ?? 0;
   const rejectedCount = signupQ.data?.rejectedCount ?? 0;
   const waivedCount = signupQ.data?.waivedCount ?? 0;
+  const verifiedByCurrency = signupQ.data?.verifiedByCurrency ?? [];
+  const verifiedTodayByCurrency = signupQ.data?.verifiedTodayByCurrency ?? [];
   const matchedCount = signupQ.data?.matchedCount ?? signupRows.length;
   const canPagePrev = signupOffset > 0;
   const canPageNext = signupOffset + signupPageSize < matchedCount;
+  const lastSync = signupQ.data?.fetchedAt
+    ? new Date(signupQ.data.fetchedAt).toLocaleTimeString()
+    : null;
+  const formatCash = (rows: { currency: string; total: number }[]) =>
+    rows.length ? rows.map((r) => `${r.currency} ${r.total.toLocaleString()}`).join(" · ") : "—";
 
   return (
-    <div className="space-y-8">
-      <PageHeader title={financeTitle} subtitle={financeSubtitle} />
+    <div className="space-y-6 md:space-y-8">
+      <PageHeader
+        title={financeTitle}
+        subtitle={financeSubtitle}
+        actions={<LiveBadge status={liveStatus} lastSync={lastSync} />}
+      />
 
-      {msg ? <p className="text-sm text-navy">{msg}</p> : null}
+      {msg ? (
+        <p
+          className={cn(
+            "rounded-md border px-3 py-2 text-sm",
+            /denied|failed|error|already marked/i.test(msg)
+              ? "border-danger/30 bg-danger-soft text-danger"
+              : "border-emerald-200 bg-emerald-50 text-emerald-900",
+          )}
+          role="status"
+        >
+          {msg}
+        </p>
+      ) : null}
 
       <div className="flex flex-wrap gap-2 border-b border-border pb-2">
         <Button
@@ -297,12 +340,65 @@ export function FinanceModulePage() {
 
       {ledgerTab === "signup" ? (
         <>
-          <div className="grid gap-4 sm:grid-cols-4">
-            <StatCard label="Pending verification" value={String(pendingCount)} />
-            <StatCard label="Verified" value={String(verifiedCount)} />
-            <StatCard label="Rejected" value={String(rejectedCount)} />
-            <StatCard label="Waived" value={String(waivedCount)} />
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <StatCard
+              label="Pending verification"
+              value={signupQ.isLoading && !signupQ.data ? "…" : String(pendingCount)}
+              hint="Unpaid + claimed only (not revenue)"
+            />
+            <StatCard
+              label="Verified (count)"
+              value={signupQ.isLoading && !signupQ.data ? "…" : String(verifiedCount)}
+              hint="Cash received — excludes waived"
+            />
+            <StatCard
+              label="Rejected"
+              value={signupQ.isLoading && !signupQ.data ? "…" : String(rejectedCount)}
+              hint="Needs correction / re-claim"
+            />
+            <StatCard
+              label="Waived"
+              value={signupQ.isLoading && !signupQ.data ? "…" : String(waivedCount)}
+              hint="Not counted as cash received"
+            />
           </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <StatCard
+              label="Verified cash (all time)"
+              value={signupQ.isLoading && !signupQ.data ? "…" : formatCash(verifiedByCurrency)}
+              hint="Sum of verified amounts by currency — no FX conversion"
+            />
+            <StatCard
+              label="Verified cash (today)"
+              value={signupQ.isLoading && !signupQ.data ? "…" : formatCash(verifiedTodayByCurrency)}
+              hint="Based on verified_at date (local midnight)"
+            />
+          </div>
+
+          {forwarded.length > 0 ? (
+            <Panel title="Needs attention — Front Desk forwards">
+              <p className="mb-2 text-sm text-muted-foreground">
+                Counsellor requests marked in progress / forwarded. Match against unpaid or claimed
+                signup fees below — payment status remains the source of truth.
+              </p>
+              <ul className="divide-y divide-border text-sm">
+                {forwarded.slice(0, 8).map((r) => (
+                  <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
+                    <div className="min-w-0">
+                      <p className="font-medium text-navy">
+                        {r.fullName || r.caseId || r.studentId.slice(0, 8)}
+                      </p>
+                      <p className="text-xs text-muted-foreground line-clamp-2">
+                        {r.summary || "No summary"}
+                      </p>
+                    </div>
+                    <StatusBadge status={r.status} />
+                  </li>
+                ))}
+              </ul>
+            </Panel>
+          ) : null}
 
           <Panel
             title="Signup fee ledger"
@@ -392,9 +488,21 @@ export function FinanceModulePage() {
                 <p className="font-medium text-navy">
                   Confirm {confirmSignup.action} for {confirmSignup.label}?
                 </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  This updates the persisted signup fee and closes any open Front Desk coordination
-                  request for this student.
+                <dl className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
+                  <div>
+                    <dt className="uppercase tracking-wide">Amount</dt>
+                    <dd className="font-medium text-navy">{confirmSignup.amountLabel}</dd>
+                  </div>
+                  <div>
+                    <dt className="uppercase tracking-wide">Current status</dt>
+                    <dd className="font-medium text-navy capitalize">
+                      {confirmSignup.status.replaceAll("_", " ")}
+                    </dd>
+                  </div>
+                </dl>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Runs the trusted verify RPC (not a direct table edit). Closes open Front Desk
+                  coordination requests. Reject/waive require notes above.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-2">
                   <Button
@@ -409,9 +517,14 @@ export function FinanceModulePage() {
                       });
                     }}
                   >
-                    Confirm {confirmSignup.action}
+                    {signupVerifyM.isPending ? "Saving…" : `Confirm ${confirmSignup.action}`}
                   </Button>
-                  <Button size="sm" variant="ghost" onClick={() => setConfirmSignup(null)}>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={signupVerifyM.isPending}
+                    onClick={() => setConfirmSignup(null)}
+                  >
                     Cancel
                   </Button>
                 </div>
@@ -470,22 +583,11 @@ export function FinanceModulePage() {
                                 {row.studentName ?? row.studentId.slice(0, 8)}
                               </div>
                               <div className="text-xs text-muted-foreground">
-                                {row.caseId || "—"}
+                                Case {row.caseId || "—"}
                               </div>
-                              <Button
-                                asChild
-                                size="sm"
-                                variant="ghost"
-                                className="mt-1 h-7 px-2 text-xs"
-                              >
-                                <Link
-                                  to="/staff/students/$studentId"
-                                  params={{ studentId: row.studentId }}
-                                  search={{ tab: "assessment" }}
-                                >
-                                  View case
-                                </Link>
-                              </Button>
+                              <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
+                                {row.studentId.slice(0, 8)}…
+                              </div>
                             </td>
                             <td className="px-3 py-2">
                               {row.currency} {row.amount.toLocaleString()}
@@ -534,8 +636,11 @@ export function FinanceModulePage() {
                                       setMsg(null);
                                       setConfirmSignup({
                                         studentId: row.studentId,
+                                        feeId: row.feeId,
                                         action: "verify",
                                         label: row.caseId || row.studentName || "student",
+                                        amountLabel: `${row.currency} ${row.amount.toLocaleString()}`,
+                                        status: row.status,
                                       });
                                     }}
                                   >
@@ -551,8 +656,11 @@ export function FinanceModulePage() {
                                       setMsg(null);
                                       setConfirmSignup({
                                         studentId: row.studentId,
+                                        feeId: row.feeId,
                                         action: "waive",
                                         label: row.caseId || row.studentName || "student",
+                                        amountLabel: `${row.currency} ${row.amount.toLocaleString()}`,
+                                        status: row.status,
                                       });
                                     }}
                                   >
@@ -568,8 +676,11 @@ export function FinanceModulePage() {
                                       setMsg(null);
                                       setConfirmSignup({
                                         studentId: row.studentId,
+                                        feeId: row.feeId,
                                         action: "reject",
                                         label: row.caseId || row.studentName || "student",
+                                        amountLabel: `${row.currency} ${row.amount.toLocaleString()}`,
+                                        status: row.status,
                                       });
                                     }}
                                   >
@@ -614,14 +725,6 @@ export function FinanceModulePage() {
               </>
             )}
 
-            {!coordQ.isError && forwarded.length > 0 ? (
-              <div className="mt-4 rounded border border-border/70 bg-accent/20 px-3 py-2 text-xs text-muted-foreground">
-                <strong className="text-navy">{forwarded.length}</strong> counsellor request
-                {forwarded.length === 1 ? "" : "s"} marked{" "}
-                <span className="font-medium text-navy">forwarded / in progress</span> by Front
-                Desk. Matching unpaid/claimed signup fees are listed above for verification.
-              </div>
-            ) : null}
             {coordQ.isError ? (
               <p className="mt-3 text-xs text-danger">
                 Could not load Front Desk coordination count: {portalErrorMessage(coordQ.error)}
@@ -881,5 +984,37 @@ export function FinanceModulePage() {
         </div>
       )}
     </div>
+  );
+}
+
+function LiveBadge({
+  status,
+  lastSync,
+}: {
+  status: "live" | "reconnecting" | "offline" | "connecting";
+  lastSync: string | null;
+}) {
+  const label =
+    status === "live"
+      ? "Live"
+      : status === "reconnecting" || status === "connecting"
+        ? "Reconnecting"
+        : lastSync
+          ? `Last updated ${lastSync}`
+          : "Offline";
+  return (
+    <span
+      className={cn(
+        "rounded px-2 py-1 text-[11px] font-semibold uppercase tracking-wide",
+        status === "live"
+          ? "bg-emerald-50 text-emerald-800"
+          : status === "offline"
+            ? "bg-slate-100 text-slate-600"
+            : "bg-amber-50 text-amber-800",
+      )}
+      title={lastSync ? `Synced ${lastSync}` : undefined}
+    >
+      {label}
+    </span>
   );
 }
