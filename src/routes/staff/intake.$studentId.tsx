@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -14,9 +14,12 @@ import {
   portalErrorMessage,
 } from "@/components/common";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/StatusBadge";
 import { FrontDeskRegistrationFormA4 } from "@/components/portal/FrontDeskRegistrationFormA4";
+import { SignupFeeVoucherA4 } from "@/components/portal/SignupFeeVoucherA4";
 import { isFrontDeskBusinessRole } from "@/lib/staff-business-access";
 import { describeJourneyStageLabel, deriveFrontDeskNextAction } from "@/lib/front-desk-workspace";
 import {
@@ -24,10 +27,17 @@ import {
   feeStatusAllowsAdmissionHandover,
   requestStuckAfterFeeDecision,
 } from "@/lib/fee-verification-workflow";
+import { INTAKE_FEE_PAYMENT_METHODS } from "@/lib/intake-form-options";
 import {
   describePersistedSignupFeeStatus,
+  printCaseDocumentPdf,
   printRegistrationFormPdf,
 } from "@/lib/registration-form-a4";
+import {
+  describeSignupFeeOperationalStatus,
+  formatSignupFeeAmount,
+  voucherPrintFilename,
+} from "@/lib/signup-fee-voucher";
 import {
   intakePortalStatusFromRow,
   studentPortalAccountStatusLabel,
@@ -40,6 +50,7 @@ import {
   getFrontDeskIntakeRecord,
   listCounsellorDesks,
   reconcileFeeVerificationFromFee,
+  recordSignupFee,
   returnFeeVerificationRequest,
 } from "@/services";
 
@@ -60,6 +71,12 @@ function FrontDeskIntakeRecordPage() {
   const [returnReason, setReturnReason] = useState("");
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [showForm, setShowForm] = useState(false);
+  const [showVoucher, setShowVoucher] = useState(false);
+  const [feeAmount, setFeeAmount] = useState("");
+  const [feeCurrency, setFeeCurrency] = useState("PKR");
+  const [feeMethod, setFeeMethod] = useState("");
+  const [feeReference, setFeeReference] = useState("");
+  const [feeNotes, setFeeNotes] = useState("");
 
   const recordQ = useQuery({
     queryKey: ["front-desk", "record", studentId],
@@ -118,6 +135,52 @@ function FrontDeskIntakeRecordPage() {
     onError: (e) => setActionMsg(portalErrorMessage(e, "Could not sync request.")),
   });
 
+  useEffect(() => {
+    const fee = recordQ.data?.signupFee;
+    if (!fee) return;
+    setFeeAmount((prev) => (prev ? prev : String(fee.amount)));
+    setFeeCurrency(fee.currency || "PKR");
+    setFeeMethod(fee.paymentMethod || "");
+    setFeeReference(fee.referenceReceipt || "");
+    setFeeNotes(fee.notes || "");
+  }, [recordQ.data?.signupFee]);
+
+  const feeM = useMutation({
+    mutationFn: (input: { markClaimed: boolean }) => {
+      const amount = Number(feeAmount);
+      if (!Number.isFinite(amount) || amount < 0) {
+        throw new Error("Enter a valid fee amount.");
+      }
+      const payload: Parameters<typeof recordSignupFee>[0] = {
+        studentId,
+        amount,
+        currency: feeCurrency.trim() || "PKR",
+        markClaimed: input.markClaimed,
+      };
+      if (feeMethod.trim()) payload.paymentMethod = feeMethod.trim();
+      if (feeReference.trim()) payload.referenceReceipt = feeReference.trim();
+      if (feeNotes.trim()) payload.notes = feeNotes.trim();
+      return recordSignupFee(payload);
+    },
+    onSuccess: async (res, vars) => {
+      setActionMsg(
+        vars.markClaimed
+          ? "Payment proof submitted — awaiting Finance verification. This is not verified."
+          : "Fee voucher obligation saved (unpaid). Print the voucher for the student.",
+      );
+      setShowVoucher(true);
+      await invalidate();
+      await recordQ.refetch();
+      if (res?.fee) {
+        setFeeAmount(String(res.fee.amount));
+        setFeeCurrency(res.fee.currency || "PKR");
+        setFeeMethod(res.fee.paymentMethod || "");
+        setFeeReference(res.fee.referenceReceipt || "");
+      }
+    },
+    onError: (e) => setActionMsg(portalErrorMessage(e, "Could not save signup fee.")),
+  });
+
   if (recordQ.isLoading) {
     return (
       <PageLoadState title="Registration record">
@@ -171,12 +234,20 @@ function FrontDeskIntakeRecordPage() {
       signupFeeStatus: student.signupFeeStatus,
       openFeeRequest,
     });
-  const feeDisplay = describePersistedSignupFeeStatus(student.signupFeeStatus);
+  const signupFee = data.signupFee;
+  const feeStatus = signupFee?.status ?? student.signupFeeStatus;
+  const feeDisplay = describePersistedSignupFeeStatus(feeStatus);
+  const feeOps = describeSignupFeeOperationalStatus(feeStatus);
   const portalStatus = intakePortalStatusFromRow({
     profileId: student.profileId,
     portalActivatedAt: student.portalActivatedAt,
   });
   const timeline = data.timeline ?? [];
+  const feeFinalized = feeStatus === "verified" || feeStatus === "waived";
+  const canIssueVoucher = !feeFinalized;
+  const canSubmitProof =
+    !feeFinalized &&
+    (feeStatus === "unpaid" || feeStatus === "claimed" || feeStatus === "rejected" || !feeStatus);
 
   return (
     <div className="space-y-5 md:space-y-6">
@@ -320,11 +391,158 @@ function FrontDeskIntakeRecordPage() {
         </Panel>
       </div>
 
-      <Panel title="Fee verification workflow">
+      <Panel title="Signup fee voucher & payment proof">
+        <p className="mb-3 text-sm text-navy/70">
+          Authoritative ledger: signup/intake fee only. Issuing a voucher or uploading proof never
+          verifies payment — Finance decides via the trusted Accounts workflow.
+        </p>
+        <div className="mb-4 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
+          <p className="font-medium text-navy">{feeOps.label}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {signupFee
+              ? `${signupFee.voucherNumber} · ${formatSignupFeeAmount(signupFee.amount, signupFee.currency)}`
+              : feeDisplay.label}
+          </p>
+        </div>
+
+        {canIssueVoucher ? (
+          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <div>
+              <Label htmlFor="fd-fee-amount">Amount</Label>
+              <Input
+                id="fd-fee-amount"
+                type="number"
+                min={0}
+                step="0.01"
+                value={feeAmount}
+                onChange={(e) => setFeeAmount(e.target.value)}
+                disabled={feeM.isPending || (Boolean(signupFee) && feeStatus === "claimed")}
+              />
+            </div>
+            <div>
+              <Label htmlFor="fd-fee-currency">Currency</Label>
+              <Input
+                id="fd-fee-currency"
+                value={feeCurrency}
+                onChange={(e) => setFeeCurrency(e.target.value)}
+                disabled={feeM.isPending || (Boolean(signupFee) && feeStatus === "claimed")}
+              />
+            </div>
+            <div>
+              <Label htmlFor="fd-fee-method">Payment method</Label>
+              <select
+                id="fd-fee-method"
+                className="mt-0 flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                value={feeMethod}
+                onChange={(e) => setFeeMethod(e.target.value)}
+                disabled={feeM.isPending}
+              >
+                <option value="">Select…</option>
+                {INTAKE_FEE_PAYMENT_METHODS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="fd-fee-ref">Transaction / receipt reference</Label>
+              <Input
+                id="fd-fee-ref"
+                value={feeReference}
+                onChange={(e) => setFeeReference(e.target.value)}
+                disabled={feeM.isPending}
+                placeholder="Required when submitting proof"
+              />
+            </div>
+            <div className="sm:col-span-2 lg:col-span-4">
+              <Label htmlFor="fd-fee-notes">Notes (optional)</Label>
+              <Textarea
+                id="fd-fee-notes"
+                value={feeNotes}
+                onChange={(e) => setFeeNotes(e.target.value)}
+                disabled={feeM.isPending}
+              />
+            </div>
+          </div>
+        ) : null}
+
+        <div className="flex flex-wrap gap-2">
+          {canIssueVoucher ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              disabled={feeM.isPending || !feeAmount.trim()}
+              onClick={() => feeM.mutate({ markClaimed: false })}
+            >
+              {signupFee ? "Update unpaid voucher" : "Issue unpaid voucher"}
+            </Button>
+          ) : null}
+          {canSubmitProof ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="navy"
+              disabled={feeM.isPending || !feeAmount.trim()}
+              onClick={() => feeM.mutate({ markClaimed: true })}
+            >
+              Submit payment proof
+            </Button>
+          ) : null}
+          {signupFee ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setShowVoucher(true);
+                window.setTimeout(() => {
+                  printCaseDocumentPdf(
+                    voucherPrintFilename(student.caseId, signupFee.voucherNumber),
+                    "fee-voucher",
+                  );
+                }, 80);
+              }}
+            >
+              Print / Save voucher PDF
+            </Button>
+          ) : null}
+          {signupFee ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowVoucher((v) => !v)}
+            >
+              {showVoucher ? "Hide voucher" : "Show voucher"}
+            </Button>
+          ) : null}
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Keep payment screenshots with the case. Reference and method are stored on the fee row for
+          Finance review. You cannot mark this fee verified.
+        </p>
+        {showVoucher && signupFee ? (
+          <div className="mt-4 overflow-x-auto rounded-lg border border-border bg-white">
+            <SignupFeeVoucherA4
+              feeId={signupFee.feeId}
+              caseId={student.caseId}
+              studentName={student.fullName}
+              amount={signupFee.amount}
+              currency={signupFee.currency}
+              status={signupFee.status}
+              issuedAt={signupFee.createdAt}
+            />
+          </div>
+        ) : null}
+      </Panel>
+
+      <Panel title="Counsellor fee-verification coordination">
         {feeRequests.length === 0 ? (
           <EmptyState
             title="No counsellor fee-verification requests"
-            body="When a counsellor requests signup-fee verification, the request and Finance handoff appear here."
+            body="When a counsellor requests signup-fee verification, the request and Finance handoff appear here. This does not replace the signup fee ledger above."
           />
         ) : (
           <TableWrap>

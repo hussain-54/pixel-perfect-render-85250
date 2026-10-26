@@ -21,7 +21,6 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   claimUniversityFeePayment,
   createUniversityFeeObligation,
-  listFeeVerificationRequests,
   listSignupFeeQueue,
   listUniversityFeeQueue,
   verifySignupFee,
@@ -33,11 +32,12 @@ import type {
   UniversityFeeStatusDb,
 } from "@/types/database";
 import { isSignupFeeVerified } from "@/lib/signup-fee-gate";
-import { FEE_QUEUE_KEY } from "@/lib/use-fee-verification-queue-realtime";
+import type { SignupFeeLedgerStatusFilter } from "@/lib/signup-fee-ledger";
+import { describeSignupFeeOperationalStatus } from "@/lib/signup-fee-voucher";
 import { useFinanceWorkspaceRealtime } from "@/lib/use-finance-workspace-realtime";
 import { cn } from "@/lib/utils";
 
-type SignupFeeQueueStatusFilter = "pending" | "verified" | "waived" | "rejected" | "all";
+type SignupFeeQueueStatusFilter = SignupFeeLedgerStatusFilter;
 
 export const Route = createFileRoute("/admin/finance")({
   component: FinanceModulePage,
@@ -55,10 +55,12 @@ const FEE_KINDS: UniversityFeeKindDb[] = [
 ];
 
 const SIGNUP_STATUS_TABS: { id: SignupFeeQueueStatusFilter; label: string }[] = [
-  { id: "pending", label: "Pending verification" },
+  { id: "claimed", label: "Review payment" },
+  { id: "unpaid", label: "Voucher unpaid" },
   { id: "verified", label: "Verified" },
-  { id: "waived", label: "Waived" },
   { id: "rejected", label: "Rejected" },
+  { id: "waived", label: "Waived" },
+  { id: "pending", label: "All open" },
   { id: "all", label: "All" },
 ];
 
@@ -67,11 +69,12 @@ export function FinanceModulePage() {
   const queryClient = useQueryClient();
   const liveStatus = useFinanceWorkspaceRealtime(true);
   const [ledgerTab, setLedgerTab] = useState<LedgerTab>("signup");
-  const [signupStatus, setSignupStatus] = useState<SignupFeeQueueStatusFilter>("pending");
+  const [signupStatus, setSignupStatus] = useState<SignupFeeQueueStatusFilter>("claimed");
   const [signupSearch, setSignupSearch] = useState("");
   const [signupSearchApplied, setSignupSearchApplied] = useState("");
   const [signupOffset, setSignupOffset] = useState(0);
   const signupPageSize = 50;
+  const [reviewFeeId, setReviewFeeId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<UniStatusFilter>("queue");
   const [msg, setMsg] = useState<string | null>(null);
   const [signupNotes, setSignupNotes] = useState("");
@@ -133,21 +136,12 @@ export function FinanceModulePage() {
     enabled: ledgerTab === "signup",
   });
 
-  const coordQ = useQuery({
-    queryKey: [...FEE_QUEUE_KEY, "finance"],
-    queryFn: () => listFeeVerificationRequests({ includeResolved: false }),
-    staleTime: 10_000,
-    refetchOnWindowFocus: true,
-    enabled: ledgerTab === "signup",
-  });
-
   const invalidateUni = async () => {
     await queryClient.invalidateQueries({ queryKey: ["admin", "university-fee-queue"] });
   };
 
   const invalidateSignup = async () => {
     await queryClient.invalidateQueries({ queryKey: ["admin", "signup-fee-queue"] });
-    await queryClient.invalidateQueries({ queryKey: [...FEE_QUEUE_KEY] });
   };
 
   const createM = useMutation({
@@ -251,7 +245,7 @@ export function FinanceModulePage() {
 
   const fees = feesQ.data?.fees ?? [];
   const signupRows = signupQ.data?.rows ?? [];
-  const forwarded = (coordQ.data?.rows ?? []).filter((r) => r.status === "in_progress");
+  const reviewRow = signupRows.find((r) => r.feeId === reviewFeeId) ?? signupRows[0] ?? null;
 
   const uniBlocked =
     feesQ.isError &&
@@ -260,7 +254,7 @@ export function FinanceModulePage() {
 
   const financeTitle = "Finance — fees & verification";
   const financeSubtitle =
-    "Signup/intake and university/application fees are separate ledgers. Claimed is never treated as verified.";
+    "Review submitted signup-fee payment proofs, then verify through the trusted Accounts RPC. University fees stay on a separate ledger. Claimed is never verified.";
 
   if (ledgerTab === "signup" && signupQ.isLoading && !signupQ.data) {
     return (
@@ -284,7 +278,8 @@ export function FinanceModulePage() {
     );
   }
 
-  const pendingCount = signupQ.data?.pendingCount ?? 0;
+  const claimedCount = signupQ.data?.claimedCount ?? signupQ.data?.pendingCount ?? 0;
+  const unpaidCount = signupQ.data?.unpaidCount ?? 0;
   const verifiedCount = signupQ.data?.verifiedCount ?? 0;
   const rejectedCount = signupQ.data?.rejectedCount ?? 0;
   const waivedCount = signupQ.data?.waivedCount ?? 0;
@@ -340,21 +335,26 @@ export function FinanceModulePage() {
 
       {ledgerTab === "signup" ? (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
             <StatCard
-              label="Pending verification"
-              value={signupQ.isLoading && !signupQ.data ? "…" : String(pendingCount)}
-              hint="Unpaid + claimed only (not revenue)"
+              label="Awaiting review"
+              value={signupQ.isLoading && !signupQ.data ? "…" : String(claimedCount)}
+              hint="Claimed proofs — actionable queue"
             />
             <StatCard
-              label="Verified (count)"
+              label="Voucher unpaid"
+              value={signupQ.isLoading && !signupQ.data ? "…" : String(unpaidCount)}
+              hint="Issued obligation, no proof yet"
+            />
+            <StatCard
+              label="Verified"
               value={signupQ.isLoading && !signupQ.data ? "…" : String(verifiedCount)}
               hint="Cash received — excludes waived"
             />
             <StatCard
               label="Rejected"
               value={signupQ.isLoading && !signupQ.data ? "…" : String(rejectedCount)}
-              hint="Needs correction / re-claim"
+              hint="Needs Front Desk correction"
             />
             <StatCard
               label="Waived"
@@ -376,32 +376,8 @@ export function FinanceModulePage() {
             />
           </div>
 
-          {forwarded.length > 0 ? (
-            <Panel title="Needs attention — Front Desk forwards">
-              <p className="mb-2 text-sm text-muted-foreground">
-                Counsellor requests marked in progress / forwarded. Match against unpaid or claimed
-                signup fees below — payment status remains the source of truth.
-              </p>
-              <ul className="divide-y divide-border text-sm">
-                {forwarded.slice(0, 8).map((r) => (
-                  <li key={r.id} className="flex flex-wrap items-center justify-between gap-2 py-2">
-                    <div className="min-w-0">
-                      <p className="font-medium text-navy">
-                        {r.fullName || r.caseId || r.studentId.slice(0, 8)}
-                      </p>
-                      <p className="text-xs text-muted-foreground line-clamp-2">
-                        {r.summary || "No summary"}
-                      </p>
-                    </div>
-                    <StatusBadge status={r.status} />
-                  </li>
-                ))}
-              </ul>
-            </Panel>
-          ) : null}
-
           <Panel
-            title="Signup fee ledger"
+            title="Signup fee verification queue"
             action={
               <Button
                 type="button"
@@ -414,10 +390,10 @@ export function FinanceModulePage() {
               </Button>
             }
           >
-            <p className="mb-3 text-sm text-muted-foreground">
-              Authoritative signup_fee_payments records. Claimed is never verified until Accounts
-              acts. Verifying here also closes linked Front Desk counselling requests (same
-              decision).
+            <p className="mb-3 text-sm text-navy/70">
+              Source of truth: <span className="font-medium">signup_fee_payments</span>. Counsellor
+              coordination requests do not replace payment status. Claimed is never verified until
+              you confirm below.
             </p>
 
             <div className="mb-3 flex flex-wrap gap-2">
@@ -551,11 +527,13 @@ export function FinanceModulePage() {
             ) : !signupRows.length ? (
               <EmptyState
                 title={
-                  signupStatus === "pending"
-                    ? "No signup fees awaiting verification"
-                    : "No matching signup fee records"
+                  signupStatus === "claimed"
+                    ? "No payment proofs awaiting review"
+                    : signupStatus === "unpaid"
+                      ? "No unpaid vouchers"
+                      : "No matching signup fee records"
                 }
-                body="Adjust filters or search. Historical verified/rejected/waived rows appear under those tabs."
+                body="Adjust filters or search. Verified, rejected, and waived history remains under those tabs."
               />
             ) : (
               <>
@@ -563,11 +541,10 @@ export function FinanceModulePage() {
                   <table className="w-full text-left text-sm">
                     <thead>
                       <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
-                        <th className="px-3 py-2">Student / case</th>
+                        <th className="px-3 py-2">Student / voucher</th>
                         <th className="px-3 py-2">Amount</th>
-                        <th className="px-3 py-2">Claim</th>
-                        <th className="px-3 py-2">Obligation → claim → decision</th>
-                        <th className="px-3 py-2">Counsellor request</th>
+                        <th className="px-3 py-2">Proof / claim</th>
+                        <th className="px-3 py-2">Status</th>
                         <th className="px-3 py-2">Actions</th>
                       </tr>
                     </thead>
@@ -576,8 +553,16 @@ export function FinanceModulePage() {
                         const stillOpen = !isSignupFeeVerified(row.status as SignupFeeStatusDb);
                         const actionable =
                           stillOpen && (row.status === "unpaid" || row.status === "claimed");
+                        const ops = describeSignupFeeOperationalStatus(row.status);
+                        const selected = (reviewFeeId ?? reviewRow?.feeId) === row.feeId;
                         return (
-                          <tr key={row.feeId} className="border-b border-border/60 align-top">
+                          <tr
+                            key={row.feeId}
+                            className={cn(
+                              "border-b border-border/60 align-top",
+                              selected && "bg-navy/[0.03]",
+                            )}
+                          >
                             <td className="px-3 py-2">
                               <div className="font-medium text-navy">
                                 {row.studentName ?? row.studentId.slice(0, 8)}
@@ -585,113 +570,107 @@ export function FinanceModulePage() {
                               <div className="text-xs text-muted-foreground">
                                 Case {row.caseId || "—"}
                               </div>
-                              <div className="mt-0.5 font-mono text-[10px] text-muted-foreground">
-                                {row.studentId.slice(0, 8)}…
+                              <div className="mt-0.5 font-mono text-[11px] text-navy/70">
+                                {row.voucherNumber}
                               </div>
                             </td>
                             <td className="px-3 py-2">
                               {row.currency} {row.amount.toLocaleString()}
                             </td>
-                            <td className="max-w-[12rem] px-3 py-2 text-xs text-muted-foreground">
+                            <td className="max-w-[14rem] px-3 py-2 text-xs text-muted-foreground">
                               {[
                                 row.paymentMethod,
-                                row.referenceReceipt ? `Ref: ${row.referenceReceipt}` : null,
+                                row.referenceReceipt ? `Txn: ${row.referenceReceipt}` : null,
                               ]
                                 .filter(Boolean)
-                                .join(" · ") || "No method/reference recorded"}
+                                .join(" · ") || "No proof details yet"}
                               <div className="mt-1 text-[11px]">
-                                Claimed/updated {fmtDate(row.updatedAt.slice(0, 10))}
+                                Updated {fmtDate(row.updatedAt.slice(0, 10))}
                               </div>
                             </td>
                             <td className="px-3 py-2">
                               <StatusBadge status={row.status} />
                               <div className="mt-1 text-[11px] text-muted-foreground">
-                                {row.status === "unpaid"
-                                  ? "Obligation open — not claimed"
-                                  : row.status === "claimed"
-                                    ? "Payment claimed — awaiting verify"
-                                    : row.verifiedAt
-                                      ? `Decision ${fmtDate(row.verifiedAt.slice(0, 10))}`
-                                      : "Closed"}
+                                {ops.label}
                               </div>
                             </td>
-                            <td className="max-w-[12rem] px-3 py-2 text-xs text-muted-foreground">
-                              {row.openRequestStatus ? (
-                                <>
-                                  <StatusBadge status={row.openRequestStatus} />
-                                  <p className="mt-1">{row.openRequestSummary || "—"}</p>
-                                </>
-                              ) : (
-                                "No open counsellor request"
-                              )}
-                            </td>
                             <td className="px-3 py-2">
-                              {actionable ? (
-                                <div className="flex flex-wrap gap-1">
-                                  <Button
-                                    size="sm"
-                                    variant="navy"
-                                    disabled={signupVerifyM.isPending}
-                                    onClick={() => {
-                                      setMsg(null);
-                                      setConfirmSignup({
-                                        studentId: row.studentId,
-                                        feeId: row.feeId,
-                                        action: "verify",
-                                        label: row.caseId || row.studentName || "student",
-                                        amountLabel: `${row.currency} ${row.amount.toLocaleString()}`,
-                                        status: row.status,
-                                      });
-                                    }}
-                                  >
-                                    Verify
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    disabled={
-                                      signupVerifyM.isPending || signupNotes.trim().length < 3
-                                    }
-                                    onClick={() => {
-                                      setMsg(null);
-                                      setConfirmSignup({
-                                        studentId: row.studentId,
-                                        feeId: row.feeId,
-                                        action: "waive",
-                                        label: row.caseId || row.studentName || "student",
-                                        amountLabel: `${row.currency} ${row.amount.toLocaleString()}`,
-                                        status: row.status,
-                                      });
-                                    }}
-                                  >
-                                    Waive
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    disabled={
-                                      signupVerifyM.isPending || signupNotes.trim().length < 3
-                                    }
-                                    onClick={() => {
-                                      setMsg(null);
-                                      setConfirmSignup({
-                                        studentId: row.studentId,
-                                        feeId: row.feeId,
-                                        action: "reject",
-                                        label: row.caseId || row.studentName || "student",
-                                        amountLabel: `${row.currency} ${row.amount.toLocaleString()}`,
-                                        status: row.status,
-                                      });
-                                    }}
-                                  >
-                                    Reject
-                                  </Button>
-                                </div>
-                              ) : (
-                                <span className="text-xs text-muted-foreground capitalize">
-                                  {row.status.replaceAll("_", " ")}
-                                </span>
-                              )}
+                              <div className="flex flex-wrap gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  onClick={() => setReviewFeeId(row.feeId)}
+                                >
+                                  Review payment
+                                </Button>
+                                {actionable ? (
+                                  <>
+                                    {row.status === "claimed" ? (
+                                      <Button
+                                        size="sm"
+                                        variant="navy"
+                                        disabled={signupVerifyM.isPending}
+                                        onClick={() => {
+                                          setMsg(null);
+                                          setReviewFeeId(row.feeId);
+                                          setConfirmSignup({
+                                            studentId: row.studentId,
+                                            feeId: row.feeId,
+                                            action: "verify",
+                                            label: row.caseId || row.studentName || "student",
+                                            amountLabel: `${row.currency} ${row.amount.toLocaleString()}`,
+                                            status: row.status,
+                                          });
+                                        }}
+                                      >
+                                        Verify
+                                      </Button>
+                                    ) : null}
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      disabled={
+                                        signupVerifyM.isPending || signupNotes.trim().length < 3
+                                      }
+                                      onClick={() => {
+                                        setMsg(null);
+                                        setReviewFeeId(row.feeId);
+                                        setConfirmSignup({
+                                          studentId: row.studentId,
+                                          feeId: row.feeId,
+                                          action: "waive",
+                                          label: row.caseId || row.studentName || "student",
+                                          amountLabel: `${row.currency} ${row.amount.toLocaleString()}`,
+                                          status: row.status,
+                                        });
+                                      }}
+                                    >
+                                      Waive
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      disabled={
+                                        signupVerifyM.isPending || signupNotes.trim().length < 3
+                                      }
+                                      onClick={() => {
+                                        setMsg(null);
+                                        setReviewFeeId(row.feeId);
+                                        setConfirmSignup({
+                                          studentId: row.studentId,
+                                          feeId: row.feeId,
+                                          action: "reject",
+                                          label: row.caseId || row.studentName || "student",
+                                          amountLabel: `${row.currency} ${row.amount.toLocaleString()}`,
+                                          status: row.status,
+                                        });
+                                      }}
+                                    >
+                                      Reject
+                                    </Button>
+                                  </>
+                                ) : null}
+                              </div>
                             </td>
                           </tr>
                         );
@@ -699,6 +678,75 @@ export function FinanceModulePage() {
                     </tbody>
                   </table>
                 </TableWrap>
+
+                {reviewRow ? (
+                  <div className="mt-4 rounded-md border border-border bg-muted/20 px-4 py-3 text-sm">
+                    <p className="font-semibold text-navy">Review details</p>
+                    <dl className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                          Student
+                        </dt>
+                        <dd className="font-medium text-navy">
+                          {reviewRow.studentName || "—"} · {reviewRow.caseId || "—"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                          Voucher
+                        </dt>
+                        <dd className="font-mono text-navy">{reviewRow.voucherNumber}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                          Amount
+                        </dt>
+                        <dd className="font-medium text-navy">
+                          {reviewRow.currency} {reviewRow.amount.toLocaleString()}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                          Payment method
+                        </dt>
+                        <dd>{reviewRow.paymentMethod || "—"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                          Transaction / reference
+                        </dt>
+                        <dd className="break-all">{reviewRow.referenceReceipt || "—"}</dd>
+                      </div>
+                      <div>
+                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                          Proof submitted
+                        </dt>
+                        <dd>{fmtDate(reviewRow.updatedAt.slice(0, 10))}</dd>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                          Notes
+                        </dt>
+                        <dd>{reviewRow.notes || "—"}</dd>
+                      </div>
+                      {reviewRow.openRequestStatus ? (
+                        <div className="sm:col-span-2">
+                          <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                            Related counsellor coordination (not payment truth)
+                          </dt>
+                          <dd className="text-muted-foreground">
+                            {reviewRow.openRequestStatus}: {reviewRow.openRequestSummary || "—"}
+                          </dd>
+                        </div>
+                      ) : null}
+                    </dl>
+                    <p className="mt-3 text-xs text-muted-foreground">
+                      Receipt files are not stored on this fee row. Compare the transaction
+                      reference and amount against proof held by Front Desk. Decisions run only
+                      through verify_signup_fee_and_activate.
+                    </p>
+                  </div>
+                ) : null}
                 <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                   <span>
                     Showing {signupRows.length} of {matchedCount} (offset {signupOffset})
@@ -724,12 +772,6 @@ export function FinanceModulePage() {
                 </div>
               </>
             )}
-
-            {coordQ.isError ? (
-              <p className="mt-3 text-xs text-danger">
-                Could not load Front Desk coordination count: {portalErrorMessage(coordQ.error)}
-              </p>
-            ) : null}
           </Panel>
         </>
       ) : (

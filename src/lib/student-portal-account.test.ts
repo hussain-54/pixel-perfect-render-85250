@@ -197,7 +197,8 @@ describe("student-facing summaries", () => {
   });
 
   it("does not include amounts in the fee label", () => {
-    expect(studentFacingFeeLabel("claimed")).toBe("Claimed — awaiting verification");
+    expect(studentFacingFeeLabel("claimed")).toBe("Awaiting Finance verification");
+    expect(studentFacingFeeLabel("unpaid")).toBe("Payment pending");
     expect(studentFacingFeeLabel("verified")).toBe("Verified");
     expect(studentFacingFeeLabel(null)).toBe("Not recorded");
   });

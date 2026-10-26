@@ -8,8 +8,8 @@ import {
 
 describe("registration form A4 helpers", () => {
   it("maps persisted fee statuses without inventing verification", () => {
-    expect(describePersistedSignupFeeStatus(null).label).toBe("Not claimed");
-    expect(describePersistedSignupFeeStatus("unpaid").label).toBe("Not claimed");
+    expect(describePersistedSignupFeeStatus(null).label).toBe("Voucher unpaid / not claimed");
+    expect(describePersistedSignupFeeStatus("unpaid").label).toBe("Voucher unpaid / not claimed");
     expect(describePersistedSignupFeeStatus("claimed").label).toBe("Claimed — awaiting Finance");
     expect(describePersistedSignupFeeStatus("claimed").isAuthorized).toBe(false);
     expect(describePersistedSignupFeeStatus("verified").label).toBe("Verified");

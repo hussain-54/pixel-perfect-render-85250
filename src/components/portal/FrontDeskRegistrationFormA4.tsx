@@ -315,7 +315,12 @@ export function FrontDeskRegistrationFormA4({
               </div>
               <ChoiceRow
                 options={[
-                  { label: "Not claimed", checked: feeDisplay.label === "Not claimed" },
+                  {
+                    label: "Not claimed",
+                    checked:
+                      feeDisplay.label === "Not claimed" ||
+                      feeDisplay.label === "Voucher unpaid / not claimed",
+                  },
                   {
                     label: "Claimed — awaiting Finance",
                     checked: feeDisplay.isClaimedAwaitingFinance,

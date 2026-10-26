@@ -89,15 +89,17 @@ export function studentProfileCompletion(student: {
 
 /** Student-facing fee label. No amounts, receipts, or internal notes. */
 export function studentFacingFeeLabel(status: string | null | undefined): string {
-  switch (status) {
+  switch ((status ?? "").trim().toLowerCase()) {
     case "verified":
       return "Verified";
     case "waived":
       return "Waived";
     case "claimed":
-      return "Claimed — awaiting verification";
+      return "Awaiting Finance verification";
     case "rejected":
       return "Needs correction";
+    case "unpaid":
+      return "Payment pending";
     default:
       return "Not recorded";
   }

@@ -4,12 +4,23 @@
  */
 import type { SignupFeeStatusDb } from "@/types/database";
 
-export type SignupFeeLedgerStatusFilter = "pending" | "verified" | "waived" | "rejected" | "all";
+/**
+ * Ledger filters:
+ * - claimed = actionable payment proofs awaiting Finance decision (primary queue)
+ * - unpaid = voucher issued / obligation open (not yet claimed)
+ * - pending = unpaid + claimed (open obligations; not the primary review queue)
+ */
+export type SignupFeeLedgerStatusFilter =
+  "claimed" | "unpaid" | "pending" | "verified" | "waived" | "rejected" | "all";
 
 export function signupFeeStatusesForLedgerFilter(
   filter: SignupFeeLedgerStatusFilter,
 ): SignupFeeStatusDb[] | null {
   switch (filter) {
+    case "claimed":
+      return ["claimed"];
+    case "unpaid":
+      return ["unpaid"];
     case "verified":
       return ["verified"];
     case "waived":

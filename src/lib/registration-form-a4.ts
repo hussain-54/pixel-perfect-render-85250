@@ -33,7 +33,7 @@ export function describePersistedSignupFeeStatus(status: string | null | undefin
   const s = (status ?? "").trim().toLowerCase();
   if (!s || s === "unpaid") {
     return {
-      label: "Not claimed",
+      label: "Voucher unpaid / not claimed",
       isClaimedAwaitingFinance: false,
       isAuthorized: false,
     };

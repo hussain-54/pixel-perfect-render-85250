@@ -256,8 +256,25 @@ export const portalListFrontDeskIntake = createServerFn({ method: "GET" }).handl
   }
 });
 
+export type FrontDeskSignupFeeDetail = {
+  feeId: string;
+  voucherNumber: string;
+  status: string;
+  amount: number;
+  currency: string;
+  paymentMethod: string | null;
+  referenceReceipt: string | null;
+  notes: string | null;
+  recordedBy: string | null;
+  verifiedAt: string | null;
+  updatedAt: string;
+  createdAt: string;
+};
+
 export type FrontDeskIntakeRecordPayload = {
   student: FrontDeskIntakeRow;
+  /** Authoritative signup_fee_payments row when present (not counselling requests). */
+  signupFee: FrontDeskSignupFeeDetail | null;
   feeRequests: FeeVerificationRequestRow[];
   nextAction: {
     code: string;
@@ -311,6 +328,40 @@ export const portalGetFrontDeskIntakeRecord = createServerFn({ method: "GET" })
         feeRequests = [];
       }
 
+      let signupFee: FrontDeskSignupFeeDetail | null = null;
+      try {
+        const { data: feeRow, error: feeErr } = await client
+          .from("signup_fee_payments")
+          .select(
+            "id, status, amount, currency, payment_method, reference_receipt, notes, recorded_by, verified_at, updated_at, created_at",
+          )
+          .eq("student_id", studentId)
+          .maybeSingle();
+        if (feeErr) {
+          if (!/does not exist|relation|PGRST205|42P01/i.test(feeErr.message)) {
+            throw new Error(feeErr.message);
+          }
+        } else if (feeRow?.id) {
+          const { signupFeeVoucherNumber } = await import("@/lib/signup-fee-voucher");
+          signupFee = {
+            feeId: feeRow.id,
+            voucherNumber: signupFeeVoucherNumber(feeRow.id),
+            status: String(feeRow.status),
+            amount: Number(feeRow.amount),
+            currency: feeRow.currency ?? "PKR",
+            paymentMethod: feeRow.payment_method ?? null,
+            referenceReceipt: feeRow.reference_receipt ?? null,
+            notes: feeRow.notes ?? null,
+            recordedBy: feeRow.recorded_by ?? null,
+            verifiedAt: feeRow.verified_at ?? null,
+            updatedAt: feeRow.updated_at,
+            createdAt: feeRow.created_at,
+          };
+        }
+      } catch {
+        signupFee = null;
+      }
+
       const openFeeRequest =
         feeRequests.find((r) => r.status === "open" || r.status === "in_progress") ??
         feeRequests.find((r) => r.status === "cancelled") ??
@@ -320,13 +371,14 @@ export const portalGetFrontDeskIntakeRecord = createServerFn({ method: "GET" })
         await import("@/lib/front-desk-workspace");
       const nextAction = deriveFrontDeskNextAction({
         assignmentStatus: student.assignmentStatus,
-        signupFeeStatus: student.signupFeeStatus,
+        signupFeeStatus: student.signupFeeStatus ?? signupFee?.status ?? null,
         openFeeRequest,
       });
       const timeline = buildFrontDeskRecordTimeline({ student, feeRequests });
 
       return {
         student,
+        signupFee,
         feeRequests,
         nextAction,
         timeline,

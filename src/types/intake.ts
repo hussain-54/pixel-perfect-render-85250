@@ -3,7 +3,7 @@
   HandoverStatusDb,
   InquiryChannelDb,
   SignupFeeStatusDb,
-} from '@/types/database';
+} from "@/types/database";
 
 export type IntakeRegisterInput = {
   fullName: string;
@@ -41,7 +41,7 @@ export type SignupFeeRecordInput = {
 
 export type VerifySignupFeeInput = {
   studentId: string;
-  action: 'verify' | 'waive' | 'reject';
+  action: "verify" | "waive" | "reject";
   notes?: string;
   activatePortal?: boolean;
 };
@@ -72,13 +72,18 @@ export type AdmissionHandoverInput = {
 
 export type SignupFeeView = {
   studentId: string;
+  /** Persisted signup_fee_payments.id — stable voucher reference source. */
+  feeId: string | null;
   status: SignupFeeStatusDb;
   amount: number;
   currency: string;
   paymentMethod: string | null;
   referenceReceipt: string | null;
+  notes?: string | null;
   verifiedAt: string | null;
   portalActivatedAt: string | null;
+  recordedBy?: string | null;
+  updatedAt?: string | null;
 };
 
 export type HandoverView = {

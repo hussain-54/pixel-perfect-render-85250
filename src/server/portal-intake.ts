@@ -412,9 +412,50 @@ export const portalRecordSignupFee = createServerFn({ method: "POST" })
       } else {
         await assertStudentVisibleDb(client, session, data.studentId);
       }
-      if (data.amount < 0) throw new AuthError("Fee amount is invalid.", 400);
+      if (!(data.amount >= 0) || Number.isNaN(Number(data.amount))) {
+        throw new AuthError("Fee amount is invalid.", 400);
+      }
+
+      const { data: existing, error: existingErr } = await client
+        .from("signup_fee_payments")
+        .select("id, status, amount, currency")
+        .eq("student_id", data.studentId)
+        .maybeSingle();
+      if (existingErr) throw new Error(existingErr.message);
+      const existingStatus = String(existing?.status ?? "").toLowerCase();
+      if (existingStatus === "verified" || existingStatus === "waived") {
+        throw new AuthError(
+          "This signup fee is already finalized by Finance. Front Desk cannot change a verified or waived fee.",
+          409,
+        );
+      }
 
       const status = data.markClaimed ? "claimed" : "unpaid";
+      if (data.markClaimed) {
+        const method = data.paymentMethod?.trim();
+        const reference = data.referenceReceipt?.trim();
+        if (!method) throw new AuthError("Payment method is required when submitting proof.", 400);
+        if (!reference) {
+          throw new AuthError(
+            "Transaction / receipt reference is required when submitting payment proof.",
+            400,
+          );
+        }
+        // Claimed amount must match the issued voucher — no silent overwrite.
+        if (
+          existing &&
+          (existingStatus === "unpaid" ||
+            existingStatus === "claimed" ||
+            existingStatus === "rejected") &&
+          Number(existing.amount) !== Number(data.amount)
+        ) {
+          throw new AuthError(
+            `Claimed amount must match the voucher obligation (${existing.currency} ${Number(existing.amount)}). Re-issue the unpaid voucher first if the amount must change.`,
+            400,
+          );
+        }
+      }
+
       const { data: row, error } = await client
         .from("signup_fee_payments")
         .upsert(
@@ -436,18 +477,67 @@ export const portalRecordSignupFee = createServerFn({ method: "POST" })
         .single();
       if (error) throw new Error(error.message);
 
+      try {
+        const { writeAudit } = await import("@/services/db");
+        await writeAudit(client, {
+          action: data.markClaimed ? "signup_fee.proof_submitted" : "signup_fee.voucher_issued",
+          entity_type: "signup_fee_payments",
+          entity_id: row.id,
+          student_id: row.student_id,
+          metadata: { status: row.status, amount: row.amount, currency: row.currency },
+        });
+      } catch {
+        /* best-effort */
+      }
+
+      // Notify Finance once when proof is claimed (not on unpaid voucher issue).
+      if (data.markClaimed) {
+        try {
+          const { data: financeProfiles } = await client
+            .from("profiles")
+            .select("id")
+            .eq("business_role", "accounts_banking_finance")
+            .limit(40);
+          const { data: stu } = await client
+            .from("students")
+            .select("full_name, case_id")
+            .eq("id", row.student_id)
+            .maybeSingle();
+          const title = "Signup fee proof submitted";
+          const body = `${stu?.full_name || "Student"} (${stu?.case_id || row.student_id}) — claim awaiting verification.`;
+          const recipients = [...new Set((financeProfiles ?? []).map((p) => p.id).filter(Boolean))];
+          if (recipients.length) {
+            await client.from("notifications").insert(
+              recipients.map((user_id) => ({
+                user_id,
+                title,
+                body,
+                link_path: "/staff/finance",
+                student_id: row.student_id,
+              })),
+            );
+          }
+        } catch {
+          /* best-effort */
+        }
+      }
+
       // Never auto-activate on claim.
       return {
         ok: true as const,
         fee: {
           studentId: row.student_id,
+          feeId: row.id,
           status: row.status,
           amount: Number(row.amount),
           currency: row.currency,
           paymentMethod: row.payment_method,
           referenceReceipt: row.reference_receipt,
+          notes: row.notes,
           verifiedAt: row.verified_at,
           portalActivatedAt: null as string | null,
+          recordedBy: row.recorded_by,
+          updatedAt: row.updated_at,
         } satisfies SignupFeeView,
       };
     } catch (error) {
@@ -466,6 +556,7 @@ export type SignupFeeQueueInput = {
 
 export type SignupFeeQueueRow = {
   feeId: string;
+  voucherNumber: string;
   studentId: string;
   studentName: string | null;
   caseId: string | null;
@@ -475,6 +566,7 @@ export type SignupFeeQueueRow = {
   paymentMethod: string | null;
   referenceReceipt: string | null;
   notes: string | null;
+  recordedBy: string | null;
   verifiedAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -508,8 +600,9 @@ export const portalListSignupFeeQueue = createServerFn({ method: "GET" })
       }
       const client = requireAoSupabaseClient();
 
-      const statusFilter = (data?.status ?? "pending") as SignupFeeQueueStatusFilter;
+      const statusFilter = (data?.status ?? "claimed") as SignupFeeQueueStatusFilter;
       const statuses = signupFeeStatusesForLedgerFilter(statusFilter);
+      const { signupFeeVoucherNumber } = await import("@/lib/signup-fee-voucher");
       const pageInput: { limit?: number; offset?: number } = {};
       if (typeof data?.limit === "number") pageInput.limit = data.limit;
       if (typeof data?.offset === "number") pageInput.offset = data.offset;
@@ -529,6 +622,8 @@ export const portalListSignupFeeQueue = createServerFn({ method: "GET" })
       };
 
       let pendingCount = 0;
+      let claimedCount = 0;
+      let unpaidCount = 0;
       let verifiedCount = 0;
       let rejectedCount = 0;
       let waivedCount = 0;
@@ -537,8 +632,10 @@ export const portalListSignupFeeQueue = createServerFn({ method: "GET" })
       try {
         const todayStart = new Date();
         todayStart.setHours(0, 0, 0, 0);
-        const [p, v, r, w, verifiedSnaps] = await Promise.all([
+        const [p, claimed, unpaid, v, r, w, verifiedSnaps] = await Promise.all([
           countFor(["unpaid", "claimed"]),
+          countFor(["claimed"]),
+          countFor(["unpaid"]),
           countFor(["verified"]),
           countFor(["rejected"]),
           countFor(["waived"]),
@@ -549,6 +646,8 @@ export const portalListSignupFeeQueue = createServerFn({ method: "GET" })
             .limit(5000),
         ]);
         pendingCount = p;
+        claimedCount = claimed;
+        unpaidCount = unpaid;
         verifiedCount = v;
         rejectedCount = r;
         waivedCount = w;
@@ -589,7 +688,7 @@ export const portalListSignupFeeQueue = createServerFn({ method: "GET" })
       let query = client
         .from("signup_fee_payments")
         .select(
-          "id, student_id, status, amount, currency, payment_method, reference_receipt, notes, verified_at, created_at, updated_at",
+          "id, student_id, status, amount, currency, payment_method, reference_receipt, notes, recorded_by, verified_at, created_at, updated_at",
           { count: "exact" },
         )
         .order("updated_at", { ascending: false });
@@ -663,6 +762,7 @@ export const portalListSignupFeeQueue = createServerFn({ method: "GET" })
         const req = requestByStudent.get(f.student_id);
         return {
           feeId: f.id,
+          voucherNumber: signupFeeVoucherNumber(f.id),
           studentId: f.student_id,
           studentName: stu?.full_name ?? null,
           caseId: stu?.case_id ?? null,
@@ -672,6 +772,7 @@ export const portalListSignupFeeQueue = createServerFn({ method: "GET" })
           paymentMethod: f.payment_method,
           referenceReceipt: f.reference_receipt,
           notes: f.notes,
+          recordedBy: f.recorded_by ?? null,
           verifiedAt: f.verified_at,
           createdAt: f.created_at,
           updatedAt: f.updated_at,
@@ -698,6 +799,8 @@ export const portalListSignupFeeQueue = createServerFn({ method: "GET" })
         ok: true as const,
         rows,
         pendingCount,
+        claimedCount,
+        unpaidCount,
         verifiedCount,
         rejectedCount,
         waivedCount,
@@ -767,6 +870,7 @@ export const portalVerifySignupFee = createServerFn({ method: "POST" })
             unchanged: true as const,
             fee: {
               studentId: existingFee.student_id,
+              feeId: existingFee.id,
               status: existingFee.status,
               amount: Number(existingFee.amount),
               currency: existingFee.currency,
@@ -931,6 +1035,7 @@ export const portalVerifySignupFee = createServerFn({ method: "POST" })
         ok: true as const,
         fee: {
           studentId: fee.student_id,
+          feeId: fee.id,
           status: fee.status,
           amount: Number(fee.amount),
           currency: fee.currency,
@@ -1397,6 +1502,7 @@ export const portalGetSignupFeeStatus = createServerFn({ method: "GET" })
           ok: true as const,
           fee: redactStudentFee({
             studentId,
+            feeId: null,
             status: "unpaid" as const,
             amount: 0,
             currency: "PKR",
@@ -1425,6 +1531,7 @@ export const portalGetSignupFeeStatus = createServerFn({ method: "GET" })
         ok: true as const,
         fee: redactStudentFee({
           studentId: fee.student_id,
+          feeId: fee.id,
           status: fee.status,
           amount: Number(fee.amount),
           currency: fee.currency,

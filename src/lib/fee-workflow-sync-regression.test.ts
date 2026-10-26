@@ -83,7 +83,9 @@ describe("Phase 3 — Finance verifies → Front Desk request terminal", () => {
 });
 
 describe("Phase 3 — Finance ledger completeness", () => {
-  it("7: signup pending filter is unpaid+claimed only (not university)", () => {
+  it("7: signup claimed filter is the actionable Finance review queue", () => {
+    expect(signupFeeStatusesForLedgerFilter("claimed")).toEqual(["claimed"]);
+    expect(signupFeeStatusesForLedgerFilter("unpaid")).toEqual(["unpaid"]);
     expect(signupFeeStatusesForLedgerFilter("pending")).toEqual(["unpaid", "claimed"]);
     expect(signupFeeStatusesForLedgerFilter("verified")).toEqual(["verified"]);
   });
