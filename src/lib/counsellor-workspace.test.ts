@@ -4,7 +4,11 @@ import {
   computeCounsellorWorkbenchMetrics,
   counsellorHasActionableNext,
   isTaskDueOnOrBeforeToday,
+  isTaskDueToday,
+  isTaskPastDue,
+  profileTabForAttentionKind,
   resolveCounsellorNotificationHref,
+  urgencyGroupFromPriority,
 } from "./counsellor-workspace";
 
 const base = {
@@ -21,6 +25,7 @@ const base = {
   handoverStatus: null as string | null,
   docsPendingReview: 0,
   hasOverdueTask: false,
+  hasDueTodayTask: false,
 };
 
 describe("counsellor-workspace", () => {
@@ -81,7 +86,7 @@ describe("counsellor-workspace", () => {
     expect(metrics.awaitingResponse).toBe(2);
   });
 
-  it("builds one attention item per student with priority", () => {
+  it("builds one attention item per student with priority and actionable metadata", () => {
     const items = buildCounsellorAttentionItems([
       {
         ...base,
@@ -95,8 +100,54 @@ describe("counsellor-workspace", () => {
       { ...base, id: "b", hasOverdueTask: true },
     ]);
     expect(items).toHaveLength(2);
-    expect(items.find((i) => i.studentId === "a")?.kind).toBe("handover");
-    expect(items.find((i) => i.studentId === "b")?.kind).toBe("task");
+    const returned = items.find((i) => i.studentId === "a");
+    const task = items.find((i) => i.studentId === "b");
+    expect(returned?.kind).toBe("handover");
+    expect(returned?.urgencyGroup).toBe("critical");
+    expect(returned?.primaryActionLabel).toBeTruthy();
+    expect(returned?.profileTab).toBe("applications");
+    expect(returned?.nextResponsibleRole).toBe("Counsellor");
+    expect(task?.kind).toBe("task");
+    expect(task?.title).toBe("Overdue follow-up task");
+    expect(task?.profileTab).toBe("overview");
+  });
+
+  it("keeps actionRequired total consistent with uncapped attention students", () => {
+    const students = Array.from({ length: 12 }, (_, i) => ({
+      ...base,
+      id: `s${i}`,
+      caseId: `GR-${i}`,
+      name: `Student ${i}`,
+      lastActivity: `2026-10-${String(10 + (i % 9)).padStart(2, "0")}T12:00:00.000Z`,
+      hasAssessment: false,
+    }));
+    const metrics = computeCounsellorWorkbenchMetrics({
+      students,
+      applicationsInProgressCount: 0,
+      followUpsDueCount: 0,
+      docsToReviewCount: 0,
+      deadlinesThisWeekCount: 0,
+    });
+    const capped = buildCounsellorAttentionItems(students, 10);
+    const uncapped = buildCounsellorAttentionItems(students, students.length);
+    expect(metrics.actionRequired).toBe(12);
+    expect(capped).toHaveLength(10);
+    expect(uncapped).toHaveLength(12);
+    expect(metrics.actionRequired).toBe(uncapped.length);
+    expect(metrics.actionRequired).toBeGreaterThan(capped.length);
+  });
+
+  it("maps attention kinds to profile tabs", () => {
+    expect(profileTabForAttentionKind("document")).toBe("documents");
+    expect(profileTabForAttentionKind("task")).toBe("overview");
+    expect(profileTabForAttentionKind("handover")).toBe("applications");
+    expect(profileTabForAttentionKind("lifecycle")).toBe("assessment");
+  });
+
+  it("derives urgency groups only from workflow priority bands", () => {
+    expect(urgencyGroupFromPriority(1)).toBe("critical");
+    expect(urgencyGroupFromPriority(2)).toBe("high");
+    expect(urgencyGroupFromPriority(5)).toBe("normal");
   });
 
   it("resolves notification hrefs to counsellor student records", () => {
@@ -114,9 +165,23 @@ describe("counsellor-workspace", () => {
     ).toBe("/staff/dashboard");
   });
 
-  it("recognizes due-today tasks", () => {
-    const now = new Date("2026-10-22T15:00:00.000Z");
-    expect(isTaskDueOnOrBeforeToday("2026-10-22T08:00:00.000Z", now)).toBe(true);
-    expect(isTaskDueOnOrBeforeToday("2026-10-23T12:00:00.000Z", now)).toBe(false);
+  it("distinguishes overdue vs due-today tasks", () => {
+    const now = new Date(2026, 9, 22, 15, 0, 0); // local 22 Oct 2026
+    const dueToday = new Date(2026, 9, 22, 8, 0, 0).toISOString();
+    const overdue = new Date(2026, 9, 21, 12, 0, 0).toISOString();
+    const tomorrow = new Date(2026, 9, 23, 12, 0, 0).toISOString();
+    expect(isTaskDueOnOrBeforeToday(dueToday, now)).toBe(true);
+    expect(isTaskDueToday(dueToday, now)).toBe(true);
+    expect(isTaskPastDue(dueToday, now)).toBe(false);
+    expect(isTaskPastDue(overdue, now)).toBe(true);
+    expect(isTaskDueOnOrBeforeToday(tomorrow, now)).toBe(false);
+  });
+
+  it("labels due-today tasks without calling them overdue", () => {
+    const items = buildCounsellorAttentionItems([
+      { ...base, id: "due", hasDueTodayTask: true, hasAssessment: true, hasConsent: true },
+    ]);
+    expect(items[0]?.kind).toBe("task");
+    expect(items[0]?.title).toBe("Follow-up task due today");
   });
 });

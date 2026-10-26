@@ -45,6 +45,15 @@ export type OfficerDashboardAttentionItem = {
   title: string;
   detail: string;
   at: string;
+  /** Workflow-derived priority rank (lower = more urgent). Omitted for older payloads. */
+  priority?: number;
+  /** Derived from priority bands only — not invented SLA. */
+  urgencyGroup?: "critical" | "high" | "normal";
+  workflowStatus?: string;
+  nextResponsibleRole?: string;
+  primaryActionLabel?: string;
+  /** Counsellor student-profile tab deep link. */
+  profileTab?: string;
 };
 
 export type OfficerDashboardDoc = {

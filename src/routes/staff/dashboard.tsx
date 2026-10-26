@@ -44,12 +44,17 @@ import { isSpecialtyOnlyBusinessRole } from "@/lib/specialty-desk-access";
 import { workspaceTitleForSession } from "@/lib/workspace-branding";
 import {
   COUNSELLOR_METRIC_DEFINITIONS,
+  COUNSELLOR_METRIC_HINTS,
+  attentionKindLabel,
+  attentionUrgencyLabel,
   resolveCounsellorNotificationHref,
 } from "@/lib/counsellor-workspace";
 import {
   ADMISSION_METRIC_DEFINITIONS,
+  ADMISSION_METRIC_HINTS,
   resolveAdmissionNotificationHref,
 } from "@/lib/admission-workspace";
+import type { ProfileTabId } from "@/types/student-profile";
 import { shouldOfferMarkAsRead } from "@/lib/notification-rules";
 import {
   COUNSELLOR_DASHBOARD_KEY,
@@ -215,53 +220,61 @@ function StaffDashboard() {
       />
 
       {isAdmission && am ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             label="Assigned to Me"
             value={String(am.assignedToMe)}
-            hint={ADMISSION_METRIC_DEFINITIONS.assignedToMe}
+            hint={ADMISSION_METRIC_HINTS.assignedToMe}
+            title={ADMISSION_METRIC_DEFINITIONS.assignedToMe}
             icon={<Users />}
           />
           <StatCard
             label="Awaiting Initial Review"
             value={String(am.awaitingInitialReview)}
-            hint={ADMISSION_METRIC_DEFINITIONS.awaitingInitialReview}
+            hint={ADMISSION_METRIC_HINTS.awaitingInitialReview}
+            title={ADMISSION_METRIC_DEFINITIONS.awaitingInitialReview}
             icon={<Hourglass />}
           />
           <StatCard
             label="Documents Missing"
             value={String(am.documentsMissing)}
-            hint={ADMISSION_METRIC_DEFINITIONS.documentsMissing}
+            hint={ADMISSION_METRIC_HINTS.documentsMissing}
+            title={ADMISSION_METRIC_DEFINITIONS.documentsMissing}
             icon={<FileWarning />}
           />
           <StatCard
             label="In Progress"
             value={String(am.inProgress)}
-            hint={ADMISSION_METRIC_DEFINITIONS.inProgress}
+            hint={ADMISSION_METRIC_HINTS.inProgress}
+            title={ADMISSION_METRIC_DEFINITIONS.inProgress}
             icon={<FolderKanban />}
           />
           <StatCard
             label="Returned for Correction"
             value={String(am.returnedForCorrection)}
-            hint={ADMISSION_METRIC_DEFINITIONS.returnedForCorrection}
+            hint={ADMISSION_METRIC_HINTS.returnedForCorrection}
+            title={ADMISSION_METRIC_DEFINITIONS.returnedForCorrection}
             icon={<RotateCcw />}
           />
           <StatCard
             label="Submitted to University"
             value={String(am.submittedToUniversity)}
-            hint={ADMISSION_METRIC_DEFINITIONS.submittedToUniversity}
+            hint={ADMISSION_METRIC_HINTS.submittedToUniversity}
+            title={ADMISSION_METRIC_DEFINITIONS.submittedToUniversity}
             icon={<Send />}
           />
           <StatCard
             label="Offers / Decisions"
             value={String(am.offersDecisionsReceived)}
-            hint={ADMISSION_METRIC_DEFINITIONS.offersDecisionsReceived}
+            hint={ADMISSION_METRIC_HINTS.offersDecisionsReceived}
+            title={ADMISSION_METRIC_DEFINITIONS.offersDecisionsReceived}
             icon={<ClipboardCheck />}
           />
           <StatCard
             label="Action Required"
             value={String(am.actionRequired)}
-            hint={ADMISSION_METRIC_DEFINITIONS.actionRequired}
+            hint={ADMISSION_METRIC_HINTS.actionRequired}
+            title={ADMISSION_METRIC_DEFINITIONS.actionRequired}
             icon={<AlertCircle />}
           />
         </div>
@@ -270,37 +283,43 @@ function StaffDashboard() {
           <StatCard
             label="My Assigned Students"
             value={String(m.assignedStudents)}
-            hint={COUNSELLOR_METRIC_DEFINITIONS.assignedStudents}
+            hint={COUNSELLOR_METRIC_HINTS.assignedStudents}
+            title={COUNSELLOR_METRIC_DEFINITIONS.assignedStudents}
             icon={<Users />}
           />
           <StatCard
             label="Counselling Completed"
             value={String(m.counsellingCompleted ?? 0)}
-            hint="Consent recorded (not registration alone)"
+            hint={COUNSELLOR_METRIC_HINTS.counsellingCompleted}
+            title={COUNSELLOR_METRIC_DEFINITIONS.counsellingCompleted}
             icon={<ClipboardCheck />}
           />
           <StatCard
             label="Follow-ups Due"
             value={String(m.followUpsDue ?? 0)}
-            hint={COUNSELLOR_METRIC_DEFINITIONS.followUpsDue}
+            hint={COUNSELLOR_METRIC_HINTS.followUpsDue}
+            title={COUNSELLOR_METRIC_DEFINITIONS.followUpsDue}
             icon={<Clock3 />}
           />
           <StatCard
             label="Applications In Progress"
             value={String(m.appsInProgress)}
-            hint={COUNSELLOR_METRIC_DEFINITIONS.applicationsInProgress}
+            hint={COUNSELLOR_METRIC_HINTS.applicationsInProgress}
+            title={COUNSELLOR_METRIC_DEFINITIONS.applicationsInProgress}
             icon={<FolderKanban />}
           />
           <StatCard
             label="Awaiting Response"
             value={String(m.awaitingResponse ?? 0)}
-            hint="Admission handover and/or Front Desk fee queue"
+            hint={COUNSELLOR_METRIC_HINTS.awaitingResponse}
+            title={COUNSELLOR_METRIC_DEFINITIONS.awaitingResponse}
             icon={<Hourglass />}
           />
           <StatCard
             label="Action Required"
             value={String(m.actionRequired ?? 0)}
-            hint={COUNSELLOR_METRIC_DEFINITIONS.actionRequired}
+            hint={COUNSELLOR_METRIC_HINTS.actionRequired}
+            title={COUNSELLOR_METRIC_DEFINITIONS.actionRequired}
             icon={<AlertCircle />}
           />
         </div>
@@ -309,11 +328,23 @@ function StaffDashboard() {
       <Panel
         title="Needs My Attention"
         action={
-          <Button asChild size="sm" variant="outline">
-            <Link to={isAdmission ? "/staff/applications" : "/staff/students"}>
-              {isAdmission ? "Open applications" : "Open directory"}
-            </Link>
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {!isAdmission && (m.actionRequired ?? 0) > (data.needsAttention ?? []).length ? (
+              <span className="text-xs text-navy/65">
+                Showing {(data.needsAttention ?? []).length} of {m.actionRequired}
+              </span>
+            ) : null}
+            {isAdmission && (am?.actionRequired ?? 0) > (data.needsAttention ?? []).length ? (
+              <span className="text-xs text-navy/65">
+                Showing {(data.needsAttention ?? []).length} of {am?.actionRequired}
+              </span>
+            ) : null}
+            <Button asChild size="sm" variant="outline">
+              <Link to={isAdmission ? "/staff/applications" : "/staff/students"}>
+                {isAdmission ? "Open applications" : "Open directory"}
+              </Link>
+            </Button>
+          </div>
         }
       >
         {(data.needsAttention ?? []).length === 0 ? (
@@ -322,44 +353,59 @@ function StaffDashboard() {
             body={
               isAdmission
                 ? "Handovers awaiting review, document gaps, and approaching deadlines will appear here."
-                : "Lifecycle steps, returned cases, overdue tasks, and pending documents will appear here."
+                : "Lifecycle steps, returned cases, due tasks, and pending documents will appear here."
             }
           />
         ) : (
           <ul className="divide-y divide-border">
-            {(data.needsAttention ?? []).map((item) => (
-              <li
-                key={item.id}
-                className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-navy">
-                    {item.fullName}{" "}
-                    <span className="font-normal text-muted-foreground">· {item.caseId}</span>
-                  </p>
-                  <p className="text-sm text-navy/90">{item.title}</p>
-                  <p className="text-xs text-muted-foreground line-clamp-2">{item.detail}</p>
-                </div>
-                <Button
-                  asChild
-                  size="sm"
-                  variant="navy"
-                  className="shrink-0 self-start sm:self-center"
+            {(data.needsAttention ?? []).map((item) => {
+              const tab = (item.profileTab ?? "assessment") as ProfileTabId;
+              const actionLabel = item.primaryActionLabel ?? "Open record";
+              return (
+                <li
+                  key={item.id}
+                  className="flex flex-col gap-2.5 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between"
                 >
-                  {isAdmission ? (
-                    <Link to="/staff/applications">Open application</Link>
-                  ) : (
-                    <Link
-                      to="/staff/students/$studentId"
-                      params={{ studentId: item.studentId }}
-                      search={{ tab: "assessment" }}
-                    >
-                      Open record
-                    </Link>
-                  )}
-                </Button>
-              </li>
-            ))}
+                  <div className="min-w-0 space-y-1">
+                    <p className="text-sm font-semibold text-navy">
+                      {item.fullName}{" "}
+                      <span className="font-normal text-navy/60">· {item.caseId}</span>
+                    </p>
+                    <p className="text-sm font-medium text-navy/90">{item.title}</p>
+                    <p className="text-sm leading-snug text-navy/65 line-clamp-2">{item.detail}</p>
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 pt-0.5 text-xs text-navy/55">
+                      <span>{attentionKindLabel(item.kind)}</span>
+                      {item.urgencyGroup ? (
+                        <span>{attentionUrgencyLabel(item.urgencyGroup)}</span>
+                      ) : null}
+                      {item.workflowStatus ? <span>Status: {item.workflowStatus}</span> : null}
+                      {item.nextResponsibleRole ? (
+                        <span>Next: {item.nextResponsibleRole}</span>
+                      ) : null}
+                      {item.at ? <span>Updated {fmtDate(item.at.slice(0, 10))}</span> : null}
+                    </div>
+                  </div>
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="navy"
+                    className="shrink-0 self-start sm:mt-0.5"
+                  >
+                    {isAdmission ? (
+                      <Link to="/staff/applications">{actionLabel}</Link>
+                    ) : (
+                      <Link
+                        to="/staff/students/$studentId"
+                        params={{ studentId: item.studentId }}
+                        search={{ tab }}
+                      >
+                        {actionLabel}
+                      </Link>
+                    )}
+                  </Button>
+                </li>
+              );
+            })}
           </ul>
         )}
       </Panel>
@@ -504,7 +550,7 @@ function StaffDashboard() {
                       {t.studentName ?? "General"}
                       {" · "}
                       {t.priority === "overdue"
-                        ? "Overdue / due"
+                        ? "Overdue"
                         : t.priority === "due_today"
                           ? "Due today"
                           : fmtDate(t.dueAt.slice(0, 10))}
@@ -686,24 +732,50 @@ function LiveBadge({
   const label =
     status === "live"
       ? "Live"
-      : status === "reconnecting" || status === "connecting"
-        ? "Reconnecting"
-        : lastSync
-          ? `Last updated ${lastSync}`
+      : status === "connecting"
+        ? "Connecting"
+        : status === "reconnecting"
+          ? "Reconnecting"
           : "Offline";
   return (
     <span
       className={cn(
-        "rounded px-2 py-1 text-[11px] font-semibold uppercase tracking-wide",
+        "inline-flex items-center gap-1.5 rounded border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide",
         status === "live"
-          ? "bg-emerald-50 text-emerald-800"
+          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
           : status === "offline"
-            ? "bg-slate-100 text-slate-600"
-            : "bg-amber-50 text-amber-800",
+            ? "border-slate-200 bg-slate-100 text-slate-600"
+            : "border-amber-200 bg-amber-50 text-amber-800",
       )}
-      title={lastSync ? `Synced ${lastSync}` : undefined}
+      title={
+        lastSync
+          ? `Data synced ${lastSync}. Badge reflects subscription health, not payload trust.`
+          : "Reflects Realtime subscription health"
+      }
+      aria-live="polite"
     >
+      <span
+        className={cn(
+          "h-1.5 w-1.5 rounded-full",
+          status === "live"
+            ? "bg-emerald-600"
+            : status === "offline"
+              ? "bg-slate-400"
+              : "bg-amber-500",
+        )}
+        aria-hidden
+      />
       {label}
+      {lastSync && status === "live" ? (
+        <span className="font-normal normal-case tracking-normal text-emerald-700/80">
+          · {lastSync}
+        </span>
+      ) : null}
+      {lastSync && status === "offline" ? (
+        <span className="font-normal normal-case tracking-normal text-slate-500">
+          · synced {lastSync}
+        </span>
+      ) : null}
     </span>
   );
 }

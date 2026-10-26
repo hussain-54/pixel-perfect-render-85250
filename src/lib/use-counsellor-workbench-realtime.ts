@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
+import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 
 export const COUNSELLOR_DASHBOARD_KEY = ["officer", "dashboard"] as const;
@@ -14,6 +15,7 @@ export type CounsellorLiveStatus = "connecting" | "live" | "reconnecting" | "off
 /**
  * Counsellor workbench Realtime: own notifications + assigned-student updates.
  * Always reconciles via authorized server queries — never trusts payload alone.
+ * LIVE reflects channel subscription health, not inventing a permanent badge.
  */
 export function useCounsellorWorkbenchRealtime(enabled: boolean): CounsellorLiveStatus {
   const queryClient = useQueryClient();
@@ -30,6 +32,9 @@ export function useCounsellorWorkbenchRealtime(enabled: boolean): CounsellorLive
     }
 
     let cancelled = false;
+    let channel: RealtimeChannel | null = null;
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
+    let attempt = 0;
     const supabase = getSupabase();
 
     const reconcile = (eventKey?: string) => {
@@ -50,127 +55,183 @@ export function useCounsellorWorkbenchRealtime(enabled: boolean): CounsellorLive
         void queryClient.invalidateQueries({ queryKey: [...APPLICATIONS_PIPELINE_KEY] });
         void queryClient.invalidateQueries({ queryKey: [...ADMISSION_HANDOVERS_KEY] });
         void queryClient.invalidateQueries({ queryKey: ["officer", "application-detail"] });
+        void queryClient.invalidateQueries({ queryKey: ["officer", "documents-queue"] });
+        void queryClient.invalidateQueries({ queryKey: ["officer", "tasks"] });
+        void queryClient.invalidateQueries({ queryKey: ["documents"] });
       }, 250);
     };
 
-    setStatus("connecting");
-    const channel = supabase
-      .channel(`counsellor-workbench-${Date.now()}`)
-      .on(
-        "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "notifications",
-        },
-        (payload) => {
-          const row = payload.new as {
-            id?: string;
-            link_path?: string | null;
-            student_id?: string | null;
-          } | null;
-          const path = row?.link_path ?? "";
-          if (
-            path.startsWith("/staff/students") ||
-            path.startsWith("/staff/dashboard") ||
-            path.startsWith("/staff/tasks") ||
-            path.startsWith("/staff/documents") ||
-            path.startsWith("/staff/applications") ||
-            path.startsWith("/staff/offers") ||
-            Boolean(row?.student_id)
-          ) {
-            reconcile(`notif:${row?.id ?? ""}`);
-          } else if (row?.id) {
-            reconcile(`notif-inbox:${row.id}`);
+    const tearDownChannel = () => {
+      if (channel) {
+        void supabase.removeChannel(channel);
+        channel = null;
+      }
+    };
+
+    const connect = () => {
+      if (cancelled) return;
+      tearDownChannel();
+      setStatus(attempt === 0 ? "connecting" : "reconnecting");
+
+      channel = supabase
+        .channel(`counsellor-workbench-${Date.now()}`)
+        .on(
+          "postgres_changes",
+          {
+            event: "INSERT",
+            schema: "public",
+            table: "notifications",
+          },
+          (payload) => {
+            const row = payload.new as {
+              id?: string;
+              link_path?: string | null;
+              student_id?: string | null;
+            } | null;
+            const path = row?.link_path ?? "";
+            if (
+              path.startsWith("/staff/students") ||
+              path.startsWith("/staff/dashboard") ||
+              path.startsWith("/staff/tasks") ||
+              path.startsWith("/staff/documents") ||
+              path.startsWith("/staff/applications") ||
+              path.startsWith("/staff/offers") ||
+              Boolean(row?.student_id)
+            ) {
+              reconcile(`notif:${row?.id ?? ""}`);
+            } else if (row?.id) {
+              reconcile(`notif-inbox:${row.id}`);
+            }
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "counselling_fee_verification_requests",
+          },
+          (payload) => {
+            const row = (payload.new ?? payload.old) as { id?: string; updated_at?: string } | null;
+            reconcile(`fee:${payload.eventType}:${row?.id ?? ""}:${row?.updated_at ?? ""}`);
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "admission_handovers",
+          },
+          (payload) => {
+            const row = (payload.new ?? payload.old) as { id?: string; student_id?: string } | null;
+            reconcile(`hand:${payload.eventType}:${row?.id ?? ""}`);
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "applications",
+          },
+          (payload) => {
+            const row = (payload.new ?? payload.old) as {
+              id?: string;
+              updated_at?: string;
+              student_id?: string;
+            } | null;
+            reconcile(`app:${payload.eventType}:${row?.id ?? ""}:${row?.updated_at ?? ""}`);
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "application_stage_history",
+          },
+          (payload) => {
+            const row = (payload.new ?? payload.old) as {
+              id?: string;
+              application_id?: string;
+            } | null;
+            reconcile(`apphist:${payload.eventType}:${row?.id ?? ""}`);
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "UPDATE",
+            schema: "public",
+            table: "students",
+          },
+          (payload) => {
+            const row = payload.new as { id?: string; updated_at?: string } | null;
+            reconcile(`stu:${row?.id ?? ""}:${row?.updated_at ?? ""}`);
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "tasks",
+          },
+          (payload) => {
+            const row = (payload.new ?? payload.old) as {
+              id?: string;
+              updated_at?: string;
+              student_id?: string | null;
+            } | null;
+            reconcile(`task:${payload.eventType}:${row?.id ?? ""}:${row?.updated_at ?? ""}`);
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "student_documents",
+          },
+          (payload) => {
+            const row = (payload.new ?? payload.old) as {
+              id?: string;
+              updated_at?: string;
+              student_id?: string;
+            } | null;
+            reconcile(`doc:${payload.eventType}:${row?.id ?? ""}:${row?.updated_at ?? ""}`);
+          },
+        )
+        .subscribe((next) => {
+          if (cancelled) return;
+          if (next === "SUBSCRIBED") {
+            attempt = 0;
+            setStatus("live");
+            reconcile();
+          } else if (next === "CHANNEL_ERROR" || next === "TIMED_OUT") {
+            setStatus("reconnecting");
+            reconcile();
+            tearDownChannel();
+            attempt += 1;
+            const delay = Math.min(1000 * attempt, 10_000);
+            if (reconnectTimer) clearTimeout(reconnectTimer);
+            reconnectTimer = setTimeout(connect, delay);
+          } else if (next === "CLOSED") {
+            if (!cancelled) setStatus("offline");
           }
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "counselling_fee_verification_requests",
-        },
-        (payload) => {
-          const row = (payload.new ?? payload.old) as { id?: string; updated_at?: string } | null;
-          reconcile(`fee:${payload.eventType}:${row?.id ?? ""}:${row?.updated_at ?? ""}`);
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "admission_handovers",
-        },
-        (payload) => {
-          const row = (payload.new ?? payload.old) as { id?: string; student_id?: string } | null;
-          reconcile(`hand:${payload.eventType}:${row?.id ?? ""}`);
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "applications",
-        },
-        (payload) => {
-          const row = (payload.new ?? payload.old) as {
-            id?: string;
-            updated_at?: string;
-            student_id?: string;
-          } | null;
-          reconcile(`app:${payload.eventType}:${row?.id ?? ""}:${row?.updated_at ?? ""}`);
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "*",
-          schema: "public",
-          table: "application_stage_history",
-        },
-        (payload) => {
-          const row = (payload.new ?? payload.old) as {
-            id?: string;
-            application_id?: string;
-          } | null;
-          reconcile(`apphist:${payload.eventType}:${row?.id ?? ""}`);
-        },
-      )
-      .on(
-        "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "students",
-        },
-        (payload) => {
-          const row = payload.new as { id?: string; updated_at?: string } | null;
-          // RLS limits to authorized students; still refetch via authorized APIs.
-          reconcile(`stu:${row?.id ?? ""}:${row?.updated_at ?? ""}`);
-        },
-      )
-      .subscribe((next) => {
-        if (cancelled) return;
-        if (next === "SUBSCRIBED") {
-          setStatus("live");
-          reconcile();
-        } else if (next === "CHANNEL_ERROR" || next === "TIMED_OUT") {
-          setStatus("reconnecting");
-          reconcile();
-        } else if (next === "CLOSED") {
-          setStatus("offline");
-        }
-      });
+        });
+    };
+
+    connect();
 
     const onVisible = () => {
       if (document.visibilityState === "visible") reconcile();
     };
     const onOnline = () => {
       setStatus("reconnecting");
+      attempt = 0;
+      connect();
       reconcile();
     };
     const onOffline = () => setStatus("offline");
@@ -181,10 +242,11 @@ export function useCounsellorWorkbenchRealtime(enabled: boolean): CounsellorLive
     return () => {
       cancelled = true;
       if (debounceTimerRef.current) clearTimeout(debounceTimerRef.current);
+      if (reconnectTimer) clearTimeout(reconnectTimer);
       document.removeEventListener("visibilitychange", onVisible);
       window.removeEventListener("online", onOnline);
       window.removeEventListener("offline", onOffline);
-      void supabase.removeChannel(channel);
+      tearDownChannel();
     };
   }, [enabled, queryClient]);
 

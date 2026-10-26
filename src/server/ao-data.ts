@@ -417,6 +417,24 @@ async function buildAdmissionOfficerDashboardFromDb(input: {
       title: a.title,
       detail: a.detail,
       at: a.at,
+      priority: a.priority,
+      urgencyGroup:
+        a.priority <= 1
+          ? ("critical" as const)
+          : a.priority <= 2
+            ? ("high" as const)
+            : ("normal" as const),
+      workflowStatus: a.title,
+      nextResponsibleRole: "Admission",
+      primaryActionLabel:
+        a.kind === "handover"
+          ? "Review handover"
+          : a.kind === "docs"
+            ? "Review documents"
+            : a.kind === "deadline"
+              ? "Open application"
+              : "Open application",
+      profileTab: a.kind === "docs" ? "documents" : "applications",
     })),
     recentActivity: recentApps.slice(0, 8).map((a) => {
       const hand = latestHandoverByStudent.get(a.studentId);
@@ -477,6 +495,8 @@ export async function buildOfficerDashboardFromDb(
     buildCounsellorAttentionItems,
     computeCounsellorWorkbenchMetrics,
     isTaskDueOnOrBeforeToday,
+    isTaskDueToday,
+    isTaskPastDue,
     nextActionLabelForSnap,
   } = await import("@/lib/counsellor-workspace");
   const inProgress = new Set<string>([...IN_PROGRESS_APPLICATION_UI_STATUSES]);
@@ -573,9 +593,14 @@ export async function buildOfficerDashboardFromDb(
   }
 
   const overdueStudentIds = new Set<string>();
+  const dueTodayStudentIds = new Set<string>();
   const followUpsDue = tasks.filter((t) => {
-    const due = isTaskDueOnOrBeforeToday(t.due_at ?? t.created_at, today);
-    if (due && t.student_id) overdueStudentIds.add(t.student_id);
+    const dueAt = t.due_at ?? t.created_at;
+    const due = isTaskDueOnOrBeforeToday(dueAt, today);
+    if (due && t.student_id) {
+      if (isTaskPastDue(dueAt, today)) overdueStudentIds.add(t.student_id);
+      else dueTodayStudentIds.add(t.student_id);
+    }
     return due;
   }).length;
 
@@ -599,6 +624,7 @@ export async function buildOfficerDashboardFromDb(
     handoverStatus: lifecycle.handoverByStudent.get(s.id) ?? null,
     docsPendingReview: docsPendingByStudent.get(s.id) ?? 0,
     hasOverdueTask: overdueStudentIds.has(s.id),
+    hasDueTodayTask: dueTodayStudentIds.has(s.id),
   }));
 
   const appsInProgress = apps.filter((a) => inProgress.has(a.status)).length;
@@ -635,17 +661,21 @@ export async function buildOfficerDashboardFromDb(
     },
     todaysTasks: tasks.slice(0, 8).map((t) => {
       const st = t.student_id ? students.find((s) => s.id === t.student_id) : undefined;
-      const due = isTaskDueOnOrBeforeToday(t.due_at ?? t.created_at, today);
+      const dueAt = t.due_at ?? t.created_at;
+      const pastDue = isTaskPastDue(dueAt, today);
+      const dueToday = isTaskDueToday(dueAt, today);
       return {
         id: t.id,
         title: t.title,
         studentId: t.student_id,
         studentName: st?.name ?? null,
-        dueAt: t.due_at ?? t.created_at,
+        dueAt,
         priority:
-          t.priority === "high" || t.priority === "overdue" || due
+          t.priority === "high" || t.priority === "overdue" || pastDue
             ? ("overdue" as const)
-            : ("normal" as const),
+            : dueToday
+              ? ("due_today" as const)
+              : ("normal" as const),
         ...(t.reminder_ref ? { reminderRef: t.reminder_ref } : {}),
       };
     }),
@@ -684,6 +714,12 @@ export async function buildOfficerDashboardFromDb(
       title: a.title,
       detail: a.detail,
       at: a.at,
+      priority: a.priority,
+      urgencyGroup: a.urgencyGroup,
+      workflowStatus: a.workflowStatus,
+      nextResponsibleRole: a.nextResponsibleRole,
+      primaryActionLabel: a.primaryActionLabel,
+      profileTab: a.profileTab,
     })),
     recentActivity: recentSnaps.slice(0, 8).map((s) => ({
       id: s.id,
@@ -840,6 +876,7 @@ export async function buildStudentsDirectoryFromDb(
         handoverStatus: handoverByStudent.get(s.id) ?? null,
         docsPendingReview: 0,
         hasOverdueTask: false,
+        hasDueTodayTask: false,
       });
       return {
         id: s.id,

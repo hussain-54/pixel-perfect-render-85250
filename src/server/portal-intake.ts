@@ -1588,14 +1588,29 @@ export const portalUpdateAdmissionHandover = createServerFn({ method: "POST" })
 
       if (data.action === "accept") {
         const { nextJourneyStageIfAdvanced } = await import("@/lib/journey-stage");
-        const { data: student } = await client
+        const { data: student, error: studentLoadErr } = await client
           .from("students")
           .select("journey_stage")
           .eq("id", row.student_id)
           .maybeSingle();
+        if (studentLoadErr) {
+          throw new AuthError(
+            `Handover accepted, but student record is not visible yet (${studentLoadErr.message}). Apply admission SELECT/mutate migration if needed.`,
+            409,
+          );
+        }
         const next = nextJourneyStageIfAdvanced(student?.journey_stage, "university_shortlisting");
         if (next) {
-          await client.from("students").update({ journey_stage: next }).eq("id", row.student_id);
+          const { error: stageErr } = await client
+            .from("students")
+            .update({ journey_stage: next })
+            .eq("id", row.student_id);
+          if (stageErr) {
+            throw new AuthError(
+              `Handover accepted, but journey stage could not be updated (${stageErr.message}).`,
+              409,
+            );
+          }
         }
       }
 

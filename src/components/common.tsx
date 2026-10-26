@@ -50,22 +50,28 @@ export function StatCard({
   value,
   hint,
   icon,
+  title,
 }: {
   label: string;
   value: ReactNode;
   hint?: string | undefined;
   icon?: ReactNode;
+  /** Optional long-form definition (native tooltip). Prefer short `hint` for on-card copy. */
+  title?: string | undefined;
 }) {
   return (
-    <div className="border-b border-border pb-4 pt-1">
-      <div className="flex items-center justify-between text-muted-foreground">
-        <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em]">{label}</span>
-        {icon && <span className="text-royal [&_svg]:size-4">{icon}</span>}
+    <div
+      className="flex h-full min-h-[5.75rem] flex-col border-b border-border pb-3.5 pt-1"
+      title={title}
+    >
+      <div className="flex items-start justify-between gap-2 text-navy/70">
+        <span className="text-xs font-semibold leading-snug tracking-wide">{label}</span>
+        {icon && <span className="shrink-0 text-royal [&_svg]:size-4">{icon}</span>}
       </div>
-      <div className="mt-2 font-display text-2xl font-semibold text-navy md:text-[1.75rem]">
+      <div className="mt-1.5 font-display text-xl font-semibold leading-none text-navy sm:text-[1.375rem]">
         {value}
       </div>
-      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+      {hint ? <p className="mt-1.5 text-sm leading-snug text-navy/65">{hint}</p> : null}
     </div>
   );
 }

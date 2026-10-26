@@ -7,8 +7,9 @@ import {
   resolveCounsellorLifecycleNext,
   type CounsellorLifecycleInput,
 } from "@/lib/counsellor-lifecycle-next";
+import type { ProfileTabId } from "@/types/student-profile";
 
-/** Documented definitions for dashboard KPI cards (product + audit). */
+/** Documented definitions for dashboard KPI cards (product + audit / tooltips). */
 export const COUNSELLOR_METRIC_DEFINITIONS = {
   assignedStudents:
     "Non-archived students currently assigned to the logged-in counsellor desk (assigned_consultant_id).",
@@ -21,7 +22,17 @@ export const COUNSELLOR_METRIC_DEFINITIONS = {
   awaitingResponse:
     "Distinct assigned students awaiting Admission (handover status submitted) and/or Front Desk/Finance (fee-verification request open or in_progress).",
   actionRequired:
-    "Distinct assigned students where the counsellor has an actionable lifecycle next step, a returned handover, a cancelled fee request, an overdue task, or a document pending review.",
+    "Distinct assigned students where the counsellor has an actionable lifecycle next step, a returned handover, a cancelled fee request, an overdue or due-today task, or a document pending review.",
+} as const;
+
+/** Short UI hints for StatCards — keep long definitions in tooltips only. */
+export const COUNSELLOR_METRIC_HINTS = {
+  assignedStudents: "On your desk",
+  counsellingCompleted: "Consent recorded",
+  followUpsDue: "Due today or earlier",
+  applicationsInProgress: "Active pipeline stages",
+  awaitingResponse: "Waiting on FD, Finance, or Admission",
+  actionRequired: "Students needing your next step",
 } as const;
 
 export const IN_PROGRESS_APPLICATION_UI_STATUSES = [
@@ -44,8 +55,13 @@ export type CounsellorWorkbenchStudentSnap = {
   openFeeRequestStatus: string | null;
   handoverStatus: string | null;
   docsPendingReview: number;
+  /** Task due before start of local today. */
   hasOverdueTask: boolean;
+  /** Task due sometime today (not past midnight). */
+  hasDueTodayTask: boolean;
 };
+
+export type CounsellorAttentionUrgency = "critical" | "high" | "normal";
 
 export type CounsellorAttentionItem = {
   id: string;
@@ -55,8 +71,14 @@ export type CounsellorAttentionItem = {
   kind: "lifecycle" | "task" | "document" | "handover" | "fee";
   title: string;
   detail: string;
+  /** Lower = more urgent (workflow-derived, not invented SLA). */
   priority: number;
   at: string;
+  urgencyGroup: CounsellorAttentionUrgency;
+  workflowStatus: string;
+  nextResponsibleRole: string;
+  primaryActionLabel: string;
+  profileTab: ProfileTabId;
 };
 
 export type CounsellorWorkbenchMetrics = {
@@ -77,6 +99,12 @@ export function endOfLocalDayIso(now = new Date()): string {
   return d.toISOString();
 }
 
+export function startOfLocalDayIso(now = new Date()): string {
+  const d = new Date(now);
+  d.setHours(0, 0, 0, 0);
+  return d.toISOString();
+}
+
 export function isTaskDueOnOrBeforeToday(
   dueAt: string | null | undefined,
   now = new Date(),
@@ -85,6 +113,18 @@ export function isTaskDueOnOrBeforeToday(
   const t = Date.parse(dueAt);
   if (Number.isNaN(t)) return false;
   return t <= Date.parse(endOfLocalDayIso(now));
+}
+
+/** True when due_at is strictly before local midnight today. */
+export function isTaskPastDue(dueAt: string | null | undefined, now = new Date()): boolean {
+  if (!dueAt) return false;
+  const t = Date.parse(dueAt);
+  if (Number.isNaN(t)) return false;
+  return t < Date.parse(startOfLocalDayIso(now));
+}
+
+export function isTaskDueToday(dueAt: string | null | undefined, now = new Date()): boolean {
+  return isTaskDueOnOrBeforeToday(dueAt, now) && !isTaskPastDue(dueAt, now);
 }
 
 export function lifecycleInputFromSnap(
@@ -115,6 +155,57 @@ export function counsellorHasActionableNext(input: CounsellorLifecycleInput): bo
   return next.primaryAction !== "none" || next.stepId === "forward_admission";
 }
 
+export function urgencyGroupFromPriority(priority: number): CounsellorAttentionUrgency {
+  if (priority <= 1) return "critical";
+  if (priority <= 2) return "high";
+  return "normal";
+}
+
+export function profileTabForAttentionKind(kind: CounsellorAttentionItem["kind"]): ProfileTabId {
+  switch (kind) {
+    case "document":
+      return "documents";
+    case "task":
+      return "overview";
+    case "handover":
+      return "applications";
+    case "fee":
+      return "assessment";
+    case "lifecycle":
+    default:
+      return "assessment";
+  }
+}
+
+export function primaryActionLabelForAttentionKind(
+  kind: CounsellorAttentionItem["kind"],
+  lifecycleLabel: string | null,
+): string {
+  switch (kind) {
+    case "document":
+      return "Review documents";
+    case "task":
+      return "Open tasks";
+    case "handover":
+      return "Review handover";
+    case "fee":
+      return "Correct fee request";
+    case "lifecycle":
+      return lifecycleLabel?.trim() || "Open record";
+    default:
+      return "Open record";
+  }
+}
+
+function studentNeedsCounsellorAction(s: CounsellorWorkbenchStudentSnap): boolean {
+  if (counsellorHasActionableNext(lifecycleInputFromSnap(s))) return true;
+  if (s.hasOverdueTask || s.hasDueTodayTask) return true;
+  if (s.docsPendingReview > 0) return true;
+  if ((s.handoverStatus ?? "").toLowerCase() === "returned") return true;
+  if ((s.openFeeRequestStatus ?? "").toLowerCase() === "cancelled") return true;
+  return false;
+}
+
 export function computeCounsellorWorkbenchMetrics(input: {
   students: CounsellorWorkbenchStudentSnap[];
   applicationsInProgressCount: number;
@@ -136,11 +227,7 @@ export function computeCounsellorWorkbenchMetrics(input: {
 
   const actionIds = new Set<string>();
   for (const s of input.students) {
-    if (counsellorHasActionableNext(lifecycleInputFromSnap(s))) actionIds.add(s.id);
-    if (s.hasOverdueTask) actionIds.add(s.id);
-    if (s.docsPendingReview > 0) actionIds.add(s.id);
-    if ((s.handoverStatus ?? "").toLowerCase() === "returned") actionIds.add(s.id);
-    if ((s.openFeeRequestStatus ?? "").toLowerCase() === "cancelled") actionIds.add(s.id);
+    if (studentNeedsCounsellorAction(s)) actionIds.add(s.id);
   }
 
   return {
@@ -164,70 +251,106 @@ export function buildCounsellorAttentionItems(
   for (const s of students) {
     const life = lifecycleInputFromSnap(s);
     const next = resolveCounsellorLifecycleNext(life);
+    const workflowStatus = s.stageLabel || next.title;
 
     if ((s.handoverStatus ?? "").toLowerCase() === "returned") {
+      const kind = "handover" as const;
       items.push({
         id: `hand-ret-${s.id}`,
         studentId: s.id,
         caseId: s.caseId,
         fullName: s.name,
-        kind: "handover",
+        kind,
         title: "Admission returned the case",
         detail: next.body,
         priority: 1,
         at: s.lastActivity,
+        urgencyGroup: urgencyGroupFromPriority(1),
+        workflowStatus,
+        nextResponsibleRole: "Counsellor",
+        primaryActionLabel: primaryActionLabelForAttentionKind(kind, next.primaryLabel),
+        profileTab: profileTabForAttentionKind(kind),
       });
     } else if ((s.openFeeRequestStatus ?? "").toLowerCase() === "cancelled") {
+      const kind = "fee" as const;
       items.push({
         id: `fee-corr-${s.id}`,
         studentId: s.id,
         caseId: s.caseId,
         fullName: s.name,
-        kind: "fee",
+        kind,
         title: "Fee verification needs correction",
         detail: "Front Desk returned the fee-verification request.",
         priority: 2,
         at: s.lastActivity,
+        urgencyGroup: urgencyGroupFromPriority(2),
+        workflowStatus,
+        nextResponsibleRole: "Counsellor",
+        primaryActionLabel: primaryActionLabelForAttentionKind(kind, next.primaryLabel),
+        profileTab: profileTabForAttentionKind(kind),
       });
     } else if (counsellorHasActionableNext(life)) {
+      const kind = "lifecycle" as const;
+      const priority =
+        next.stepId === "complete_assessment" || next.stepId === "record_consent" ? 3 : 4;
       items.push({
         id: `life-${s.id}`,
         studentId: s.id,
         caseId: s.caseId,
         fullName: s.name,
-        kind: "lifecycle",
+        kind,
         title: next.title,
         detail: next.body,
-        priority: next.stepId === "complete_assessment" || next.stepId === "record_consent" ? 3 : 4,
+        priority,
         at: s.lastActivity,
+        urgencyGroup: urgencyGroupFromPriority(priority),
+        workflowStatus,
+        nextResponsibleRole: "Counsellor",
+        primaryActionLabel: primaryActionLabelForAttentionKind(kind, next.primaryLabel),
+        profileTab: profileTabForAttentionKind(kind),
       });
     }
 
-    if (s.hasOverdueTask) {
+    if (s.hasOverdueTask || s.hasDueTodayTask) {
+      const kind = "task" as const;
+      const priority = s.hasOverdueTask ? 2 : 3;
       items.push({
         id: `task-${s.id}`,
         studentId: s.id,
         caseId: s.caseId,
         fullName: s.name,
-        kind: "task",
-        title: "Overdue follow-up task",
-        detail: "An open task for this student is past due.",
-        priority: 2,
+        kind,
+        title: s.hasOverdueTask ? "Overdue follow-up task" : "Follow-up task due today",
+        detail: s.hasOverdueTask
+          ? "An open task for this student is past due."
+          : "An open task for this student is due today.",
+        priority,
         at: s.lastActivity,
+        urgencyGroup: urgencyGroupFromPriority(priority),
+        workflowStatus,
+        nextResponsibleRole: "Counsellor",
+        primaryActionLabel: primaryActionLabelForAttentionKind(kind, null),
+        profileTab: profileTabForAttentionKind(kind),
       });
     }
 
     if (s.docsPendingReview > 0) {
+      const kind = "document" as const;
       items.push({
         id: `doc-${s.id}`,
         studentId: s.id,
         caseId: s.caseId,
         fullName: s.name,
-        kind: "document",
+        kind,
         title: "Documents awaiting review",
         detail: `${s.docsPendingReview} document${s.docsPendingReview === 1 ? "" : "s"} pending review.`,
         priority: 5,
         at: s.lastActivity,
+        urgencyGroup: urgencyGroupFromPriority(5),
+        workflowStatus,
+        nextResponsibleRole: "Counsellor",
+        primaryActionLabel: primaryActionLabelForAttentionKind(kind, null),
+        profileTab: profileTabForAttentionKind(kind),
       });
     }
   }
@@ -271,4 +394,32 @@ export function resolveCounsellorNotificationHref(input: {
 
 export function nextActionLabelForSnap(snap: CounsellorWorkbenchStudentSnap): string {
   return resolveCounsellorLifecycleNext(lifecycleInputFromSnap(snap)).title;
+}
+
+export function attentionKindLabel(kind: string): string {
+  switch (kind) {
+    case "handover":
+      return "Handover";
+    case "fee":
+      return "Fee";
+    case "task":
+      return "Task";
+    case "document":
+      return "Documents";
+    case "lifecycle":
+      return "Lifecycle";
+    default:
+      return "Action";
+  }
+}
+
+export function attentionUrgencyLabel(group: string): string {
+  switch (group) {
+    case "critical":
+      return "Critical";
+    case "high":
+      return "High";
+    default:
+      return "Normal";
+  }
 }

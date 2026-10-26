@@ -26,6 +26,18 @@ export const ADMISSION_METRIC_DEFINITIONS = {
     "Distinct students/apps needing Admission action: submitted handovers, Docs Pending apps, deadline ≤7 days, or docs needing correction.",
 } as const;
 
+/** Short UI hints for StatCards — keep long definitions in tooltips only. */
+export const ADMISSION_METRIC_HINTS = {
+  assignedToMe: "Apps owned by your desk",
+  awaitingInitialReview: "Handovers awaiting accept/return",
+  documentsMissing: "Docs pending or incomplete",
+  inProgress: "Under review or ready to submit",
+  returnedForCorrection: "Returned to counsellor",
+  submittedToUniversity: "Submitted stage",
+  offersDecisionsReceived: "Offer received stage",
+  actionRequired: "Cases needing your next step",
+} as const;
+
 export type AdmissionAppSnap = {
   id: string;
   studentId: string;
