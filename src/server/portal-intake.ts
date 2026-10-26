@@ -418,7 +418,7 @@ export const portalRecordSignupFee = createServerFn({ method: "POST" })
 
       const { data: existing, error: existingErr } = await client
         .from("signup_fee_payments")
-        .select("id, status, amount, currency")
+        .select("id, status, amount, currency, notes")
         .eq("student_id", data.studentId)
         .maybeSingle();
       if (existingErr) throw new Error(existingErr.message);
@@ -456,6 +456,80 @@ export const portalRecordSignupFee = createServerFn({ method: "POST" })
         }
       }
 
+      const {
+        appendFeeProofMeta,
+        parseFeeProofMeta,
+        signupFeeProofStoragePath,
+        stripFeeProofMeta,
+      } = await import("@/lib/signup-fee-voucher-pdf");
+      const { validateDocumentUpload } = await import("@/lib/document-storage");
+
+      let notesOut = stripFeeProofMeta(data.notes).trim() || null;
+      // Preserve prior proof meta when Front Desk updates notes without a new file.
+      const priorProof = existing ? parseFeeProofMeta(existing.notes) : null;
+
+      let proofMeta: ReturnType<typeof parseFeeProofMeta> = priorProof;
+      if (data.markClaimed && data.proofFile) {
+        const raw = data.proofFile.contentBase64?.replace(/\s/g, "") ?? "";
+        let bytes: Buffer;
+        try {
+          bytes = Buffer.from(raw, "base64");
+        } catch {
+          throw new AuthError("Payment proof file could not be decoded.", 400);
+        }
+        const checked = validateDocumentUpload({
+          mimeType: data.proofFile.mimeType,
+          byteLength: bytes.byteLength,
+          fileName: data.proofFile.fileName,
+        });
+        if (!checked.ok) throw new AuthError(checked.error, 400);
+        // Fee id is stable on student_id upsert; use existing id or a provisional path key.
+        const feeKey = existing?.id ?? data.studentId;
+        const storagePath = signupFeeProofStoragePath(data.studentId, feeKey, checked.fileName);
+        const { STUDENT_DOCUMENTS_BUCKET } = await import("@/lib/document-storage");
+        let uploaded = false;
+        try {
+          const { createAdminSupabase } = await import("@/server/supabase-admin");
+          const admin = createAdminSupabase();
+          const { error: upErr } = await admin.storage
+            .from(STUDENT_DOCUMENTS_BUCKET)
+            .upload(storagePath, bytes, {
+              contentType: data.proofFile.mimeType,
+              upsert: true,
+            });
+          if (upErr) throw new Error(upErr.message);
+          uploaded = true;
+        } catch (storageErr) {
+          try {
+            const { writePrivateDocumentBlob } = await import("@/server/document-blob-store");
+            await writePrivateDocumentBlob(storagePath, bytes);
+            uploaded = true;
+          } catch {
+            throw new AuthError(
+              storageErr instanceof Error
+                ? `Could not store payment proof: ${storageErr.message}`
+                : "Could not store payment proof.",
+              503,
+            );
+          }
+        }
+        if (!uploaded) throw new AuthError("Could not store payment proof.", 503);
+        proofMeta = {
+          path: storagePath,
+          fileName: checked.fileName,
+          mimeType: data.proofFile.mimeType,
+          byteLength: bytes.byteLength,
+          uploadedAt: new Date().toISOString(),
+        };
+      }
+
+      if (proofMeta && data.markClaimed) {
+        notesOut = appendFeeProofMeta(notesOut, proofMeta);
+      } else if (!data.markClaimed) {
+        // Re-issuing unpaid voucher clears claim notes path to proof meta.
+        notesOut = stripFeeProofMeta(data.notes).trim() || null;
+      }
+
       const { data: row, error } = await client
         .from("signup_fee_payments")
         .upsert(
@@ -465,7 +539,7 @@ export const portalRecordSignupFee = createServerFn({ method: "POST" })
             currency: data.currency?.trim() || "PKR",
             payment_method: data.paymentMethod?.trim() || null,
             reference_receipt: data.referenceReceipt?.trim() || null,
-            notes: data.notes?.trim() || null,
+            notes: notesOut,
             status,
             recorded_by: session.userId ?? null,
             verified_by: null,
@@ -477,6 +551,30 @@ export const portalRecordSignupFee = createServerFn({ method: "POST" })
         .single();
       if (error) throw new Error(error.message);
 
+      // If proof was uploaded before fee id existed, rewrite meta path under real fee id (best-effort).
+      if (
+        data.markClaimed &&
+        proofMeta &&
+        existing?.id !== row.id &&
+        proofMeta.path.includes(data.studentId)
+      ) {
+        try {
+          const { STUDENT_DOCUMENTS_BUCKET } = await import("@/lib/document-storage");
+          const nextPath = signupFeeProofStoragePath(data.studentId, row.id, proofMeta.fileName);
+          if (nextPath !== proofMeta.path) {
+            const { createAdminSupabase } = await import("@/server/supabase-admin");
+            const admin = createAdminSupabase();
+            await admin.storage.from(STUDENT_DOCUMENTS_BUCKET).move(proofMeta.path, nextPath);
+            proofMeta = { ...proofMeta, path: nextPath };
+            const patched = appendFeeProofMeta(stripFeeProofMeta(row.notes), proofMeta);
+            await client.from("signup_fee_payments").update({ notes: patched }).eq("id", row.id);
+            row.notes = patched;
+          }
+        } catch {
+          /* keep provisional path — still readable via meta */
+        }
+      }
+
       try {
         const { writeAudit } = await import("@/services/db");
         await writeAudit(client, {
@@ -484,7 +582,12 @@ export const portalRecordSignupFee = createServerFn({ method: "POST" })
           entity_type: "signup_fee_payments",
           entity_id: row.id,
           student_id: row.student_id,
-          metadata: { status: row.status, amount: row.amount, currency: row.currency },
+          metadata: {
+            status: row.status,
+            amount: row.amount,
+            currency: row.currency,
+            hasProofFile: Boolean(proofMeta && data.markClaimed),
+          },
         });
       } catch {
         /* best-effort */
@@ -506,13 +609,14 @@ export const portalRecordSignupFee = createServerFn({ method: "POST" })
           const title = "Signup fee proof submitted";
           const body = `${stu?.full_name || "Student"} (${stu?.case_id || row.student_id}) — claim awaiting verification.`;
           const recipients = [...new Set((financeProfiles ?? []).map((p) => p.id).filter(Boolean))];
+          const linkPath = `/staff/finance?feeId=${encodeURIComponent(row.id)}`;
           if (recipients.length) {
             await client.from("notifications").insert(
               recipients.map((user_id) => ({
                 user_id,
                 title,
                 body,
-                link_path: "/staff/finance",
+                link_path: linkPath,
                 student_id: row.student_id,
               })),
             );
@@ -545,6 +649,172 @@ export const portalRecordSignupFee = createServerFn({ method: "POST" })
     }
   });
 
+/**
+ * Generate a real A4 PDF voucher from the authoritative fee row.
+ * Re-download never creates a new fee record or changes amount/status.
+ */
+export const portalDownloadSignupFeeVoucher = createServerFn({ method: "POST" })
+  .validator((data: { studentId: string }) => data)
+  .handler(async ({ data }) => {
+    try {
+      const session = await requireTrustedSession();
+      requireRoles(session, ["consultant", "admin", "super_admin"]);
+      session.businessRole = await resolveSessionBusinessRole(session);
+      await requireSignupFeeRecordPermission(session);
+      const { usesSupabaseDataPlane, requireAoSupabaseClient, assertStudentVisibleDb } =
+        await import("@/server/ao-data");
+      if (!usesSupabaseDataPlane(session)) {
+        throw new AuthError("Fee voucher download requires the live data plane.", 400);
+      }
+      const client = requireAoSupabaseClient();
+      const studentId = data.studentId?.trim();
+      if (!studentId) throw new AuthError("Student id is required.", 400);
+
+      if (isFrontDeskBusinessRole(session.businessRole)) {
+        const { data: owned, error: ownedErr } = await client.rpc("is_intake_registrar", {
+          p_student_id: studentId,
+        });
+        if (ownedErr) {
+          if (/does not exist|function/i.test(ownedErr.message)) {
+            throw new AuthError(
+              "Intake registrar RPC unavailable. Apply migration 20261014030000_front_desk_fee_and_business_role_guard.sql.",
+              503,
+            );
+          }
+          throw new Error(ownedErr.message);
+        }
+        if (!owned) {
+          throw new AuthError("You can only download vouchers for students you registered.", 403);
+        }
+      } else {
+        await assertStudentVisibleDb(client, session, studentId);
+      }
+
+      const { data: feeRow, error: feeErr } = await client
+        .from("signup_fee_payments")
+        .select("id, status, amount, currency, created_at")
+        .eq("student_id", studentId)
+        .maybeSingle();
+      if (feeErr) throw new Error(feeErr.message);
+      if (!feeRow?.id) {
+        throw new AuthError("Issue an unpaid voucher before downloading the PDF.", 404);
+      }
+
+      const { data: stu, error: stuErr } = await client
+        .from("students")
+        .select("full_name, case_id")
+        .eq("id", studentId)
+        .maybeSingle();
+      if (stuErr) throw new Error(stuErr.message);
+
+      const { encodeSignupFeeVoucherPdf } = await import("@/lib/signup-fee-voucher-pdf");
+      const pdf = encodeSignupFeeVoucherPdf({
+        feeId: feeRow.id,
+        caseId: stu?.case_id || studentId,
+        studentName: stu?.full_name || "Student",
+        amount: Number(feeRow.amount),
+        currency: feeRow.currency || "PKR",
+        status: feeRow.status,
+        issuedAt: feeRow.created_at,
+      });
+
+      return {
+        ok: true as const,
+        filename: pdf.filename,
+        mimeType: pdf.mimeType,
+        contentBase64: pdf.contentBase64,
+        voucherNumber: pdf.voucherNumber,
+        feeId: feeRow.id,
+        status: feeRow.status,
+        amount: Number(feeRow.amount),
+        currency: feeRow.currency || "PKR",
+      };
+    } catch (error) {
+      toError(error);
+    }
+  });
+
+/** Finance-only signed URL (or base64 fallback) for uploaded payment proof. */
+export const portalGetSignupFeeProofUrl = createServerFn({ method: "POST" })
+  .validator((data: { feeId: string; studentId: string }) => data)
+  .handler(async ({ data }) => {
+    try {
+      const session = await requireTrustedSession();
+      requireRoles(session, ["admin", "super_admin", "consultant"]);
+      session.businessRole = await resolveSessionBusinessRole(session);
+      denyFrontDeskConsultantWorkflows(session, "signup fee proof preview");
+      requireSignupFeeVerifyPermission(session);
+      const canVerify =
+        rolesAtLeastAdmin(session.role) ||
+        canFullyApproveModule(session.businessRole, "fees_payments") ||
+        session.businessRole === "accounts_banking_finance" ||
+        session.businessRole === "manager";
+      if (!canVerify) {
+        throw new AuthError("Only Accounts/Finance or Admin may open payment proof.", 403);
+      }
+
+      const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
+      if (!usesSupabaseDataPlane(session)) {
+        throw new AuthError("Proof preview requires the live data plane.", 400);
+      }
+      const client = requireAoSupabaseClient();
+      const feeId = data.feeId?.trim();
+      const studentId = data.studentId?.trim();
+      if (!feeId || !studentId) throw new AuthError("Fee and student ids are required.", 400);
+
+      const { data: feeRow, error } = await client
+        .from("signup_fee_payments")
+        .select("id, student_id, notes")
+        .eq("id", feeId)
+        .eq("student_id", studentId)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (!feeRow) throw new AuthError("Signup fee record not found.", 404);
+
+      const { parseFeeProofMeta } = await import("@/lib/signup-fee-voucher-pdf");
+      const meta = parseFeeProofMeta(feeRow.notes);
+      if (!meta?.path) {
+        throw new AuthError("No uploaded payment proof is attached to this fee claim.", 404);
+      }
+
+      const { STUDENT_DOCUMENTS_BUCKET, DOCUMENT_PREVIEW_TTL_SEC } =
+        await import("@/lib/document-storage");
+
+      try {
+        const { createAdminSupabase } = await import("@/server/supabase-admin");
+        const admin = createAdminSupabase();
+        const { data: signed, error: signErr } = await admin.storage
+          .from(STUDENT_DOCUMENTS_BUCKET)
+          .createSignedUrl(meta.path, DOCUMENT_PREVIEW_TTL_SEC);
+        if (signErr || !signed?.signedUrl) throw new Error(signErr?.message || "sign failed");
+        return {
+          ok: true as const,
+          mode: "signed_url" as const,
+          url: signed.signedUrl,
+          fileName: meta.fileName,
+          mimeType: meta.mimeType,
+          expiresInSec: DOCUMENT_PREVIEW_TTL_SEC,
+        };
+      } catch {
+        const { readPrivateDocumentBlob } = await import("@/server/document-blob-store");
+        const bytes = await readPrivateDocumentBlob(meta.path);
+        if (!bytes) {
+          throw new AuthError("Payment proof file is missing from storage.", 404);
+        }
+        return {
+          ok: true as const,
+          mode: "base64" as const,
+          contentBase64: bytes.toString("base64"),
+          fileName: meta.fileName,
+          mimeType: meta.mimeType,
+          expiresInSec: DOCUMENT_PREVIEW_TTL_SEC,
+        };
+      }
+    } catch (error) {
+      toError(error);
+    }
+  });
+
 export type SignupFeeQueueStatusFilter = SignupFeeLedgerStatusFilter;
 
 export type SignupFeeQueueInput = {
@@ -566,6 +836,12 @@ export type SignupFeeQueueRow = {
   paymentMethod: string | null;
   referenceReceipt: string | null;
   notes: string | null;
+  /** Display notes without embedded proof JSON. */
+  notesDisplay: string | null;
+  hasProofFile: boolean;
+  proofFileName: string | null;
+  proofMimeType: string | null;
+  proofUploadedAt: string | null;
   recordedBy: string | null;
   verifiedAt: string | null;
   createdAt: string;
@@ -757,9 +1033,12 @@ export const portalListSignupFeeQueue = createServerFn({ method: "GET" })
         }
       }
 
+      const { parseFeeProofMeta, stripFeeProofMeta } = await import("@/lib/signup-fee-voucher-pdf");
       const rows: SignupFeeQueueRow[] = (fees ?? []).map((f) => {
         const stu = nameById.get(f.student_id);
         const req = requestByStudent.get(f.student_id);
+        const proof = parseFeeProofMeta(f.notes);
+        const notesDisplay = stripFeeProofMeta(f.notes).trim() || null;
         return {
           feeId: f.id,
           voucherNumber: signupFeeVoucherNumber(f.id),
@@ -772,6 +1051,11 @@ export const portalListSignupFeeQueue = createServerFn({ method: "GET" })
           paymentMethod: f.payment_method,
           referenceReceipt: f.reference_receipt,
           notes: f.notes,
+          notesDisplay,
+          hasProofFile: Boolean(proof?.path),
+          proofFileName: proof?.fileName ?? null,
+          proofMimeType: proof?.mimeType ?? null,
+          proofUploadedAt: proof?.uploadedAt ?? null,
           recordedBy: f.recorded_by ?? null,
           verifiedAt: f.verified_at,
           createdAt: f.created_at,

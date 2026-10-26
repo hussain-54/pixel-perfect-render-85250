@@ -52,6 +52,53 @@ describe("front-desk-workspace", () => {
     expect(next.code).toBe("assign_counsellor");
   });
 
+  it("ignores cancelled coordination when a fee ledger row already exists", () => {
+    const next = deriveFrontDeskNextAction({
+      assignmentStatus: "assigned",
+      signupFeeStatus: "claimed",
+      openFeeRequest: {
+        status: "cancelled",
+        forwardedAt: "2026-10-01T00:00:00.000Z",
+        signupFeeStatus: "claimed",
+      },
+    });
+    expect(next.code).toBe("await_finance");
+    expect(next.label).toMatch(/awaiting Finance/i);
+  });
+
+  it("excludes cancelled coordination from actionable KPI counts", () => {
+    const metrics = computeFrontDeskDashboardMetrics({
+      intakeRows: [
+        {
+          ...intakeBase,
+          id: "hina",
+          assignmentStatus: "assigned",
+          counsellorName: "C",
+          signupFeeStatus: "claimed",
+        },
+      ],
+      feeRequests: [
+        {
+          id: "old-cancelled",
+          studentId: "hina",
+          caseId: "GR-1",
+          fullName: "Hina Khan",
+          status: "cancelled",
+          signupFeeStatus: null,
+          summary: "No fee record",
+          coordinatorNote: "Forwarded then cancelled",
+          forwardedAt: "2026-09-01T00:00:00.000Z",
+          resolvedAt: "2026-09-02T00:00:00.000Z",
+          createdAt: "2026-09-01T00:00:00.000Z",
+          updatedAt: "2026-09-02T00:00:00.000Z",
+          feeVerifiedAt: null,
+        },
+      ],
+    });
+    expect(metrics.actionRequired).toBe(0);
+    expect(metrics.feeVerification).toBe(1);
+  });
+
   it("computes KPIs without double-counting action required", () => {
     const metrics = computeFrontDeskDashboardMetrics({
       intakeRows: [

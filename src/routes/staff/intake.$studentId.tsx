@@ -28,24 +28,26 @@ import {
   requestStuckAfterFeeDecision,
 } from "@/lib/fee-verification-workflow";
 import { INTAKE_FEE_PAYMENT_METHODS } from "@/lib/intake-form-options";
+import { downloadBase64File } from "@/lib/export-formats";
 import {
   describePersistedSignupFeeStatus,
-  printCaseDocumentPdf,
   printRegistrationFormPdf,
 } from "@/lib/registration-form-a4";
 import {
   describeSignupFeeOperationalStatus,
   formatSignupFeeAmount,
-  voucherPrintFilename,
 } from "@/lib/signup-fee-voucher";
+import { stripFeeProofMeta } from "@/lib/signup-fee-voucher-pdf";
 import {
   intakePortalStatusFromRow,
   studentPortalAccountStatusLabel,
 } from "@/lib/student-portal-account";
+import { DOCUMENT_ALLOWED_MIME, DOCUMENT_UPLOAD_MAX_BYTES } from "@/lib/document-storage";
 import { FEE_QUEUE_KEY } from "@/lib/use-fee-verification-queue-realtime";
 import { cn } from "@/lib/utils";
 import {
   assignCounsellor,
+  downloadSignupFeeVoucher,
   forwardFeeVerificationRequest,
   getFrontDeskIntakeRecord,
   listCounsellorDesks,
@@ -77,6 +79,8 @@ function FrontDeskIntakeRecordPage() {
   const [feeMethod, setFeeMethod] = useState("");
   const [feeReference, setFeeReference] = useState("");
   const [feeNotes, setFeeNotes] = useState("");
+  const [proofFile, setProofFile] = useState<File | null>(null);
+  const [voucherDlMsg, setVoucherDlMsg] = useState<string | null>(null);
 
   const recordQ = useQuery({
     queryKey: ["front-desk", "record", studentId],
@@ -142,11 +146,46 @@ function FrontDeskIntakeRecordPage() {
     setFeeCurrency(fee.currency || "PKR");
     setFeeMethod(fee.paymentMethod || "");
     setFeeReference(fee.referenceReceipt || "");
-    setFeeNotes(fee.notes || "");
+    setFeeNotes(stripFeeProofMeta(fee.notes) || "");
   }, [recordQ.data?.signupFee]);
 
+  const readProofAsBase64 = (file: File) =>
+    new Promise<{ fileName: string; mimeType: string; contentBase64: string }>(
+      (resolve, reject) => {
+        if (file.size > DOCUMENT_UPLOAD_MAX_BYTES) {
+          reject(
+            new Error(
+              `Proof file is too large. Maximum is ${Math.floor(DOCUMENT_UPLOAD_MAX_BYTES / (1024 * 1024))} MB.`,
+            ),
+          );
+          return;
+        }
+        if (!(DOCUMENT_ALLOWED_MIME as readonly string[]).includes(file.type)) {
+          reject(new Error("Use PDF, JPEG, PNG, or WebP for payment proof."));
+          return;
+        }
+        const reader = new FileReader();
+        reader.onerror = () => reject(new Error("Could not read the proof file."));
+        reader.onload = () => {
+          const result = String(reader.result || "");
+          const comma = result.indexOf(",");
+          const contentBase64 = comma >= 0 ? result.slice(comma + 1) : result;
+          if (!contentBase64) {
+            reject(new Error("Proof file was empty."));
+            return;
+          }
+          resolve({
+            fileName: file.name,
+            mimeType: file.type || "application/octet-stream",
+            contentBase64,
+          });
+        };
+        reader.readAsDataURL(file);
+      },
+    );
+
   const feeM = useMutation({
-    mutationFn: (input: { markClaimed: boolean }) => {
+    mutationFn: async (input: { markClaimed: boolean }) => {
       const amount = Number(feeAmount);
       if (!Number.isFinite(amount) || amount < 0) {
         throw new Error("Enter a valid fee amount.");
@@ -160,15 +199,19 @@ function FrontDeskIntakeRecordPage() {
       if (feeMethod.trim()) payload.paymentMethod = feeMethod.trim();
       if (feeReference.trim()) payload.referenceReceipt = feeReference.trim();
       if (feeNotes.trim()) payload.notes = feeNotes.trim();
+      if (input.markClaimed && proofFile) {
+        payload.proofFile = await readProofAsBase64(proofFile);
+      }
       return recordSignupFee(payload);
     },
     onSuccess: async (res, vars) => {
       setActionMsg(
         vars.markClaimed
           ? "Payment proof submitted — awaiting Finance verification. This is not verified."
-          : "Fee voucher obligation saved (unpaid). Print the voucher for the student.",
+          : "Fee voucher obligation saved (unpaid). Download the voucher PDF for the student.",
       );
       setShowVoucher(true);
+      if (vars.markClaimed) setProofFile(null);
       await invalidate();
       await recordQ.refetch();
       if (res?.fee) {
@@ -176,9 +219,35 @@ function FrontDeskIntakeRecordPage() {
         setFeeCurrency(res.fee.currency || "PKR");
         setFeeMethod(res.fee.paymentMethod || "");
         setFeeReference(res.fee.referenceReceipt || "");
+        setFeeNotes(stripFeeProofMeta(res.fee.notes) || "");
+      }
+      if (!vars.markClaimed && res?.fee?.feeId) {
+        try {
+          const pdf = await downloadSignupFeeVoucher({ studentId });
+          if (pdf?.contentBase64) {
+            downloadBase64File(pdf.filename, pdf.mimeType, pdf.contentBase64);
+            setVoucherDlMsg(`Downloaded ${pdf.voucherNumber}`);
+          }
+        } catch (e) {
+          setVoucherDlMsg(portalErrorMessage(e, "Voucher saved but PDF download failed."));
+        }
       }
     },
     onError: (e) => setActionMsg(portalErrorMessage(e, "Could not save signup fee.")),
+  });
+
+  const voucherDlM = useMutation({
+    mutationFn: () => downloadSignupFeeVoucher({ studentId }),
+    onSuccess: (pdf) => {
+      if (!pdf?.contentBase64) {
+        setVoucherDlMsg("Voucher PDF was empty.");
+        return;
+      }
+      downloadBase64File(pdf.filename, pdf.mimeType, pdf.contentBase64);
+      setVoucherDlMsg(`Downloaded ${pdf.voucherNumber} · ${pdf.status}`);
+      setShowVoucher(true);
+    },
+    onError: (e) => setVoucherDlMsg(portalErrorMessage(e, "Could not generate voucher PDF.")),
   });
 
   if (recordQ.isLoading) {
@@ -224,9 +293,7 @@ function FrontDeskIntakeRecordPage() {
   const student = data.student;
   const feeRequests = data.feeRequests ?? [];
   const openFeeRequest =
-    feeRequests.find((r) => r.status === "open" || r.status === "in_progress") ??
-    feeRequests.find((r) => r.status === "cancelled") ??
-    null;
+    feeRequests.find((r) => r.status === "open" || r.status === "in_progress") ?? null;
   const nextAction =
     data.nextAction ??
     deriveFrontDeskNextAction({
@@ -464,6 +531,23 @@ function FrontDeskIntakeRecordPage() {
                 disabled={feeM.isPending}
               />
             </div>
+            {canSubmitProof ? (
+              <div className="sm:col-span-2 lg:col-span-4">
+                <Label htmlFor="fd-fee-proof">Payment screenshot / receipt (optional)</Label>
+                <Input
+                  id="fd-fee-proof"
+                  type="file"
+                  accept={DOCUMENT_ALLOWED_MIME.join(",")}
+                  disabled={feeM.isPending}
+                  onChange={(e) => setProofFile(e.target.files?.[0] ?? null)}
+                  className="mt-1 cursor-pointer"
+                />
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  PDF or image, max {Math.floor(DOCUMENT_UPLOAD_MAX_BYTES / (1024 * 1024))} MB.
+                  {proofFile ? ` Selected: ${proofFile.name}` : ""}
+                </p>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -473,7 +557,7 @@ function FrontDeskIntakeRecordPage() {
               type="button"
               size="sm"
               variant="outline"
-              disabled={feeM.isPending || !feeAmount.trim()}
+              disabled={feeM.isPending || voucherDlM.isPending || !feeAmount.trim()}
               onClick={() => feeM.mutate({ markClaimed: false })}
             >
               {signupFee ? "Update unpaid voucher" : "Issue unpaid voucher"}
@@ -484,7 +568,9 @@ function FrontDeskIntakeRecordPage() {
               type="button"
               size="sm"
               variant="navy"
-              disabled={feeM.isPending || !feeAmount.trim()}
+              disabled={
+                feeM.isPending || !feeAmount.trim() || !feeMethod.trim() || !feeReference.trim()
+              }
               onClick={() => feeM.mutate({ markClaimed: true })}
             >
               Submit payment proof
@@ -494,18 +580,14 @@ function FrontDeskIntakeRecordPage() {
             <Button
               type="button"
               size="sm"
-              variant="outline"
+              variant="navy"
+              disabled={voucherDlM.isPending || feeM.isPending}
               onClick={() => {
-                setShowVoucher(true);
-                window.setTimeout(() => {
-                  printCaseDocumentPdf(
-                    voucherPrintFilename(student.caseId, signupFee.voucherNumber),
-                    "fee-voucher",
-                  );
-                }, 80);
+                setVoucherDlMsg(null);
+                voucherDlM.mutate();
               }}
             >
-              Print / Save voucher PDF
+              {voucherDlM.isPending ? "Generating PDF…" : "Download Fee Voucher"}
             </Button>
           ) : null}
           {signupFee ? (
@@ -515,13 +597,14 @@ function FrontDeskIntakeRecordPage() {
               variant="ghost"
               onClick={() => setShowVoucher((v) => !v)}
             >
-              {showVoucher ? "Hide voucher" : "Show voucher"}
+              {showVoucher ? "Hide voucher preview" : "Show voucher preview"}
             </Button>
           ) : null}
         </div>
+        {voucherDlMsg ? <p className="mt-2 text-xs text-navy">{voucherDlMsg}</p> : null}
         <p className="mt-3 text-xs text-muted-foreground">
-          Keep payment screenshots with the case. Reference and method are stored on the fee row for
-          Finance review. You cannot mark this fee verified.
+          Download generates a real A4 PDF from the fee ledger (same voucher reference on every
+          download). Uploaded proof reaches Finance for review. You cannot mark this fee verified.
         </p>
         {showVoucher && signupFee ? (
           <div className="mt-4 overflow-x-auto rounded-lg border border-border bg-white">
@@ -557,6 +640,7 @@ function FrontDeskIntakeRecordPage() {
               </thead>
               <tbody>
                 {feeRequests.map((row) => {
+                  const isHistoricalCancelled = row.status === "cancelled";
                   const stuck = requestStuckAfterFeeDecision({
                     requestStatus: row.status,
                     signupFeeStatus: row.signupFeeStatus,
@@ -571,16 +655,28 @@ function FrontDeskIntakeRecordPage() {
                   });
                   const forwarded = Boolean(row.forwardedAt) || row.status === "in_progress";
                   return (
-                    <tr key={row.id} className="border-b border-border/60 align-top">
+                    <tr
+                      key={row.id}
+                      className={cn(
+                        "border-b border-border/60 align-top",
+                        isHistoricalCancelled && "opacity-75",
+                      )}
+                    >
                       <td className="px-3 py-2">
                         <div className="text-xs text-muted-foreground">
                           Submitted {fmtDate(row.createdAt.slice(0, 10))}
+                          {isHistoricalCancelled ? " · Historical" : ""}
                         </div>
                         <p className="mt-1 text-xs">{row.summary || "—"}</p>
                       </td>
                       <td className="px-3 py-2 text-xs">
                         <div className="font-medium text-navy">{claim.feeStatusLabel}</div>
                         <div className="text-muted-foreground">{claim.claimLabel}</div>
+                        {isHistoricalCancelled ? (
+                          <div className="mt-1 text-[11px] text-muted-foreground">
+                            Cancelled coordination — not a fee ledger row
+                          </div>
+                        ) : null}
                         {feeOk ? (
                           <div className="mt-1 text-[11px] text-emerald-800">
                             Fee gate satisfied
@@ -589,7 +685,12 @@ function FrontDeskIntakeRecordPage() {
                       </td>
                       <td className="px-3 py-2">
                         <StatusBadge status={row.status} />
-                        {forwarded && row.status !== "resolved" ? (
+                        {isHistoricalCancelled ? (
+                          <div className="mt-1 text-[11px] font-medium text-muted-foreground">
+                            Historical / cancelled
+                          </div>
+                        ) : null}
+                        {forwarded && row.status !== "resolved" && !isHistoricalCancelled ? (
                           <div className="mt-1 text-[11px] text-muted-foreground">
                             Forwarded
                             {row.forwardedAt ? ` · ${fmtDate(row.forwardedAt.slice(0, 10))}` : ""}
@@ -614,6 +715,7 @@ function FrontDeskIntakeRecordPage() {
                             </Button>
                           ) : null}
                           {!stuck &&
+                          !isHistoricalCancelled &&
                           (row.status === "open" ||
                             (row.status === "in_progress" && !row.forwardedAt)) ? (
                             <Button
@@ -625,7 +727,9 @@ function FrontDeskIntakeRecordPage() {
                               Send to Accounts
                             </Button>
                           ) : null}
-                          {!stuck && (row.status === "open" || row.status === "in_progress") ? (
+                          {!stuck &&
+                          !isHistoricalCancelled &&
+                          (row.status === "open" || row.status === "in_progress") ? (
                             <Button
                               size="sm"
                               variant="outline"

@@ -24,9 +24,19 @@ function pdfEscape(text: string): string {
   return text.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)");
 }
 
-/** Minimal multi-page text PDF (PDF 1.4) for audit/report dumps. */
-export function toSimplePdf(title: string, lines: string[]): string {
-  const maxWidth = 90;
+export type SimplePdfPageSize = "letter" | "a4";
+
+/** Minimal multi-page text PDF (PDF 1.4) for audit/report dumps and fee vouchers. */
+export function toSimplePdf(
+  title: string,
+  lines: string[],
+  opts?: { pageSize?: SimplePdfPageSize },
+): string {
+  const pageSize = opts?.pageSize ?? "letter";
+  // ISO A4 = 595.28 × 841.89 pt; US Letter = 612 × 792.
+  const mediaBox = pageSize === "a4" ? "[0 0 595 842]" : "[0 0 612 792]";
+  const startY = pageSize === "a4" ? 800 : 780;
+  const maxWidth = pageSize === "a4" ? 86 : 90;
   const wrapped: string[] = [];
   for (const raw of lines) {
     const line = raw.replace(/\r/g, "");
@@ -42,9 +52,10 @@ export function toSimplePdf(title: string, lines: string[]): string {
     if (rest) wrapped.push(rest);
   }
 
-  const pageSize = 48;
+  const linesPerPage = pageSize === "a4" ? 52 : 48;
   const pages: string[][] = [];
-  for (let i = 0; i < wrapped.length; i += pageSize) pages.push(wrapped.slice(i, i + pageSize));
+  for (let i = 0; i < wrapped.length; i += linesPerPage)
+    pages.push(wrapped.slice(i, i + linesPerPage));
   if (!pages.length) pages.push(["(empty)"]);
 
   const bodies: string[] = [];
@@ -58,7 +69,7 @@ export function toSimplePdf(title: string, lines: string[]): string {
     const textOps = [
       "BT",
       "/F1 10 Tf",
-      "50 780 Td",
+      `50 ${startY} Td`,
       "14 TL",
       `(${pdfEscape(i === 0 ? title : `${title} (cont.)`)}) Tj`,
       "T*",
@@ -66,7 +77,7 @@ export function toSimplePdf(title: string, lines: string[]): string {
       "ET",
     ].join("\n");
     bodies.push(
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents ${contentObj} 0 R /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> >>`,
+      `<< /Type /Page /Parent 2 0 R /MediaBox ${mediaBox} /Contents ${contentObj} 0 R /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> >>`,
     );
     bodies.push(
       `<< /Length ${Buffer.byteLength(textOps, "utf8")} >>\nstream\n${textOps}\nendstream`,
@@ -97,12 +108,15 @@ export function encodeExport(
   csvRows: (string | number | null | undefined)[][],
   pdfLines: string[],
   pdfTitle: string,
+  opts?: { pdfPageSize?: SimplePdfPageSize },
 ): { filename: string; mimeType: string; contentBase64: string } {
   if (format === "pdf") {
     return {
       filename: `${filenameBase}.pdf`,
       mimeType: "application/pdf",
-      contentBase64: utf8ToBase64(toSimplePdf(pdfTitle, pdfLines)),
+      contentBase64: utf8ToBase64(
+        toSimplePdf(pdfTitle, pdfLines, { pageSize: opts?.pdfPageSize ?? "letter" }),
+      ),
     };
   }
   if (format === "excel") {

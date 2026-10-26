@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -21,6 +21,7 @@ import { Textarea } from "@/components/ui/textarea";
 import {
   claimUniversityFeePayment,
   createUniversityFeeObligation,
+  getSignupFeeProofUrl,
   listSignupFeeQueue,
   listUniversityFeeQueue,
   verifySignupFee,
@@ -31,6 +32,7 @@ import type {
   UniversityFeeKindDb,
   UniversityFeeStatusDb,
 } from "@/types/database";
+import { downloadBase64File } from "@/lib/export-formats";
 import { isSignupFeeVerified } from "@/lib/signup-fee-gate";
 import type { SignupFeeLedgerStatusFilter } from "@/lib/signup-fee-ledger";
 import { describeSignupFeeOperationalStatus } from "@/lib/signup-fee-voucher";
@@ -74,7 +76,16 @@ export function FinanceModulePage() {
   const [signupSearchApplied, setSignupSearchApplied] = useState("");
   const [signupOffset, setSignupOffset] = useState(0);
   const signupPageSize = 50;
-  const [reviewFeeId, setReviewFeeId] = useState<string | null>(null);
+  const [reviewFeeId, setReviewFeeId] = useState<string | null>(() => {
+    if (typeof window === "undefined") return null;
+    try {
+      return new URLSearchParams(window.location.search).get("feeId");
+    } catch {
+      return null;
+    }
+  });
+  const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null);
+  const [proofPreviewMsg, setProofPreviewMsg] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<UniStatusFilter>("queue");
   const [msg, setMsg] = useState<string | null>(null);
   const [signupNotes, setSignupNotes] = useState("");
@@ -234,6 +245,7 @@ export function FinanceModulePage() {
       );
       setSignupNotes("");
       setConfirmSignup(null);
+      setProofPreviewUrl(null);
       await invalidateSignup();
     },
     onError: (err) => {
@@ -242,6 +254,32 @@ export function FinanceModulePage() {
       void invalidateSignup();
     },
   });
+
+  const proofPreviewM = useMutation({
+    mutationFn: (input: { feeId: string; studentId: string }) => getSignupFeeProofUrl(input),
+    onSuccess: (res) => {
+      setProofPreviewMsg(null);
+      if (res?.mode === "signed_url" && res.url) {
+        setProofPreviewUrl(res.url);
+        return;
+      }
+      if (res?.mode === "base64" && res.contentBase64) {
+        downloadBase64File(res.fileName, res.mimeType, res.contentBase64);
+        setProofPreviewMsg(`Downloaded ${res.fileName} (local storage preview).`);
+        return;
+      }
+      setProofPreviewMsg("No proof payload returned.");
+    },
+    onError: (err) => {
+      setProofPreviewUrl(null);
+      setProofPreviewMsg(portalErrorMessage(err, "Could not open payment proof."));
+    },
+  });
+
+  useEffect(() => {
+    setProofPreviewUrl(null);
+    setProofPreviewMsg(null);
+  }, [reviewFeeId]);
 
   const fees = feesQ.data?.fees ?? [];
   const signupRows = signupQ.data?.rows ?? [];
@@ -727,7 +765,64 @@ export function FinanceModulePage() {
                         <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
                           Notes
                         </dt>
-                        <dd>{reviewRow.notes || "—"}</dd>
+                        <dd>{reviewRow.notesDisplay || reviewRow.notes || "—"}</dd>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                          Uploaded proof
+                        </dt>
+                        <dd>
+                          {reviewRow.hasProofFile ? (
+                            <div className="space-y-2">
+                              <p className="text-sm text-navy">
+                                {reviewRow.proofFileName || "Proof on file"}
+                                {reviewRow.proofUploadedAt
+                                  ? ` · ${fmtDate(reviewRow.proofUploadedAt.slice(0, 10))}`
+                                  : ""}
+                              </p>
+                              <div className="flex flex-wrap gap-2">
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  disabled={proofPreviewM.isPending}
+                                  onClick={() =>
+                                    proofPreviewM.mutate({
+                                      feeId: reviewRow.feeId,
+                                      studentId: reviewRow.studentId,
+                                    })
+                                  }
+                                >
+                                  {proofPreviewM.isPending ? "Opening…" : "Open proof"}
+                                </Button>
+                              </div>
+                              {proofPreviewMsg ? (
+                                <p className="text-xs text-muted-foreground">{proofPreviewMsg}</p>
+                              ) : null}
+                              {proofPreviewUrl ? (
+                                <div className="overflow-hidden rounded border border-border bg-white">
+                                  {reviewRow.proofMimeType?.startsWith("image/") ? (
+                                    <img
+                                      src={proofPreviewUrl}
+                                      alt="Payment proof"
+                                      className="max-h-80 w-full object-contain"
+                                    />
+                                  ) : (
+                                    <iframe
+                                      title="Payment proof"
+                                      src={proofPreviewUrl}
+                                      className="h-80 w-full"
+                                    />
+                                  )}
+                                </div>
+                              ) : null}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">
+                              No file uploaded — compare transaction reference with proof held by
+                              Front Desk.
+                            </span>
+                          )}
+                        </dd>
                       </div>
                       {reviewRow.openRequestStatus ? (
                         <div className="sm:col-span-2">
@@ -741,9 +836,8 @@ export function FinanceModulePage() {
                       ) : null}
                     </dl>
                     <p className="mt-3 text-xs text-muted-foreground">
-                      Receipt files are not stored on this fee row. Compare the transaction
-                      reference and amount against proof held by Front Desk. Decisions run only
-                      through verify_signup_fee_and_activate.
+                      Decisions run only through verify_signup_fee_and_activate. Cancelled
+                      counsellor coordination requests never appear in this claimed queue.
                     </p>
                   </div>
                 ) : null}

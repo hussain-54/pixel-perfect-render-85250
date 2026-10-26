@@ -105,11 +105,23 @@ export function deriveFrontDeskNextAction(input: {
       };
     }
     if (req.status === "cancelled") {
-      return {
-        code: "return_or_correct",
-        label: "Needs correction — follow up with counsellor",
-        priority: 2,
-      };
+      // Fee ledger is authoritative when a signup fee row already exists.
+      const fee = (input.signupFeeStatus ?? req.signupFeeStatus ?? "").toLowerCase();
+      if (
+        fee === "unpaid" ||
+        fee === "claimed" ||
+        fee === "verified" ||
+        fee === "waived" ||
+        fee === "rejected"
+      ) {
+        // Fall through — cancelled coordination is historical, not the next action.
+      } else {
+        return {
+          code: "return_or_correct",
+          label: "Needs correction — follow up with counsellor",
+          priority: 2,
+        };
+      }
     }
     if (req.status === "open" || (req.status === "in_progress" && !req.forwardedAt)) {
       return {
@@ -171,7 +183,9 @@ export function computeFrontDeskDashboardMetrics(input: {
 
   const openOrStuckFeeIds = new Set<string>();
   for (const req of input.feeRequests) {
-    if (req.status === "open" || req.status === "cancelled") {
+    // Cancelled coordination is historical — never drives actionable counts / Finance queues.
+    if (req.status === "cancelled" || req.status === "resolved") continue;
+    if (req.status === "open") {
       openOrStuckFeeIds.add(req.studentId);
       continue;
     }
@@ -238,14 +252,23 @@ export function buildFrontDeskAttentionItems(input: {
       continue;
     }
     if (req.status === "cancelled") {
+      const fee = (req.signupFeeStatus ?? "").toLowerCase();
+      const feeExists =
+        fee === "unpaid" ||
+        fee === "claimed" ||
+        fee === "verified" ||
+        fee === "waived" ||
+        fee === "rejected";
       items.push({
         id: `corr-${req.id}`,
         studentId: req.studentId,
         caseId: req.caseId,
         fullName: req.fullName,
         kind: "fee_correction",
-        title: "Fee request needs correction",
-        detail: req.coordinatorNote || req.summary || "Returned for counsellor correction.",
+        title: feeExists ? "Historical cancelled coordination" : "Fee request needs correction",
+        detail: feeExists
+          ? "Cancelled counsellor request — not a fee ledger row. Use Signup fee voucher status above."
+          : req.coordinatorNote || req.summary || "Returned for counsellor correction.",
         at: req.updatedAt || req.createdAt,
       });
     }
@@ -346,10 +369,34 @@ export function buildFrontDeskRecordTimeline(input: {
         kind: "fee_verification",
         title:
           req.status === "cancelled"
-            ? "Fee-verification request returned / cancelled"
+            ? "Historical: fee-verification request cancelled"
             : "Fee-verification request resolved",
-        ...(req.coordinatorNote ? { detail: req.coordinatorNote } : {}),
+        ...(req.status === "cancelled"
+          ? {
+              detail: [
+                "Not a signup fee ledger row — excluded from Finance verification queue.",
+                req.coordinatorNote || req.summary || null,
+              ]
+                .filter(Boolean)
+                .join(" "),
+            }
+          : req.coordinatorNote
+            ? { detail: req.coordinatorNote }
+            : {}),
         at: req.resolvedAt,
+      });
+    } else if (req.status === "cancelled") {
+      items.push({
+        id: `fvr-cancelled-${req.id}`,
+        kind: "fee_verification",
+        title: "Historical: fee-verification request cancelled",
+        detail: [
+          "Not a signup fee ledger row — excluded from Finance verification queue.",
+          req.coordinatorNote || req.summary || null,
+        ]
+          .filter(Boolean)
+          .join(" "),
+        at: req.updatedAt || req.createdAt,
       });
     }
   }

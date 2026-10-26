@@ -362,10 +362,9 @@ export const portalGetFrontDeskIntakeRecord = createServerFn({ method: "GET" })
         signupFee = null;
       }
 
+      // Actionable coordination only — cancelled/historical entries stay in feeRequests + timeline.
       const openFeeRequest =
-        feeRequests.find((r) => r.status === "open" || r.status === "in_progress") ??
-        feeRequests.find((r) => r.status === "cancelled") ??
-        null;
+        feeRequests.find((r) => r.status === "open" || r.status === "in_progress") ?? null;
 
       const { buildFrontDeskRecordTimeline, deriveFrontDeskNextAction } =
         await import("@/lib/front-desk-workspace");

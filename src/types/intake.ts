@@ -29,6 +29,13 @@ export type IntakeRegisterInput = {
   };
 };
 
+export type SignupFeeProofFileInput = {
+  fileName: string;
+  mimeType: string;
+  /** Raw file bytes as base64 (no data: URL prefix). */
+  contentBase64: string;
+};
+
 export type SignupFeeRecordInput = {
   studentId: string;
   amount: number;
@@ -37,6 +44,8 @@ export type SignupFeeRecordInput = {
   referenceReceipt?: string;
   notes?: string;
   markClaimed?: boolean;
+  /** Optional payment screenshot/receipt — stored privately; Finance previews via signed URL. */
+  proofFile?: SignupFeeProofFileInput;
 };
 
 export type VerifySignupFeeInput = {
