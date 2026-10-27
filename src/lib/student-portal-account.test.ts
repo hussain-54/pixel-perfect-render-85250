@@ -7,6 +7,7 @@ import {
   mapStudentPortalLinkRpcError,
   portalActivationUnchangedByLink,
   sanitizeProvisionErrorMessage,
+  studentFacingFeeHint,
   studentFacingFeeLabel,
   studentPortalAccountStatus,
   studentPortalAccountStatusLabel,
@@ -201,5 +202,12 @@ describe("student-facing summaries", () => {
     expect(studentFacingFeeLabel("unpaid")).toBe("Payment pending");
     expect(studentFacingFeeLabel("verified")).toBe("Verified");
     expect(studentFacingFeeLabel(null)).toBe("Not recorded");
+  });
+
+  it("explains fee status in StatCard hints without amounts", () => {
+    expect(studentFacingFeeHint("rejected", false)).toMatch(/rejected/i);
+    expect(studentFacingFeeHint("claimed", false)).toMatch(/reviewing/i);
+    expect(studentFacingFeeHint("unpaid", false)).toMatch(/voucher/i);
+    expect(studentFacingFeeHint("verified", true)).toMatch(/active/i);
   });
 });

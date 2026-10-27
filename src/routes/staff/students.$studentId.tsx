@@ -9,10 +9,7 @@ import {
 import { StudentProfileWorkspaceView } from "@/components/portal/StudentProfileWorkspace";
 import { useData } from "@/lib/useData";
 import { getStudentProfile } from "@/services";
-import {
-  STUDENT_PROFILE_TABS,
-  type ProfileTabId,
-} from "@/types/student-profile";
+import { STUDENT_PROFILE_TABS, type ProfileTabId } from "@/types/student-profile";
 
 const TAB_IDS = new Set(STUDENT_PROFILE_TABS.map((t) => t.id));
 

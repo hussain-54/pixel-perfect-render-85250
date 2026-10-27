@@ -5,6 +5,8 @@ export type OfficerDashboardMetrics = {
   appsInProgress: number;
   docsToReview: number;
   deadlinesThisWeek: number;
+  /** Assigned students with no saved counselling assessment yet. */
+  awaitingInitialAssessment: number;
   /** Assigned students with counselling_agreements.consented = true. */
   counsellingCompleted: number;
   /** Open/in_progress tasks due today or earlier. */
@@ -34,6 +36,8 @@ export type OfficerDashboardStudent = {
   caseId?: string;
   lastActivity?: string;
   nextActionLabel?: string;
+  /** Pipeline application id when this row is application-centric (Admission). */
+  applicationId?: string | null;
 };
 
 export type OfficerDashboardAttentionItem = {
@@ -45,6 +49,8 @@ export type OfficerDashboardAttentionItem = {
   title: string;
   detail: string;
   at: string;
+  /** Pipeline application id when attention is about a specific file. */
+  applicationId?: string | null;
   /** Workflow-derived priority rank (lower = more urgent). Omitted for older payloads. */
   priority?: number;
   /** Derived from priority bands only — not invented SLA. */

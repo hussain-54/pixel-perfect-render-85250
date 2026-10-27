@@ -58,11 +58,16 @@ export type FrontDeskDashboardPayload = {
   myRegistrations: number;
   awaitingAssignment: number;
   assignedStudents: number;
-  /** Signup fees still unpaid or claimed (not yet verified/waived/rejected). */
+  unpaidVouchers: number;
+  proofsAwaitingFinance: number;
+  /** Signup fees still unpaid or claimed (legacy combined metric). */
   feesAwaitingFinance: number;
+  verifiedFees: number;
+  rejectedFees: number;
+  portalLinkPending: number;
   /** Students with journey_stage at/after application_submitted (not applications.stage). */
   applicationsInProgress: number;
-  /** Distinct students needing FD attention (unassigned and/or open/stuck fee requests). */
+  /** Distinct students needing FD attention (unassigned, rejected fee, open/stuck requests). */
   actionRequired: number;
   recentAssigned: FrontDeskIntakeRow[];
   recentRegistrations: FrontDeskIntakeRow[];
@@ -189,11 +194,6 @@ export const portalGetFrontDeskDashboard = createServerFn({ method: "GET" }).han
       if (profile?.full_name?.trim()) greetingName = profile.full_name.trim();
     }
 
-    const feesAwaitingFinance = rows.filter((r) => {
-      const s = (r.signupFeeStatus ?? "").toLowerCase();
-      return s === "unpaid" || s === "claimed";
-    }).length;
-
     const { computeFrontDeskDashboardMetrics } = await import("@/lib/front-desk-workspace");
 
     // Fee-request metrics for actionRequired — same RPC as the queue (FD org-wide).
@@ -223,8 +223,13 @@ export const portalGetFrontDeskDashboard = createServerFn({ method: "GET" }).han
       greetingName,
       myRegistrations: metrics.totalRegistrations,
       awaitingAssignment: metrics.awaitingCounsellor,
-      assignedStudents: assigned.length,
-      feesAwaitingFinance,
+      assignedStudents: metrics.assignedToCounsellors || assigned.length,
+      unpaidVouchers: metrics.unpaidVouchers,
+      proofsAwaitingFinance: metrics.proofsAwaitingFinance,
+      feesAwaitingFinance: metrics.feeVerification,
+      verifiedFees: metrics.verifiedFees,
+      rejectedFees: metrics.rejectedFees,
+      portalLinkPending: metrics.portalLinkPending,
       applicationsInProgress: metrics.applicationsInProgress,
       actionRequired: metrics.actionRequired,
       recentAssigned: assigned.slice(0, 8),

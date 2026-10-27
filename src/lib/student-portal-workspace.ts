@@ -130,7 +130,7 @@ export function buildStudentNextActions(input: {
         fee === "rejected"
           ? "Contact Front Desk or Accounts with updated payment evidence."
           : "Portal features unlock after Accounts verifies or waives your signup fee.",
-      href: "/student/dashboard",
+      href: "/student/notifications",
       priority: 1,
     });
   }

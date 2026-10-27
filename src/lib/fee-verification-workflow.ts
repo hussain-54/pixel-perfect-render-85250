@@ -81,13 +81,12 @@ export function frontDeskCanSeeFeeVerificationRequest(input: {
   return Boolean(input.isFrontDesk && input.viewerUserId);
 }
 
-export type FeeVerificationQueueTab =
-  "open" | "awaiting_finance" | "needs_correction" | "completed";
+export type FeeVerificationQueueTab = "open" | "awaiting_finance" | "cancelled" | "completed";
 
 export function feeVerificationTabForStatus(status: string): FeeVerificationQueueTab {
   const s = status.trim().toLowerCase();
   if (s === "in_progress") return "awaiting_finance";
-  if (s === "cancelled") return "needs_correction";
+  if (s === "cancelled") return "cancelled";
   if (s === "resolved") return "completed";
   return "open";
 }
@@ -96,7 +95,7 @@ export function feeVerificationStatusesForTab(tab: FeeVerificationQueueTab): str
   switch (tab) {
     case "awaiting_finance":
       return ["in_progress"];
-    case "needs_correction":
+    case "cancelled":
       return ["cancelled"];
     case "completed":
       return ["resolved"];

@@ -56,6 +56,11 @@ import {
   returnFeeVerificationRequest,
 } from "@/services";
 
+export type IntakeRecordSearch = {
+  /** Scroll/highlight assign counsellor control when pending. */
+  focus?: "assign";
+};
+
 export const Route = createFileRoute("/staff/intake/$studentId")({
   beforeLoad: ({ context }) => {
     const auth = (context as { auth?: { businessRole?: string | null; role?: string } }).auth;
@@ -63,11 +68,16 @@ export const Route = createFileRoute("/staff/intake/$studentId")({
       throw redirect({ to: "/staff/students" });
     }
   },
+  validateSearch: (raw: Record<string, unknown>): IntakeRecordSearch => {
+    if (raw["focus"] === "assign") return { focus: "assign" };
+    return {};
+  },
   component: FrontDeskIntakeRecordPage,
 });
 
 function FrontDeskIntakeRecordPage() {
   const { studentId } = Route.useParams();
+  const search = Route.useSearch();
   const queryClient = useQueryClient();
   const [returnForId, setReturnForId] = useState<string | null>(null);
   const [returnReason, setReturnReason] = useState("");
@@ -94,6 +104,15 @@ function FrontDeskIntakeRecordPage() {
     queryFn: listCounsellorDesks,
     staleTime: 60_000,
   });
+
+  useEffect(() => {
+    if (search.focus !== "assign") return;
+    if (recordQ.data?.student?.assignmentStatus !== "pending") return;
+    const el = document.getElementById("fd-record-assign");
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => el.focus(), 200);
+  }, [search.focus, recordQ.data?.student?.assignmentStatus, studentId]);
 
   const invalidate = async () => {
     await queryClient.invalidateQueries({ queryKey: ["front-desk"] });
@@ -317,8 +336,9 @@ function FrontDeskIntakeRecordPage() {
     (feeStatus === "unpaid" || feeStatus === "claimed" || feeStatus === "rejected" || !feeStatus);
 
   return (
-    <div className="space-y-5 md:space-y-6">
+    <div className="space-y-4 md:space-y-5">
       <PageHeader
+        compact
         title={student.fullName}
         subtitle={`${student.caseId} · Front Desk registration record`}
         actions={
@@ -412,7 +432,9 @@ function FrontDeskIntakeRecordPage() {
               {student.assignmentStatus === "pending" ? (
                 <StatusBadge status="Pending" />
               ) : (
-                <span className="font-medium">{student.counsellorName || "Assigned"}</span>
+                <span className="font-medium">
+                  {student.counsellorName || "Counsellor assigned"}
+                </span>
               )}
             </div>
             <div>
@@ -428,7 +450,15 @@ function FrontDeskIntakeRecordPage() {
               </p>
             </div>
             {student.assignmentStatus === "pending" ? (
-              <div>
+              <div
+                id="fd-assign-panel"
+                className={cn(
+                  "rounded-md border p-3",
+                  search.focus === "assign"
+                    ? "border-royal/50 bg-accent/40 ring-2 ring-royal/30"
+                    : "border-border bg-muted/20",
+                )}
+              >
                 <label htmlFor="fd-record-assign" className="text-xs font-medium text-navy">
                   Assign counsellor
                 </label>

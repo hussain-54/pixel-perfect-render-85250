@@ -3,7 +3,9 @@
  */
 import type { PortalNavItem } from "@/components/portal/PortalShell";
 import {
+  canViewModuleInMatrix,
   cloneDefaultPermissionMatrix,
+  type BusinessModule,
   type BusinessRole,
   type PermissionMatrix,
 } from "@/lib/business-permissions";
@@ -48,6 +50,32 @@ const consultantNav: PortalNavItem[] = [
   { to: "/staff/activity", label: "Activity", icon: Activity },
 ];
 
+/** Matrix module required to show a CRM nav item (null = always for CRM desks). */
+const CRM_NAV_MODULE: Partial<Record<PortalNavItem["to"], BusinessModule | null>> = {
+  "/staff/dashboard": null,
+  "/staff/students": "students",
+  "/staff/appointments": "counselling",
+  "/staff/applications": "admissions",
+  "/staff/documents": "documents",
+  "/staff/offers": "admissions",
+  "/staff/tasks": "counselling",
+  "/staff/leads": "digital_marketing",
+  "/staff/reports": "reports",
+  "/staff/activity": "students",
+};
+
+function filterCrmNavByMatrix(
+  items: PortalNavItem[],
+  businessRole: BusinessRole | null | undefined,
+  matrix: PermissionMatrix,
+): PortalNavItem[] {
+  return items.filter((item) => {
+    const mod = CRM_NAV_MODULE[item.to];
+    if (mod === undefined || mod === null) return true;
+    return canViewModuleInMatrix(matrix, businessRole, mod);
+  });
+}
+
 const frontDeskNav: PortalNavItem[] = [
   { to: "/staff/front-desk", label: "Dashboard", icon: LayoutDashboard },
   { to: "/staff/register", label: "Register Student", icon: UserRoundPlus },
@@ -67,11 +95,12 @@ function specialtyItemsFromMatrix(
   businessRole: BusinessRole | null | undefined,
   matrix: PermissionMatrix,
 ): PortalNavItem[] {
-  return specialtyNavFromEffectiveMatrix(businessRole, matrix).map((item) => ({
+  // Only the first specialty item carries the section label — avoids repeating "Modules".
+  return specialtyNavFromEffectiveMatrix(businessRole, matrix).map((item, index) => ({
     to: item.to,
     label: item.label,
     icon: SPECIALTY_ICONS[item.to],
-    section: "Modules",
+    ...(index === 0 ? { section: "Modules" as const } : {}),
   }));
 }
 
@@ -95,7 +124,7 @@ export function buildStaffNav(
   }
 
   if (shouldIncludeCounsellorCrmNav(businessRole)) {
-    const crm = [...consultantNav];
+    const crm = filterCrmNavByMatrix(consultantNav, businessRole, matrix);
     const crmTos = new Set(crm.map((i) => i.to));
     for (const item of specialtyItems) {
       if (!crmTos.has(item.to)) crm.push(item);

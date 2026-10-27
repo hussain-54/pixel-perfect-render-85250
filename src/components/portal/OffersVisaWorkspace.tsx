@@ -6,6 +6,7 @@ import {
   ErrorState,
   LoadingRows,
   PageHeader,
+  PageLoadState,
   Panel,
   PermissionDenied,
   TableWrap,
@@ -188,27 +189,56 @@ export function OffersVisaWorkspace() {
     onError: (err) => setActionError(portalErrorMessage(err, "Export failed.")),
   });
 
-  if (listQ.isLoading) return <LoadingRows rows={8} />;
+  if (listQ.isLoading) {
+    return (
+      <PageLoadState
+        title="Offers & visa"
+        subtitle="Offer conversions, CAS / I-20, and visa outcomes."
+      >
+        <LoadingRows rows={8} />
+      </PageLoadState>
+    );
+  }
   if (listQ.isError) {
     const msg = portalErrorMessage(listQ.error);
     if (String(listQ.error).includes("403") || msg.toLowerCase().includes("permission")) {
-      return <PermissionDenied body={msg} />;
+      return (
+        <PageLoadState title="Offers & visa">
+          <PermissionDenied body={msg} />
+        </PageLoadState>
+      );
     }
-    return <ErrorState body={msg} />;
+    return (
+      <PageLoadState title="Offers & visa">
+        <ErrorState body={msg} />
+      </PageLoadState>
+    );
   }
 
   const data = listQ.data;
-  if (!data) return <EmptyState title="No offers pipeline" />;
+  if (!data) {
+    return (
+      <PageLoadState title="Offers & visa">
+        <EmptyState title="No offers pipeline" />
+      </PageLoadState>
+    );
+  }
   const detail = detailQ.data;
 
   return (
-    <div>
+    <div className="space-y-4 md:space-y-5">
       <PageHeader
-        title="Offers, CAS & Visa Management"
+        compact
+        title="Offers & visa"
         subtitle="Track offer conversions, fee deposits, CAS / I-20 releases, and visa outcomes."
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button size="sm" variant="outline" disabled={exportM.isPending} onClick={() => exportM.mutate()}>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={exportM.isPending}
+              onClick={() => exportM.mutate()}
+            >
               Export Summary
             </Button>
             <Button size="sm" variant="navy" onClick={() => setCreateOpen(true)}>
@@ -297,7 +327,10 @@ export function OffersVisaWorkspace() {
         <div>
           {phase === "offers" ? (
             !data.offers.length ? (
-              <EmptyState title="No offers in this view" body="Try another metric tab or add an offer record." />
+              <EmptyState
+                title="No offers in this view"
+                body="Try another metric tab or add an offer record."
+              />
             ) : (
               <TableWrap>
                 <thead>
@@ -314,7 +347,11 @@ export function OffersVisaWorkspace() {
                   {data.offers.map((row) => (
                     <tr key={row.id} className={cn(selectedOfferId === row.id && "bg-accent/60")}>
                       <td>
-                        <button type="button" className="text-left" onClick={() => setSelectedOfferId(row.id)}>
+                        <button
+                          type="button"
+                          className="text-left"
+                          onClick={() => setSelectedOfferId(row.id)}
+                        >
                           <p className="font-medium text-navy">{row.studentName}</p>
                           <p className="text-xs text-muted-foreground">{row.studentCaseId}</p>
                         </button>
@@ -334,7 +371,9 @@ export function OffersVisaWorkspace() {
                       </td>
                       <td>
                         <StatusBadge status={row.currentStatusLabel.split(" · ")[0]!} />
-                        <p className="mt-1 text-xs text-muted-foreground">{row.currentStatusLabel}</p>
+                        <p className="mt-1 text-xs text-muted-foreground">
+                          {row.currentStatusLabel}
+                        </p>
                       </td>
                     </tr>
                   ))}
@@ -529,7 +568,9 @@ export function OffersVisaWorkspace() {
 
         <Panel title={detail ? `${detail.offer.studentName} · Offer` : "Offer inspection"}>
           {!selectedOfferId ? (
-            <p className="text-sm text-muted-foreground">Select an offer to inspect conditions and actions.</p>
+            <p className="text-sm text-muted-foreground">
+              Select an offer to inspect conditions and actions.
+            </p>
           ) : detailQ.isLoading ? (
             <LoadingRows rows={4} />
           ) : detailQ.isError ? (
@@ -544,7 +585,9 @@ export function OffersVisaWorkspace() {
                 <Meta label="Current status" value={detail.offer.currentStatusLabel} />
                 <Meta
                   label="Accept deadline"
-                  value={detail.offer.responseDeadline ? fmtDate(detail.offer.responseDeadline) : "—"}
+                  value={
+                    detail.offer.responseDeadline ? fmtDate(detail.offer.responseDeadline) : "—"
+                  }
                   warn={detail.offer.deadlineAlert}
                 />
                 <Meta label="Conditions" value={detail.offer.conditionsLabel} />
@@ -573,7 +616,9 @@ export function OffersVisaWorkspace() {
                         <div>
                           <p className="text-sm text-navy">{c.description}</p>
                           <p className="text-xs text-muted-foreground">
-                            {c.met ? `Met ${c.metAt ? fmtDate(c.metAt.slice(0, 10)) : ""}` : "Not met"}
+                            {c.met
+                              ? `Met ${c.metAt ? fmtDate(c.metAt.slice(0, 10)) : ""}`
+                              : "Not met"}
                           </p>
                         </div>
                         <Button
@@ -679,7 +724,10 @@ export function OffersVisaWorkspace() {
                 ) : (
                   <ol className="space-y-2">
                     {detail.history.map((h) => (
-                      <li key={h.id} className="border-t border-border/70 pt-2 first:border-0 first:pt-0">
+                      <li
+                        key={h.id}
+                        className="border-t border-border/70 pt-2 first:border-0 first:pt-0"
+                      >
                         <p className="text-sm font-medium text-navy">{h.action}</p>
                         <p className="text-xs text-muted-foreground">
                           {h.actorName} · {fmtDate(h.at.slice(0, 10))}
@@ -701,7 +749,8 @@ export function OffersVisaWorkspace() {
             <DialogTitle>Add offer record</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Links to an existing application in Offer Received. Does not invent university decisions.
+            Links to an existing application in Offer Received. Does not invent university
+            decisions.
           </p>
           <label className="mt-2 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Application

@@ -3,8 +3,8 @@ import { useQueryClient } from "@tanstack/react-query";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import { FEE_QUEUE_KEY } from "@/lib/use-fee-verification-queue-realtime";
 
-export const FINANCE_SIGNUP_QUEUE_KEY = ["admin", "signup-fee-queue"] as const;
-export const FINANCE_UNIVERSITY_QUEUE_KEY = ["admin", "university-fee-queue"] as const;
+export const FINANCE_SIGNUP_QUEUE_KEY = ["finance", "signup-fee-queue"] as const;
+export const FINANCE_UNIVERSITY_QUEUE_KEY = ["finance", "university-fee-queue"] as const;
 export const FINANCE_NOTIFICATIONS_KEY = ["notifications", "staff"] as const;
 
 export type FinanceLiveStatus = "connecting" | "live" | "reconnecting" | "offline";

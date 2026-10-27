@@ -349,6 +349,7 @@ async function buildAdmissionOfficerDashboardFromDb(input: {
       appsInProgress: admissionMetrics.inProgress,
       docsToReview: docs.filter((d) => d.status === "Pending Review").length,
       deadlinesThisWeek: admissionMetrics.upcomingDeadlines,
+      awaitingInitialAssessment: 0,
       counsellingCompleted: 0,
       followUpsDue: tasks.filter((t) => isTaskDueOnOrBeforeToday(t.due_at ?? t.created_at, today))
         .length,
@@ -417,6 +418,7 @@ async function buildAdmissionOfficerDashboardFromDb(input: {
       title: a.title,
       detail: a.detail,
       at: a.at,
+      applicationId: a.applicationId,
       priority: a.priority,
       urgencyGroup:
         a.priority <= 1
@@ -452,6 +454,7 @@ async function buildAdmissionOfficerDashboardFromDb(input: {
         stage: (st?.stage ?? "university_shortlisting") as Student["stage"],
         stageLabel: a.stage,
         caseId: a.studentCaseId,
+        applicationId: a.id,
         ...(st?.lastActivity ? { lastActivity: st.lastActivity } : {}),
         nextActionLabel: next.label,
       };
@@ -654,6 +657,7 @@ export async function buildOfficerDashboardFromDb(
       appsInProgress: workbenchMetrics.applicationsInProgress,
       docsToReview: workbenchMetrics.docsToReview,
       deadlinesThisWeek: workbenchMetrics.deadlinesThisWeek,
+      awaitingInitialAssessment: workbenchMetrics.awaitingInitialAssessment,
       counsellingCompleted: workbenchMetrics.counsellingCompleted,
       followUpsDue: workbenchMetrics.followUpsDue,
       awaitingResponse: workbenchMetrics.awaitingResponse,

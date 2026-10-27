@@ -6,6 +6,7 @@ import {
   ErrorState,
   LoadingRows,
   PageHeader,
+  PageLoadState,
   Panel,
   PermissionDenied,
   TableWrap,
@@ -135,25 +136,46 @@ export function DocumentsQueue() {
     onError: (err) => setRequestMessage(portalErrorMessage(err, "Request failed.")),
   });
 
-  if (queueQ.isLoading) return <LoadingRows rows={8} />;
+  if (queueQ.isLoading) {
+    return (
+      <PageLoadState title="Documents" subtitle="Review submitted student compliance documents.">
+        <LoadingRows rows={8} />
+      </PageLoadState>
+    );
+  }
   if (queueQ.isError) {
     const msg = portalErrorMessage(queueQ.error);
     if (String(queueQ.error).includes("403") || msg.toLowerCase().includes("permission")) {
-      return <PermissionDenied body={msg} />;
+      return (
+        <PageLoadState title="Documents">
+          <PermissionDenied body={msg} />
+        </PageLoadState>
+      );
     }
-    return <ErrorState body={msg} />;
+    return (
+      <PageLoadState title="Documents">
+        <ErrorState body={msg} />
+      </PageLoadState>
+    );
   }
 
   const data = queueQ.data;
-  if (!data) return <EmptyState title="No document queue" />;
+  if (!data) {
+    return (
+      <PageLoadState title="Documents">
+        <EmptyState title="No document queue" />
+      </PageLoadState>
+    );
+  }
 
   const doc = inspectionQ.data?.document;
   const noteReady = note.trim().length >= 3;
 
   return (
-    <div>
+    <div className="space-y-4 md:space-y-5">
       <PageHeader
-        title="Document Verification Queue"
+        compact
+        title="Documents"
         subtitle="Review, verify, and validate submitted student compliance documents."
         actions={
           <Button size="sm" variant="navy" onClick={() => setChecklistOpen(true)}>
@@ -255,7 +277,9 @@ export function DocumentsQueue() {
           ) : inspectionQ.isLoading ? (
             <LoadingRows rows={4} />
           ) : inspectionQ.isError ? (
-            <ErrorState body={portalErrorMessage(inspectionQ.error, "Could not load this document.")} />
+            <ErrorState
+              body={portalErrorMessage(inspectionQ.error, "Could not load this document.")}
+            />
           ) : doc ? (
             <div className="space-y-4">
               <DocumentSecurePreview
@@ -306,7 +330,12 @@ export function DocumentsQueue() {
                 <Button
                   size="sm"
                   variant="navy"
-                  disabled={reviewM.isPending || doc.awaitingUpload || !doc.hasPrivateFile || doc.status === "Approved"}
+                  disabled={
+                    reviewM.isPending ||
+                    doc.awaitingUpload ||
+                    !doc.hasPrivateFile ||
+                    doc.status === "Approved"
+                  }
                   onClick={() => reviewM.mutate({ id: doc.id, action: "approve" })}
                 >
                   Approve
@@ -368,7 +397,12 @@ export function DocumentsQueue() {
                     className="min-h-24"
                   />
                   <div className="flex gap-2">
-                    <Button size="sm" variant="navy" type="submit" disabled={reviewM.isPending || !noteReady}>
+                    <Button
+                      size="sm"
+                      variant="navy"
+                      type="submit"
+                      disabled={reviewM.isPending || !noteReady}
+                    >
                       {noteMode === "reject" ? "Confirm rejection" : "Send request"}
                     </Button>
                     <Button
@@ -426,7 +460,8 @@ export function DocumentsQueue() {
             <DialogTitle>Checklist templates</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            Required documents follow the student&apos;s destination. Request anything still missing.
+            Required documents follow the student&apos;s destination. Request anything still
+            missing.
           </p>
           <label className="mt-3 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
             Student
@@ -452,12 +487,14 @@ export function DocumentsQueue() {
 
           <div className="mt-4">
             {!checklistStudentId ? (
-              <p className="text-sm text-muted-foreground">Choose a student to load their checklist.</p>
+              <p className="text-sm text-muted-foreground">
+                Choose a student to load their checklist.
+              </p>
             ) : checklistQ.isLoading ? (
               <LoadingRows rows={4} />
             ) : checklistQ.isError ? (
               <ErrorState body={portalErrorMessage(checklistQ.error)} />
-            ) : !(checklistQ.data?.items.length) ? (
+            ) : !checklistQ.data?.items.length ? (
               <p className="text-sm text-muted-foreground">
                 No checklist is configured for {checklistQ.data?.destination ?? "this destination"}.
                 Country-specific templates apply only where configured.
@@ -494,7 +531,9 @@ export function DocumentsQueue() {
                         Request
                       </Button>
                     ) : (
-                      <StatusBadge status={item.awaitingUpload ? "Requested" : (item.status ?? "Approved")} />
+                      <StatusBadge
+                        status={item.awaitingUpload ? "Requested" : (item.status ?? "Approved")}
+                      />
                     )}
                   </li>
                 ))}

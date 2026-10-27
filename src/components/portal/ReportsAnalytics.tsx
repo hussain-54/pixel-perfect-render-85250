@@ -1,19 +1,12 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
   EmptyState,
   ErrorState,
   LoadingRows,
   PageHeader,
+  PageLoadState,
   Panel,
   PermissionDenied,
   TableWrap,
@@ -54,30 +47,53 @@ export function ReportsAnalytics() {
   });
 
   const exportM = useMutation({
-    mutationFn: (format: ReportExportFormat) =>
-      exportOfficerReports({ ...filters, format }),
+    mutationFn: (format: ReportExportFormat) => exportOfficerReports({ ...filters, format }),
     onSuccess: (payload) => {
       downloadBase64File(payload.filename, payload.mimeType, payload.contentBase64);
     },
   });
 
-  if (reportQ.isLoading) return <LoadingRows rows={10} />;
+  if (reportQ.isLoading) {
+    return (
+      <PageLoadState
+        title="Reports"
+        subtitle="Application processing and conversion for assigned caseloads."
+      >
+        <LoadingRows rows={10} />
+      </PageLoadState>
+    );
+  }
   if (reportQ.isError) {
     const msg = portalErrorMessage(reportQ.error);
     if (msg.toLowerCase().includes("permission") || String(reportQ.error).includes("403")) {
-      return <PermissionDenied body={msg} />;
+      return (
+        <PageLoadState title="Reports">
+          <PermissionDenied body={msg} />
+        </PageLoadState>
+      );
     }
-    return <ErrorState body={msg} />;
+    return (
+      <PageLoadState title="Reports">
+        <ErrorState body={msg} />
+      </PageLoadState>
+    );
   }
 
   const data = reportQ.data;
-  if (!data) return <EmptyState title="No report data" />;
+  if (!data) {
+    return (
+      <PageLoadState title="Reports">
+        <EmptyState title="No report data" />
+      </PageLoadState>
+    );
+  }
 
   return (
-    <div>
+    <div className="space-y-4 md:space-y-5">
       <PageHeader
-        title="Performance & Conversion Analytics"
-        subtitle="Evaluate application processing efficiency and conversion metrics for assigned caseloads."
+        compact
+        title="Reports"
+        subtitle="Application processing efficiency and conversion for assigned caseloads."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button

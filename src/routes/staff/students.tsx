@@ -3,6 +3,7 @@ import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-r
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   PageHeader,
+  PageLoadState,
   TableWrap,
   LoadingRows,
   EmptyState,
@@ -25,9 +26,11 @@ import {
 import { getStudentsDirectory, intakeRegisterStudent } from "@/services";
 import type { StudentDirectoryFilters } from "@/types/portal-officer";
 import type { InquiryChannelDb } from "@/types/database";
+import { enforceSpecialtyStaffModuleBeforeLoad } from "@/lib/staff-specialty-before-load";
 import { useCounsellorWorkbenchRealtime } from "@/lib/use-counsellor-workbench-realtime";
 
 export const Route = createFileRoute("/staff/students")({
+  beforeLoad: ({ context }) => enforceSpecialtyStaffModuleBeforeLoad(context, "students"),
   component: StaffStudents,
 });
 
@@ -212,17 +215,50 @@ function StudentsDirectory() {
     [filters.archived],
   );
 
+  function clearDirectoryFilters() {
+    setSearchInput("");
+    setFilters({
+      page: 1,
+      pageSize: 20,
+      archived: false,
+      q: "",
+      country: "",
+      intake: "",
+      stage: "",
+      consultantId: "",
+      dateFrom: "",
+      dateTo: "",
+    });
+  }
+
+  if (dirQ.isLoading && !dirQ.data) {
+    return (
+      <PageLoadState title="My Students" subtitle={subtitle}>
+        <LoadingRows rows={8} />
+      </PageLoadState>
+    );
+  }
+
   if (dirQ.isError) {
     const msg = portalErrorMessage(dirQ.error);
     if (String(dirQ.error).includes("403") || msg.toLowerCase().includes("permission")) {
-      return <PermissionDenied body={msg} />;
+      return (
+        <PageLoadState title="My Students" subtitle={subtitle}>
+          <PermissionDenied body={msg} />
+        </PageLoadState>
+      );
     }
-    return <ErrorState body={msg} onRetry={() => void dirQ.refetch()} />;
+    return (
+      <PageLoadState title="My Students" subtitle={subtitle}>
+        <ErrorState body={msg} onRetry={() => void dirQ.refetch()} />
+      </PageLoadState>
+    );
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4 md:space-y-5">
       <PageHeader
+        compact
         title="My Students"
         subtitle={subtitle}
         actions={
@@ -301,11 +337,16 @@ function StudentsDirectory() {
       ) : !dirQ.data?.rows.length ? (
         <EmptyState
           title={filters.archived ? "No archived students" : "No students found"}
-          body="Adjust filters, or wait for Front Desk to assign students to your desk."
+          body="Clear filters, or wait for Front Desk to assign students to your desk."
           action={
-            <Button size="sm" variant="outline" onClick={() => void dirQ.refetch()}>
-              Retry
-            </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" variant="outline" onClick={clearDirectoryFilters}>
+                Clear filters
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => void dirQ.refetch()}>
+                Retry
+              </Button>
+            </div>
           }
         />
       ) : (

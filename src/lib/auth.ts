@@ -523,7 +523,8 @@ export async function signUpStudent(options: {
       return {
         ok: true,
         role: established.role,
-        redirectTo: portalHomeByRole[established.role],
+        redirectTo: landingForSession(established.role, established.businessRole),
+        businessRole: established.businessRole ?? null,
       };
     }
 

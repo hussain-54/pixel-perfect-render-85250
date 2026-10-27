@@ -5,6 +5,7 @@ import {
   ErrorState,
   LoadingRows,
   PageHeader,
+  PageLoadState,
   PermissionDenied,
   portalErrorMessage,
 } from "@/components/common";
@@ -71,23 +72,47 @@ export function ActivityAuditLog() {
 
   const resetPaging = () => setLimit(PAGE);
 
-  if (listQ.isLoading && limit === PAGE) return <LoadingRows rows={8} />;
+  if (listQ.isLoading && limit === PAGE) {
+    return (
+      <PageLoadState
+        title="Activity"
+        subtitle="Append-only timeline across assigned student files."
+      >
+        <LoadingRows rows={8} />
+      </PageLoadState>
+    );
+  }
   if (listQ.isError) {
     const msg = portalErrorMessage(listQ.error);
     if (msg.toLowerCase().includes("permission") || String(listQ.error).includes("403")) {
-      return <PermissionDenied body={msg} />;
+      return (
+        <PageLoadState title="Activity">
+          <PermissionDenied body={msg} />
+        </PageLoadState>
+      );
     }
-    return <ErrorState body={msg} />;
+    return (
+      <PageLoadState title="Activity">
+        <ErrorState body={msg} />
+      </PageLoadState>
+    );
   }
 
   const data = listQ.data;
-  if (!data) return <EmptyState title="No activity" />;
+  if (!data) {
+    return (
+      <PageLoadState title="Activity">
+        <EmptyState title="No activity" />
+      </PageLoadState>
+    );
+  }
 
   return (
-    <div>
+    <div className="space-y-4 md:space-y-5">
       <PageHeader
-        title="System Audit Log & Activity History"
-        subtitle="Complete, unalterable timeline of actions across assigned student files. Records are append-only."
+        compact
+        title="Activity"
+        subtitle="Append-only timeline of actions across assigned student files."
         actions={
           <Button
             size="sm"
@@ -216,10 +241,7 @@ export function ActivityAuditLog() {
               </h2>
               <ul className="space-y-3">
                 {group.items.map((item) => (
-                  <li
-                    key={item.id}
-                    className={cn("rounded-md border p-4", toneClass[item.tone])}
-                  >
+                  <li key={item.id} className={cn("rounded-md border p-4", toneClass[item.tone])}>
                     <div className="flex flex-wrap items-start justify-between gap-2">
                       <p className="text-sm font-semibold text-navy">{item.action}</p>
                       <time className="text-xs font-medium text-muted-foreground">

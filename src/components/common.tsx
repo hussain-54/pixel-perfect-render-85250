@@ -7,22 +7,42 @@ export function PageHeader({
   title,
   subtitle,
   actions,
+  compact = false,
 }: {
   title: string;
   subtitle?: string;
   actions?: ReactNode;
+  /** Denser operational workspaces (staff desks). */
+  compact?: boolean;
 }) {
   return (
-    <div className="mb-5 flex flex-col gap-3 sm:mb-6 sm:flex-row sm:items-end sm:justify-between">
+    <div
+      className={cn(
+        "flex flex-col gap-2.5 sm:flex-row sm:items-end sm:justify-between",
+        compact ? "mb-4" : "mb-5 sm:mb-6",
+      )}
+    >
       <div className="min-w-0">
-        <h1 className="font-display text-xl font-semibold text-navy sm:text-2xl md:text-[1.75rem]">
+        <h1
+          className={cn(
+            "font-display font-semibold text-navy",
+            compact ? "text-lg sm:text-xl" : "text-xl sm:text-2xl md:text-[1.75rem]",
+          )}
+        >
           {title}
         </h1>
-        {subtitle && (
-          <p className="mt-1 max-w-3xl text-sm leading-relaxed text-muted-foreground">{subtitle}</p>
-        )}
+        {subtitle ? (
+          <p
+            className={cn(
+              "mt-0.5 max-w-3xl leading-snug text-navy/70",
+              compact ? "text-xs sm:text-sm" : "text-sm leading-relaxed text-muted-foreground",
+            )}
+          >
+            {subtitle}
+          </p>
+        ) : null}
       </div>
-      {actions && <div className="flex flex-wrap gap-2">{actions}</div>}
+      {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
     </div>
   );
 }
@@ -51,6 +71,8 @@ export function StatCard({
   hint,
   icon,
   title,
+  onClick,
+  selected = false,
 }: {
   label: string;
   value: ReactNode;
@@ -58,20 +80,46 @@ export function StatCard({
   icon?: ReactNode;
   /** Optional long-form definition (native tooltip). Prefer short `hint` for on-card copy. */
   title?: string | undefined;
+  /** When set, card is a filter/control button (keyboard accessible). */
+  onClick?: () => void;
+  selected?: boolean;
 }) {
-  return (
-    <div
-      className="flex h-full min-h-[5.75rem] flex-col border-b border-border pb-3.5 pt-1"
-      title={title}
-    >
+  const body = (
+    <>
       <div className="flex items-start justify-between gap-2 text-navy/70">
         <span className="text-xs font-semibold leading-snug tracking-wide">{label}</span>
-        {icon && <span className="shrink-0 text-royal [&_svg]:size-4">{icon}</span>}
+        {icon ? <span className="shrink-0 text-royal [&_svg]:size-4">{icon}</span> : null}
       </div>
       <div className="mt-1.5 font-display text-xl font-semibold leading-none text-navy sm:text-[1.375rem]">
         {value}
       </div>
-      {hint ? <p className="mt-1.5 text-sm leading-snug text-navy/65">{hint}</p> : null}
+      {hint ? <p className="mt-1.5 text-xs leading-snug text-navy/65 sm:text-sm">{hint}</p> : null}
+    </>
+  );
+  const shellClass = cn(
+    "flex h-full min-h-[5.25rem] flex-col border-b border-border pb-3 pt-1 text-left",
+    onClick &&
+      "w-full rounded-md px-1 transition-colors hover:bg-navy/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal/40",
+    selected && "border-b-royal bg-navy/[0.04]",
+  );
+
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        className={shellClass}
+        title={title}
+        onClick={onClick}
+        aria-pressed={selected}
+      >
+        {body}
+      </button>
+    );
+  }
+
+  return (
+    <div className={shellClass} title={title}>
+      {body}
     </div>
   );
 }
@@ -81,22 +129,86 @@ export function Panel({
   action,
   children,
   className,
+  compact = false,
 }: {
   title?: string;
   action?: ReactNode;
   children: ReactNode;
   className?: string;
+  compact?: boolean;
 }) {
   return (
     <section className={cn("panel", className)}>
-      {title && (
-        <header className="flex items-center justify-between border-b border-border px-5 py-3.5">
+      {title ? (
+        <header
+          className={cn(
+            "flex items-center justify-between border-b border-border",
+            compact ? "px-4 py-2.5" : "px-5 py-3.5",
+          )}
+        >
           <h2 className="font-sans text-sm font-semibold tracking-normal text-navy">{title}</h2>
           {action}
         </header>
-      )}
-      <div className="p-5">{children}</div>
+      ) : null}
+      <div className={cn(compact ? "p-4" : "p-5")}>{children}</div>
     </section>
+  );
+}
+
+/** Connection state chip for Realtime-backed workspaces (reflects subscription health only). */
+export function LiveBadge({
+  status,
+  lastSync,
+}: {
+  status: "live" | "reconnecting" | "offline" | "connecting";
+  lastSync?: string | null;
+}) {
+  const label =
+    status === "live"
+      ? "Live"
+      : status === "connecting"
+        ? "Connecting"
+        : status === "reconnecting"
+          ? "Reconnecting"
+          : lastSync
+            ? `Last updated ${lastSync}`
+            : "Offline";
+  return (
+    <span
+      role="status"
+      aria-live="polite"
+      className={cn(
+        "inline-flex items-center gap-1.5 rounded border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide",
+        status === "live"
+          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+          : status === "offline"
+            ? "border-slate-200 bg-slate-100 text-slate-600"
+            : "border-amber-200 bg-amber-50 text-amber-800",
+      )}
+      title={
+        lastSync
+          ? `Data synced ${lastSync}. Badge reflects subscription health, not payload trust.`
+          : "Reflects Realtime subscription health"
+      }
+    >
+      <span
+        className={cn(
+          "h-1.5 w-1.5 rounded-full",
+          status === "live"
+            ? "bg-emerald-600"
+            : status === "offline"
+              ? "bg-slate-400"
+              : "bg-amber-500",
+        )}
+        aria-hidden
+      />
+      {label}
+      {lastSync && status === "live" ? (
+        <span className="font-normal normal-case tracking-normal text-emerald-700/80">
+          · {lastSync}
+        </span>
+      ) : null}
+    </span>
   );
 }
 

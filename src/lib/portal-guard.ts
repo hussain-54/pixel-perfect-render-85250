@@ -1,11 +1,7 @@
 import { redirect } from "@tanstack/react-router";
 import { getPortalSession, type PublicSession } from "@/server/portal-data";
-import {
-  portalHomeByRole,
-  roleCanAccessPortal,
-  type PortalHome,
-  type PortalKind,
-} from "@/lib/roles";
+import { roleCanAccessPortal, type PortalHome, type PortalKind } from "@/lib/roles";
+import { staffHomeForBusinessRole } from "@/lib/staff-business-access";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import {
   readPortalSessionCache,
@@ -33,10 +29,15 @@ async function bearerHeaders(): Promise<HeadersInit | undefined> {
   }
 }
 
+/** Unauthenticated sign-in `redirect` search default (role unknown yet). */
 function portalHomePath(portal: PortalKind): PortalHome {
   if (portal === "student") return "/student/dashboard";
   if (portal === "staff") return "/staff/dashboard";
   return "/admin/dashboard";
+}
+
+function homeForSession(session: PublicSession): PortalHome {
+  return staffHomeForBusinessRole(session.role, session.businessRole ?? null);
 }
 
 /**
@@ -117,7 +118,7 @@ export function requirePortalAccess(portal: PortalKind) {
     }
 
     if (!roleCanAccessPortal(session.role, portal)) {
-      throw redirect({ to: portalHomeByRole[session.role] });
+      throw redirect({ to: homeForSession(session) });
     }
 
     return { auth: session };

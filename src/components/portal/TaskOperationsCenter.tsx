@@ -6,6 +6,7 @@ import {
   ErrorState,
   LoadingRows,
   PageHeader,
+  PageLoadState,
   Panel,
   PermissionDenied,
   TableWrap,
@@ -23,12 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  getTaskOps,
-  runTaskAutomation,
-  updateTaskStatus,
-  upsertTask,
-} from "@/services";
+import { getTaskOps, runTaskAutomation, updateTaskStatus, upsertTask } from "@/services";
 import {
   TASK_FILTER_TABS,
   TASK_PRIORITY_LEVELS,
@@ -128,17 +124,37 @@ export function TaskOperationsCenter() {
     onError: (err) => setActionError(portalErrorMessage(err, "Automation run failed.")),
   });
 
-  if (listQ.isLoading) return <LoadingRows rows={8} />;
+  if (listQ.isLoading) {
+    return (
+      <PageLoadState title="Tasks" subtitle="Reminders, flags, and application deadlines.">
+        <LoadingRows rows={8} />
+      </PageLoadState>
+    );
+  }
   if (listQ.isError) {
     const msg = portalErrorMessage(listQ.error);
     if (String(listQ.error).includes("403") || msg.toLowerCase().includes("permission")) {
-      return <PermissionDenied body={msg} />;
+      return (
+        <PageLoadState title="Tasks">
+          <PermissionDenied body={msg} />
+        </PageLoadState>
+      );
     }
-    return <ErrorState body={msg} />;
+    return (
+      <PageLoadState title="Tasks">
+        <ErrorState body={msg} />
+      </PageLoadState>
+    );
   }
 
   const data = listQ.data;
-  if (!data) return <EmptyState title="No tasks" />;
+  if (!data) {
+    return (
+      <PageLoadState title="Tasks">
+        <EmptyState title="No tasks" />
+      </PageLoadState>
+    );
+  }
 
   const defaultAssignee = data.assignees[0]?.id ?? "";
   const markedDates = Object.keys(data.calendarMarks).map((key) => {
@@ -190,10 +206,11 @@ export function TaskOperationsCenter() {
   );
 
   return (
-    <div>
+    <div className="space-y-4 md:space-y-5">
       <PageHeader
-        title="Task Operations Center"
-        subtitle="Manage daily reminders, automated system flags, and critical application deadlines."
+        compact
+        title="Tasks"
+        subtitle="Reminders, automated flags, and application deadlines."
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -258,7 +275,9 @@ export function TaskOperationsCenter() {
           <li>Document rejections create a follow-up task (event-driven, idempotent).</li>
           <li>Application deadlines within 7 days generate alert tasks (server sweep).</li>
           <li>Offer acceptance deadlines within 7 days generate reminders (server sweep).</li>
-          <li>Passport / IELTS expiry dates within 90 days create alerts when recorded or on sweep.</li>
+          <li>
+            Passport / IELTS expiry dates within 90 days create alerts when recorded or on sweep.
+          </li>
         </ul>
         <p className="mt-2 text-xs text-muted-foreground">
           Scheduler: {data.automation.schedulerActive ? "active on server process" : "not running"}
@@ -282,9 +301,7 @@ export function TaskOperationsCenter() {
                   key={row.id}
                   className={cn(
                     "rounded-md border p-4",
-                    row.isOverdue
-                      ? "border-danger/50 bg-danger-soft/40"
-                      : "border-border bg-white",
+                    row.isOverdue ? "border-danger/50 bg-danger-soft/40" : "border-border bg-white",
                   )}
                 >
                   <div className="flex flex-wrap items-start justify-between gap-3">
@@ -321,9 +338,7 @@ export function TaskOperationsCenter() {
                         {row.relatedApplicationLabel
                           ? ` · Linked app: ${row.relatedApplicationLabel}`
                           : ""}
-                        {row.relatedDocumentLabel
-                          ? ` · Document: ${row.relatedDocumentLabel}`
-                          : ""}
+                        {row.relatedDocumentLabel ? ` · Document: ${row.relatedDocumentLabel}` : ""}
                       </p>
                       <p className="mt-1 text-xs text-muted-foreground">
                         {row.dueLabel} · Assignee {row.assigneeName} · {row.sourceLabel}
@@ -569,7 +584,9 @@ function WeekGroupedList({
             onClick={() => onPick(key)}
           >
             <span className="font-medium text-navy">{fmtDate(key)}</span>
-            <span className="text-xs text-muted-foreground">{count} task{count === 1 ? "" : "s"}</span>
+            <span className="text-xs text-muted-foreground">
+              {count} task{count === 1 ? "" : "s"}
+            </span>
           </button>
         </li>
       ))}

@@ -232,6 +232,7 @@ export const portalGetOfficerDashboard = createServerFn({ method: "GET" }).handl
         appsInProgress,
         docsToReview,
         deadlinesThisWeek,
+        awaitingInitialAssessment: 0,
         counsellingCompleted: 0,
         followUpsDue: todaysTasks.filter(
           (t) => t.priority === "overdue" || t.priority === "due_today",

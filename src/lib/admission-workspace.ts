@@ -290,9 +290,12 @@ export function resolveAdmissionNotificationHref(input: {
   if (path.startsWith("/staff/applications")) return path.split("?")[0] || "/staff/applications";
   if (path.startsWith("/staff/documents")) return "/staff/documents";
   if (path.startsWith("/staff/offers")) return "/staff/offers";
+  // Prefer the applications queue for Admission desks; student profile is secondary.
   const studentId = input.studentId?.trim();
-  if (studentId) return `/staff/students/${studentId}`;
-  if (path.startsWith("/staff/students")) return path.split("?")[0] || "/staff/students";
+  if (studentId) {
+    return `/staff/applications?studentId=${encodeURIComponent(studentId)}`;
+  }
+  if (path.startsWith("/staff/students")) return "/staff/applications";
   return "/staff/applications";
 }
 

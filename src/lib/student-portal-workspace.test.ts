@@ -34,6 +34,7 @@ describe("student-portal-workspace", () => {
       pendingTimelineCount: 0,
     });
     expect(actions[0]?.id).toBe("fee");
+    expect(actions[0]?.href).toBe("/student/notifications");
     expect(actions.some((a) => a.id === "docs")).toBe(true);
   });
 });

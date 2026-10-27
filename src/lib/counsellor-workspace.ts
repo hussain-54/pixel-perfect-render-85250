@@ -13,6 +13,8 @@ import type { ProfileTabId } from "@/types/student-profile";
 export const COUNSELLOR_METRIC_DEFINITIONS = {
   assignedStudents:
     "Non-archived students currently assigned to the logged-in counsellor desk (assigned_consultant_id).",
+  awaitingInitialAssessment:
+    "Assigned students with no saved counselling assessment (assessed_at null). Opening the profile does not count as complete.",
   counsellingCompleted:
     "Assigned students with at least one counselling_agreements row where consented = true. Not a full session history; registration alone does not count.",
   followUpsDue:
@@ -28,6 +30,7 @@ export const COUNSELLOR_METRIC_DEFINITIONS = {
 /** Short UI hints for StatCards — keep long definitions in tooltips only. */
 export const COUNSELLOR_METRIC_HINTS = {
   assignedStudents: "On your desk",
+  awaitingInitialAssessment: "No saved counselling assessment yet",
   counsellingCompleted: "Consent recorded",
   followUpsDue: "Due today or earlier",
   applicationsInProgress: "Active pipeline stages",
@@ -83,6 +86,7 @@ export type CounsellorAttentionItem = {
 
 export type CounsellorWorkbenchMetrics = {
   assignedStudents: number;
+  awaitingInitialAssessment: number;
   counsellingCompleted: number;
   followUpsDue: number;
   applicationsInProgress: number;
@@ -214,6 +218,7 @@ export function computeCounsellorWorkbenchMetrics(input: {
   deadlinesThisWeekCount: number;
 }): CounsellorWorkbenchMetrics {
   const assignedStudents = input.students.length;
+  const awaitingInitialAssessment = input.students.filter((s) => !s.hasAssessment).length;
   const counsellingCompleted = input.students.filter((s) => s.hasConsent).length;
 
   const awaitingIds = new Set<string>();
@@ -232,6 +237,7 @@ export function computeCounsellorWorkbenchMetrics(input: {
 
   return {
     assignedStudents,
+    awaitingInitialAssessment,
     counsellingCompleted,
     followUpsDue: input.followUpsDueCount,
     applicationsInProgress: input.applicationsInProgressCount,

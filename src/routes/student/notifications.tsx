@@ -3,6 +3,7 @@ import { createFileRoute, useRouter } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   PageHeader,
+  PageLoadState,
   EmptyState,
   ErrorState,
   LoadingRows,
@@ -56,9 +57,21 @@ function StudentNotifications() {
     void router.navigate({ to: href });
   }
 
+  if (notifQ.isLoading) {
+    return (
+      <PageLoadState
+        title="Notifications"
+        subtitle="Updates about fees, documents, and applications"
+      >
+        <LoadingRows rows={5} />
+      </PageLoadState>
+    );
+  }
+
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 md:space-y-5">
       <PageHeader
+        compact
         title="Notifications"
         subtitle={
           unread > 0
@@ -67,9 +80,7 @@ function StudentNotifications() {
         }
       />
       {err ? <ErrorState body={err} onRetry={() => setErr(null)} /> : null}
-      {notifQ.isLoading ? (
-        <LoadingRows />
-      ) : notifQ.isError ? (
+      {notifQ.isError ? (
         <ErrorState body={portalErrorMessage(notifQ.error)} onRetry={() => void notifQ.refetch()} />
       ) : !notifQ.data?.length ? (
         <EmptyState

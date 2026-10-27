@@ -159,23 +159,52 @@ export function deriveFrontDeskNextAction(input: {
   return { code: "none", label: "No Front Desk action required", priority: 99 };
 }
 
+export type FrontDeskDashboardMetrics = {
+  totalRegistrations: number;
+  awaitingCounsellor: number;
+  assignedToCounsellors: number;
+  /** Issued unpaid vouchers (not claimed yet). */
+  unpaidVouchers: number;
+  /** Payment proofs submitted — awaiting Finance (claimed only; not verified cash). */
+  proofsAwaitingFinance: number;
+  /** Combined unpaid + claimed for legacy callers. */
+  feeVerification: number;
+  verifiedFees: number;
+  rejectedFees: number;
+  /** Fee authorized (verified/waived) but portal not yet activated. */
+  portalLinkPending: number;
+  applicationsInProgress: number;
+  actionRequired: number;
+};
+
 export function computeFrontDeskDashboardMetrics(input: {
   intakeRows: IntakeLike[];
   feeRequests: FeeReqLike[];
-}): {
-  totalRegistrations: number;
-  awaitingCounsellor: number;
-  feeVerification: number;
-  applicationsInProgress: number;
-  actionRequired: number;
-} {
+}): FrontDeskDashboardMetrics {
   const totalRegistrations = input.intakeRows.length;
   const awaitingCounsellor = input.intakeRows.filter(
     (r) => r.assignmentStatus === "pending",
   ).length;
-  const feeVerification = input.intakeRows.filter((r) => {
-    const s = (r.signupFeeStatus ?? "").toLowerCase();
-    return s === "unpaid" || s === "claimed";
+  const assignedToCounsellors = input.intakeRows.filter(
+    (r) => r.assignmentStatus === "assigned",
+  ).length;
+  const unpaidVouchers = input.intakeRows.filter(
+    (r) => (r.signupFeeStatus ?? "").toLowerCase() === "unpaid",
+  ).length;
+  const proofsAwaitingFinance = input.intakeRows.filter(
+    (r) => (r.signupFeeStatus ?? "").toLowerCase() === "claimed",
+  ).length;
+  const feeVerification = unpaidVouchers + proofsAwaitingFinance;
+  const verifiedFees = input.intakeRows.filter(
+    (r) => (r.signupFeeStatus ?? "").toLowerCase() === "verified",
+  ).length;
+  const rejectedFees = input.intakeRows.filter(
+    (r) => (r.signupFeeStatus ?? "").toLowerCase() === "rejected",
+  ).length;
+  const portalLinkPending = input.intakeRows.filter((r) => {
+    const fee = (r.signupFeeStatus ?? "").toLowerCase();
+    if (fee !== "verified" && fee !== "waived") return false;
+    return !r.portalActivatedAt;
   }).length;
   const applicationsInProgress = input.intakeRows.filter((r) =>
     isJourneyApplicationInProgress(r.journeyStage),
@@ -198,18 +227,46 @@ export function computeFrontDeskDashboardMetrics(input: {
       openOrStuckFeeIds.add(req.studentId);
     }
   }
+  const rejectedIds = input.intakeRows
+    .filter((r) => (r.signupFeeStatus ?? "").toLowerCase() === "rejected")
+    .map((r) => r.id);
   const unassignedIds = new Set(
     input.intakeRows.filter((r) => r.assignmentStatus === "pending").map((r) => r.id),
   );
-  const actionRequired = new Set([...openOrStuckFeeIds, ...unassignedIds]).size;
+  const actionRequired = new Set([...openOrStuckFeeIds, ...unassignedIds, ...rejectedIds]).size;
 
   return {
     totalRegistrations,
     awaitingCounsellor,
+    assignedToCounsellors,
+    unpaidVouchers,
+    proofsAwaitingFinance,
     feeVerification,
+    verifiedFees,
+    rejectedFees,
+    portalLinkPending,
     applicationsInProgress,
     actionRequired,
   };
+}
+
+/** Primary CTA label for a Front Desk next-action code. */
+export function frontDeskNextActionCta(
+  code: string,
+): "Assign counsellor" | "Open record" | "Sync fee" | "Send to Finance" | "View" {
+  switch (code) {
+    case "assign_counsellor":
+      return "Assign counsellor";
+    case "sync_fee_request":
+      return "Sync fee";
+    case "forward_fee_request":
+      return "Send to Finance";
+    case "await_finance":
+    case "return_or_correct":
+      return "Open record";
+    default:
+      return "View";
+  }
 }
 
 export function buildFrontDeskAttentionItems(input: {
@@ -318,7 +375,7 @@ export function buildFrontDeskRecordTimeline(input: {
       id: "counsellor-assigned",
       kind: "counsellor",
       title: "Counsellor assigned",
-      detail: s.counsellorName || "Assigned",
+      detail: s.counsellorName || "Counsellor assigned",
       at: s.updatedAt,
     });
   }

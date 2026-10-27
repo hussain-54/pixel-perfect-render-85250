@@ -17,7 +17,11 @@ import {
 } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { useData } from "@/lib/useData";
-import { studentFacingFeeLabel, studentProfileCompletion } from "@/lib/student-portal-account";
+import {
+  studentFacingFeeHint,
+  studentFacingFeeLabel,
+  studentProfileCompletion,
+} from "@/lib/student-portal-account";
 import {
   buildStudentNextActions,
   isStudentActionableDocStatus,
@@ -127,10 +131,11 @@ function StudentDashboard() {
   });
 
   return (
-    <div className="space-y-5 md:space-y-6">
+    <div className="space-y-4 md:space-y-5">
       <PageHeader
-        title={`Welcome, ${student.name.split(" ")[0]}`}
-        subtitle={`${student.caseId} · ${student.destination || "Destination not set"} · ${student.program || "Programme not set"}`}
+        compact
+        title={`Hello, ${student.name.split(" ")[0]}`}
+        subtitle={`${student.caseId}${student.destination ? ` · ${student.destination}` : ""}${student.program ? ` · ${student.program}` : ""}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <Button asChild size="sm" variant="outline">
@@ -145,7 +150,7 @@ function StudentDashboard() {
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
           label="Profile"
           value={`${profile.percent}%`}
@@ -154,11 +159,10 @@ function StudentDashboard() {
         <StatCard
           label="Signup fee"
           value={feeQ.isLoading ? "…" : feeQ.isError ? "Unavailable" : feeLabel}
-          hint={
-            feeQ.data?.fee?.portalActivatedAt
-              ? "Portal access is active"
-              : "Unlocks after Accounts verification"
-          }
+          hint={studentFacingFeeHint(
+            feeQ.data?.fee?.status,
+            Boolean(feeQ.data?.fee?.portalActivatedAt),
+          )}
         />
         <StatCard
           label="Counsellor"
@@ -173,7 +177,11 @@ function StudentDashboard() {
         />
       </div>
 
+      {/* Banner owns urgent doc correction list — omit duplicate “docs” row from next actions. */}
+      <ActionRequiredBanner docs={docs} uploadLink="/student/documents" />
+
       <Panel
+        compact
         title="What you need to do next"
         action={
           <Link
@@ -184,34 +192,41 @@ function StudentDashboard() {
           </Link>
         }
       >
-        {nextActions.length === 0 ? (
-          <EmptyState
-            title="You're up to date"
-            body="When staff request documents or updates, they will appear here."
-          />
-        ) : (
-          <ul className="divide-y divide-border">
-            {nextActions.map((item) => (
-              <li
-                key={item.id}
-                className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-navy">{item.title}</p>
-                  <p className="text-xs text-muted-foreground">{item.detail}</p>
-                </div>
-                <Button
-                  asChild
-                  size="sm"
-                  variant="navy"
-                  className="shrink-0 self-start sm:self-center"
+        {(() => {
+          const hasDocBanner = filterActionRequired(docs).length > 0;
+          const items = hasDocBanner ? nextActions.filter((a) => a.id !== "docs") : nextActions;
+          if (items.length === 0) {
+            return (
+              <EmptyState
+                title="You're up to date"
+                body="When staff request documents or updates, they will appear here."
+              />
+            );
+          }
+          return (
+            <ul className="divide-y divide-border">
+              {items.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <Link to={item.href}>Open</Link>
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-navy">{item.title}</p>
+                    <p className="text-xs text-muted-foreground">{item.detail}</p>
+                  </div>
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="navy"
+                    className="shrink-0 self-start sm:self-center"
+                  >
+                    <Link to={item.href}>Open</Link>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          );
+        })()}
       </Panel>
 
       <div>
@@ -222,10 +237,9 @@ function StudentDashboard() {
         />
       </div>
 
-      <ActionRequiredBanner docs={docs} uploadLink="/student/documents" />
-
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div className="grid gap-4 lg:grid-cols-2">
         <Panel
+          compact
           title="Application snapshot"
           action={
             <Link
@@ -278,6 +292,7 @@ function StudentDashboard() {
         </Panel>
 
         <Panel
+          compact
           title="Next appointment"
           action={
             <Link

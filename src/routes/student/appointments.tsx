@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   PageHeader,
+  PageLoadState,
   TableWrap,
   fmtDate,
   ErrorState,
@@ -64,19 +65,35 @@ function StudentAppointments() {
     },
   });
 
-  if (studentQ.isLoading) return <LoadingRows rows={5} />;
-  if (studentQ.isError || !studentQ.data) return <ErrorState />;
+  if (studentQ.isLoading) {
+    return (
+      <PageLoadState
+        title="Appointments"
+        subtitle="Request a consultation slot. Times are stored in UTC."
+      >
+        <LoadingRows rows={5} />
+      </PageLoadState>
+    );
+  }
+  if (studentQ.isError || !studentQ.data) {
+    return (
+      <PageLoadState title="Appointments">
+        <ErrorState />
+      </PageLoadState>
+    );
+  }
 
   const rows = [...(apptsQ.data ?? [])].sort((a, b) => b.date.localeCompare(a.date));
 
   return (
-    <div>
+    <div className="space-y-4 md:space-y-5">
       <PageHeader
+        compact
         title="Appointments"
         subtitle="Request a consultation slot. Times are stored in UTC; your consultant confirms."
       />
 
-      <Panel title="Request appointment" className="mb-6">
+      <Panel compact title="Request appointment">
         <form
           className="space-y-4"
           onSubmit={(e) => {

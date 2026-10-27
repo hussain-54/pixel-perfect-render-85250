@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   PageHeader,
+  PageLoadState,
   TableWrap,
   fmtDate,
   LoadingRows,
@@ -13,9 +14,11 @@ import {
 import { StatusBadge } from "@/components/StatusBadge";
 import { useData } from "@/lib/useData";
 import { LEAD_STATUSES } from "@/lib/lead-mappers";
+import { enforceSpecialtyStaffModuleBeforeLoad } from "@/lib/staff-specialty-before-load";
 import { getLeads, updateLeadStatus } from "@/services";
 
 export const Route = createFileRoute("/staff/leads")({
+  beforeLoad: ({ context }) => enforceSpecialtyStaffModuleBeforeLoad(context, "digital_marketing"),
   component: StaffLeads,
 });
 
@@ -43,22 +46,28 @@ function StaffLeads() {
     },
   });
 
+  if (leadsQ.isLoading) {
+    return (
+      <PageLoadState title="Leads" subtitle="Prospects assigned to your desk.">
+        <LoadingRows rows={6} />
+      </PageLoadState>
+    );
+  }
+
   return (
-    <div>
-      <PageHeader title="Leads" subtitle="Prospects assigned to your desk." />
+    <div className="space-y-4 md:space-y-5">
+      <PageHeader compact title="Leads" subtitle="Prospects assigned to your desk." />
       {msg ? (
-        <p className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
+        <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
           {msg}
         </p>
       ) : null}
       {err ? (
-        <p className="mb-3 rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
+        <p className="rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2 text-xs text-destructive">
           {err}
         </p>
       ) : null}
-      {leadsQ.isLoading ? (
-        <LoadingRows />
-      ) : leadsQ.isError ? (
+      {leadsQ.isError ? (
         <ErrorState body={portalErrorMessage(leadsQ.error)} />
       ) : !rows.length ? (
         <EmptyState title="No leads assigned" body="Try the admin leads view for all enquiries." />

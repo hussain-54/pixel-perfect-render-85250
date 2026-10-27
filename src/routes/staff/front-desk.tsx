@@ -9,10 +9,13 @@ import {
   BadgeDollarSign,
   ClipboardList,
   AlertCircle,
+  CheckCircle2,
+  Link2,
 } from "lucide-react";
 import {
   EmptyState,
   ErrorState,
+  LiveBadge,
   LoadingRows,
   PageHeader,
   PageLoadState,
@@ -43,8 +46,13 @@ import { isFrontDeskBusinessRole } from "@/lib/staff-business-access";
 import {
   buildFrontDeskAttentionItems,
   deriveFrontDeskNextAction,
+  frontDeskNextActionCta,
   resolveFrontDeskNotificationHref,
 } from "@/lib/front-desk-workspace";
+import {
+  intakePortalStatusFromRow,
+  studentPortalAccountStatusLabel,
+} from "@/lib/student-portal-account";
 import {
   describeFeeClaimDisplay,
   feeStatusAllowsAdmissionHandover,
@@ -74,7 +82,7 @@ export const Route = createFileRoute("/staff/front-desk")({
 const TABS: { id: FeeVerificationQueueTab; label: string }[] = [
   { id: "open", label: "Open" },
   { id: "awaiting_finance", label: "Awaiting Finance" },
-  { id: "needs_correction", label: "Needs Correction" },
+  { id: "cancelled", label: "Cancelled (historical)" },
   { id: "completed", label: "Completed" },
 ];
 
@@ -92,9 +100,67 @@ function FrontDeskDashboardPage() {
   const [regSearch, setRegSearch] = useState("");
   const [regAssign, setRegAssign] = useState("all");
   const [regFee, setRegFee] = useState("all");
+  const [regPortal, setRegPortal] = useState("all");
+  const [kpiFilter, setKpiFilter] = useState<string>("all");
   const [regSort, setRegSort] = useState<RegSortKey>("createdAt");
   const [regPage, setRegPage] = useState(0);
-  const regPageSize = 8;
+  const regPageSize = 10;
+
+  function applyKpiFilter(next: string) {
+    setKpiFilter(next);
+    setRegPage(0);
+    setRegSearch("");
+    if (next === "all") {
+      setRegAssign("all");
+      setRegFee("all");
+      setRegPortal("all");
+      return;
+    }
+    if (next === "awaiting") {
+      setRegAssign("pending");
+      setRegFee("all");
+      setRegPortal("all");
+      return;
+    }
+    if (next === "assigned") {
+      setRegAssign("assigned");
+      setRegFee("all");
+      setRegPortal("all");
+      return;
+    }
+    if (next === "unpaid") {
+      setRegAssign("all");
+      setRegFee("unpaid");
+      setRegPortal("all");
+      return;
+    }
+    if (next === "claimed") {
+      setRegAssign("all");
+      setRegFee("claimed");
+      setRegPortal("all");
+      return;
+    }
+    if (next === "verified") {
+      setRegAssign("all");
+      setRegFee("verified");
+      setRegPortal("all");
+      return;
+    }
+    if (next === "portal") {
+      setRegAssign("all");
+      setRegFee("all");
+      setRegPortal("pending");
+      return;
+    }
+    if (next === "action") {
+      setRegAssign("all");
+      setRegFee("all");
+      setRegPortal("all");
+      document
+        .getElementById("fd-attention-panel")
+        ?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
 
   const feeReqQ = useQuery({
     queryKey: [...FEE_QUEUE_KEY, "with-history"],
@@ -194,8 +260,14 @@ function FrontDeskDashboardPage() {
       if (regAssign === "pending" && r.assignmentStatus !== "pending") return false;
       if (regAssign === "assigned" && r.assignmentStatus !== "assigned") return false;
       if (regFee !== "all" && (r.signupFeeStatus || "unpaid") !== regFee) return false;
+      if (regPortal === "pending") {
+        const fee = (r.signupFeeStatus || "").toLowerCase();
+        if (fee !== "verified" && fee !== "waived") return false;
+        if (r.portalActivatedAt) return false;
+      }
+      if (regPortal === "active" && !r.portalActivatedAt) return false;
       if (!q) return true;
-      return [r.caseId, r.fullName, r.email, r.counsellorName]
+      return [r.caseId, r.fullName, r.email, r.counsellorName, r.destination, r.program]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(q));
     });
@@ -204,7 +276,7 @@ function FrontDeskDashboardPage() {
       return String(b[regSort] || "").localeCompare(String(a[regSort] || ""));
     });
     return list;
-  }, [dashQ.data, regSearch, regAssign, regFee, regSort]);
+  }, [dashQ.data, regSearch, regAssign, regFee, regPortal, regSort]);
 
   const regPageCount = Math.max(1, Math.ceil(registrationRows.length / regPageSize));
   const regPageRows = registrationRows.slice(
@@ -254,13 +326,15 @@ function FrontDeskDashboardPage() {
     );
   }
 
-  const lastSync = feeReqQ.data?.fetchedAt
-    ? new Date(feeReqQ.data.fetchedAt).toLocaleTimeString()
+  const lastSyncMs = [
+    feeReqQ.data?.fetchedAt ? Date.parse(feeReqQ.data.fetchedAt) : Number.NaN,
+    dashQ.dataUpdatedAt || Number.NaN,
+  ].filter((n) => Number.isFinite(n));
+  const lastSync = lastSyncMs.length
+    ? new Date(Math.max(...lastSyncMs)).toLocaleTimeString()
     : null;
   const actionRequired =
     typeof data.actionRequired === "number" ? data.actionRequired : attentionItems.length;
-  const applicationsInProgress =
-    typeof data.applicationsInProgress === "number" ? data.applicationsInProgress : 0;
 
   async function openNotification(n: {
     id: string;
@@ -284,10 +358,11 @@ function FrontDeskDashboardPage() {
   }
 
   return (
-    <div className="space-y-5 md:space-y-6">
+    <div className="space-y-4 md:space-y-5">
       <PageHeader
-        title="Front Desk & Student Affairs"
-        subtitle={`Student intake & tracking · Signed in as ${data.greetingName}`}
+        compact
+        title="Front Desk"
+        subtitle={`${data.greetingName} · Intake & tracking`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <LiveBadge status={liveStatus} lastSync={lastSync} />
@@ -316,106 +391,149 @@ function FrontDeskDashboardPage() {
               </Link>
             </Button>
             <Button asChild size="sm" variant="outline">
-              <Link to="/staff/intake">My Registrations</Link>
+              <Link to="/staff/intake">Registrations</Link>
             </Button>
           </div>
         }
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4">
         <StatCard
-          label="Total Registrations"
+          label="Registrations"
           value={String(data.myRegistrations)}
           icon={<Users />}
+          selected={kpiFilter === "all"}
+          onClick={() => applyKpiFilter("all")}
+          title="All registrations you manage"
         />
         <StatCard
-          label="Awaiting Counsellor"
+          label="Awaiting counsellor"
           value={String(data.awaitingAssignment)}
           icon={<Clock3 />}
+          selected={kpiFilter === "awaiting"}
+          onClick={() => applyKpiFilter("awaiting")}
         />
         <StatCard
-          label="Fee Verification"
-          value={String(data.feesAwaitingFinance)}
-          hint="Signup fees unpaid or claimed"
-          icon={<BadgeDollarSign />}
-        />
-        <StatCard
-          label="Applications In Progress"
-          value={String(applicationsInProgress)}
-          hint="Journey at/after application submitted"
+          label="Assigned"
+          value={String(data.assignedStudents)}
           icon={<ClipboardList />}
+          selected={kpiFilter === "assigned"}
+          onClick={() => applyKpiFilter("assigned")}
         />
         <StatCard
-          label="Action Required"
+          label="Voucher unpaid"
+          value={String(data.unpaidVouchers ?? 0)}
+          hint="Issued, payment not claimed"
+          icon={<BadgeDollarSign />}
+          selected={kpiFilter === "unpaid"}
+          onClick={() => applyKpiFilter("unpaid")}
+        />
+        <StatCard
+          label="Proofs awaiting Finance"
+          value={String(data.proofsAwaitingFinance ?? 0)}
+          hint="Claimed — not verified cash"
+          icon={<BadgeDollarSign />}
+          selected={kpiFilter === "claimed"}
+          onClick={() => applyKpiFilter("claimed")}
+        />
+        <StatCard
+          label="Finance verified"
+          value={String(data.verifiedFees ?? 0)}
+          icon={<CheckCircle2 />}
+          selected={kpiFilter === "verified"}
+          onClick={() => applyKpiFilter("verified")}
+        />
+        <StatCard
+          label="Portal link pending"
+          value={String(data.portalLinkPending ?? 0)}
+          hint="Fee authorized; activation pending"
+          icon={<Link2 />}
+          selected={kpiFilter === "portal"}
+          onClick={() => applyKpiFilter("portal")}
+        />
+        <StatCard
+          label="Action required"
           value={String(actionRequired)}
-          hint="Unassigned or fee queue needing FD"
+          hint="Unassigned, rejected, or open requests"
           icon={<AlertCircle />}
+          selected={kpiFilter === "action"}
+          onClick={() => applyKpiFilter("action")}
         />
       </div>
 
-      <Panel
-        title="Needs Your Attention"
-        action={
-          <Button
-            type="button"
-            size="sm"
-            variant="outline"
-            onClick={() => {
-              setTab("open");
-              document
-                .getElementById("fd-fee-verification-panel")
-                ?.scrollIntoView({ behavior: "smooth", block: "start" });
-            }}
-          >
-            Fee queue
-          </Button>
-        }
-      >
-        {attentionItems.length === 0 ? (
-          <EmptyState
-            title="Nothing needs attention"
-            body="New fee-verification requests and unassigned registrations will appear here."
-          />
-        ) : (
-          <ul className="divide-y divide-border">
-            {attentionItems.map((item) => (
-              <li
-                key={item.id}
-                className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium text-navy">
-                    {item.fullName}{" "}
-                    <span className="font-normal text-muted-foreground">· {item.caseId}</span>
-                  </p>
-                  <p className="text-sm text-navy/90">{item.title}</p>
-                  <p className="text-xs text-muted-foreground line-clamp-2">{item.detail}</p>
-                </div>
-                <Button
-                  asChild
-                  size="sm"
-                  variant="navy"
-                  className="shrink-0 self-start sm:self-center"
+      <div id="fd-attention-panel">
+        <Panel
+          compact
+          title="Needs attention"
+          action={
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setTab("open");
+                document
+                  .getElementById("fd-fee-verification-panel")
+                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+            >
+              Fee queue
+            </Button>
+          }
+        >
+          {attentionItems.length === 0 ? (
+            <EmptyState
+              title="Nothing needs attention"
+              body="New fee-verification requests and unassigned registrations will appear here."
+            />
+          ) : (
+            <ul className="divide-y divide-border">
+              {attentionItems.map((item) => (
+                <li
+                  key={item.id}
+                  className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
                 >
-                  <Link to="/staff/intake/$studentId" params={{ studentId: item.studentId }}>
-                    Open record
-                  </Link>
-                </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Panel>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-navy">
+                      {item.fullName}{" "}
+                      <span className="font-normal text-muted-foreground">· {item.caseId}</span>
+                    </p>
+                    <p className="text-sm text-navy/90">{item.title}</p>
+                    <p className="text-xs text-muted-foreground line-clamp-2">{item.detail}</p>
+                  </div>
+                  <Button
+                    asChild
+                    size="sm"
+                    variant="navy"
+                    className="shrink-0 self-start sm:self-center"
+                  >
+                    <Link
+                      to="/staff/intake/$studentId"
+                      params={{ studentId: item.studentId }}
+                      {...(item.kind === "unassigned"
+                        ? { search: { focus: "assign" as const } }
+                        : {})}
+                    >
+                      {item.kind === "unassigned" ? "Assign counsellor" : "Open record"}
+                    </Link>
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Panel>
+      </div>
 
       <Panel
-        title="Recent Registrations"
+        compact
+        title="Registrations"
         action={
           <Button asChild variant="outline" size="sm">
             <Link to="/staff/intake">View all</Link>
           </Button>
         }
       >
-        <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
           <div>
             <Label htmlFor="fd-dash-search">Search</Label>
             <Input
@@ -423,19 +541,22 @@ function FrontDeskDashboardPage() {
               value={regSearch}
               onChange={(e) => {
                 setRegSearch(e.target.value);
+                setKpiFilter("all");
                 setRegPage(0);
               }}
-              placeholder="Name, case, email…"
+              placeholder="Name, case, destination…"
+              className="h-9"
             />
           </div>
           <div>
             <Label htmlFor="fd-dash-assign">Counsellor</Label>
             <select
               id="fd-dash-assign"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
               value={regAssign}
               onChange={(e) => {
                 setRegAssign(e.target.value);
+                setKpiFilter("all");
                 setRegPage(0);
               }}
             >
@@ -448,26 +569,44 @@ function FrontDeskDashboardPage() {
             <Label htmlFor="fd-dash-fee">Signup fee</Label>
             <select
               id="fd-dash-fee"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
               value={regFee}
               onChange={(e) => {
                 setRegFee(e.target.value);
+                setKpiFilter("all");
                 setRegPage(0);
               }}
             >
               <option value="all">All</option>
-              <option value="unpaid">Not claimed</option>
-              <option value="claimed">Claimed</option>
+              <option value="unpaid">Voucher unpaid</option>
+              <option value="claimed">Proof submitted</option>
               <option value="verified">Verified</option>
               <option value="waived">Waived</option>
               <option value="rejected">Rejected</option>
             </select>
           </div>
           <div>
+            <Label htmlFor="fd-dash-portal">Portal</Label>
+            <select
+              id="fd-dash-portal"
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={regPortal}
+              onChange={(e) => {
+                setRegPortal(e.target.value);
+                setKpiFilter("all");
+                setRegPage(0);
+              }}
+            >
+              <option value="all">All</option>
+              <option value="pending">Link pending</option>
+              <option value="active">Activated</option>
+            </select>
+          </div>
+          <div>
             <Label htmlFor="fd-dash-sort">Sort</Label>
             <select
               id="fd-dash-sort"
-              className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
               value={regSort}
               onChange={(e) => setRegSort(e.target.value as RegSortKey)}
             >
@@ -490,76 +629,87 @@ function FrontDeskDashboardPage() {
           />
         ) : (
           <>
-            <TableWrap>
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="px-3 py-2">Case</th>
-                    <th className="px-3 py-2">Student</th>
-                    <th className="hidden px-3 py-2 md:table-cell">Counsellor</th>
-                    <th className="hidden px-3 py-2 lg:table-cell">Registered</th>
-                    <th className="px-3 py-2">Fee</th>
-                    <th className="hidden px-3 py-2 xl:table-cell">Updated</th>
-                    <th className="px-3 py-2">Next</th>
-                    <th className="px-3 py-2"> </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {regPageRows.map((row) => {
-                    const openReq =
-                      allRows.find(
-                        (r) =>
-                          r.studentId === row.id &&
-                          (r.status === "open" || r.status === "in_progress"),
-                      ) ?? null;
-                    const next = deriveFrontDeskNextAction({
-                      assignmentStatus: row.assignmentStatus,
-                      signupFeeStatus: row.signupFeeStatus,
-                      openFeeRequest: openReq,
-                    });
-                    return (
-                      <tr key={row.id} className="border-b border-border/60 align-top">
-                        <td className="px-3 py-2.5 font-medium text-navy">{row.caseId}</td>
-                        <td className="px-3 py-2.5">
-                          <div className="font-medium">{row.fullName}</div>
-                          <div className="text-xs text-muted-foreground">{row.email}</div>
-                          <div className="mt-1 text-xs text-muted-foreground md:hidden">
-                            {row.assignmentStatus === "pending"
-                              ? "Awaiting counsellor"
-                              : row.counsellorName || "Assigned"}
-                          </div>
-                        </td>
-                        <td className="hidden px-3 py-2.5 md:table-cell">
-                          {row.assignmentStatus === "pending" ? (
-                            <StatusBadge status="Pending" />
-                          ) : (
-                            row.counsellorName || "Assigned"
-                          )}
-                        </td>
-                        <td className="hidden px-3 py-2.5 text-muted-foreground lg:table-cell">
-                          {fmtDate(row.createdAt)}
-                        </td>
-                        <td className="px-3 py-2.5 text-xs">
-                          {describePersistedSignupFeeStatus(row.signupFeeStatus).label}
-                        </td>
-                        <td className="hidden px-3 py-2.5 text-muted-foreground xl:table-cell">
-                          {fmtDate(row.updatedAt)}
-                        </td>
-                        <td className="max-w-[12rem] px-3 py-2.5 text-xs text-muted-foreground">
-                          {next.label}
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <Button asChild size="sm" variant="outline">
-                            <Link to="/staff/intake/$studentId" params={{ studentId: row.id }}>
-                              View record
+            <TableWrap compact>
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th className="hidden md:table-cell">Destination</th>
+                  <th className="hidden lg:table-cell">Counsellor</th>
+                  <th>Fee</th>
+                  <th className="hidden xl:table-cell">Portal</th>
+                  <th className="hidden lg:table-cell">Updated</th>
+                  <th>Next action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {regPageRows.map((row) => {
+                  const openReq =
+                    allRows.find(
+                      (r) =>
+                        r.studentId === row.id &&
+                        (r.status === "open" || r.status === "in_progress"),
+                    ) ?? null;
+                  const next = deriveFrontDeskNextAction({
+                    assignmentStatus: row.assignmentStatus,
+                    signupFeeStatus: row.signupFeeStatus,
+                    openFeeRequest: openReq,
+                  });
+                  const portalLabel = studentPortalAccountStatusLabel(
+                    intakePortalStatusFromRow({
+                      profileId: row.profileId,
+                      portalActivatedAt: row.portalActivatedAt,
+                    }),
+                  );
+                  const dest = [row.destination, row.program].filter(Boolean).join(" · ") || "—";
+                  return (
+                    <tr key={row.id}>
+                      <td>
+                        <div className="font-medium text-navy">{row.fullName}</div>
+                        <div className="text-xs text-muted-foreground">{row.caseId}</div>
+                      </td>
+                      <td className="hidden max-w-[10rem] truncate text-xs text-muted-foreground md:table-cell">
+                        {dest}
+                      </td>
+                      <td className="hidden lg:table-cell">
+                        {row.assignmentStatus === "pending" ? (
+                          <StatusBadge status="Pending" />
+                        ) : (
+                          <span className="text-sm">
+                            {row.counsellorName || "Counsellor assigned"}
+                          </span>
+                        )}
+                      </td>
+                      <td className="text-xs">
+                        {describePersistedSignupFeeStatus(row.signupFeeStatus).label}
+                      </td>
+                      <td className="hidden text-xs text-muted-foreground xl:table-cell">
+                        {portalLabel}
+                      </td>
+                      <td className="hidden text-xs text-muted-foreground lg:table-cell">
+                        {fmtDate(row.updatedAt)}
+                      </td>
+                      <td>
+                        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
+                          <span className="max-w-[11rem] text-xs text-muted-foreground">
+                            {next.label}
+                          </span>
+                          <Button asChild size="sm" variant="navy" className="shrink-0 self-start">
+                            <Link
+                              to="/staff/intake/$studentId"
+                              params={{ studentId: row.id }}
+                              {...(next.code === "assign_counsellor"
+                                ? { search: { focus: "assign" as const } }
+                                : {})}
+                            >
+                              {frontDeskNextActionCta(next.code)}
                             </Link>
                           </Button>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
             </TableWrap>
             <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
               <span>
@@ -593,7 +743,8 @@ function FrontDeskDashboardPage() {
 
       <div id="fd-fee-verification-panel">
         <Panel
-          title="Counsellor Fee-Verification Requests"
+          compact
+          title="Counsellor fee-verification requests"
           action={
             <div className="flex flex-wrap items-center gap-2">
               <Button
@@ -936,36 +1087,4 @@ function FrontDeskDashboardPage() {
 
 function filteredCountFallback(rows: { status: string }[], status: string): number {
   return rows.filter((r) => r.status === status).length;
-}
-
-function LiveBadge({
-  status,
-  lastSync,
-}: {
-  status: "live" | "reconnecting" | "offline" | "connecting";
-  lastSync: string | null;
-}) {
-  const label =
-    status === "live"
-      ? "Live"
-      : status === "reconnecting" || status === "connecting"
-        ? "Reconnecting"
-        : lastSync
-          ? `Last updated ${lastSync}`
-          : "Offline";
-  return (
-    <span
-      className={cn(
-        "rounded px-2 py-1 text-[11px] font-semibold uppercase tracking-wide",
-        status === "live"
-          ? "bg-emerald-50 text-emerald-800"
-          : status === "offline"
-            ? "bg-slate-100 text-slate-600"
-            : "bg-amber-50 text-amber-800",
-      )}
-      title={lastSync ? `Queue synced ${lastSync}` : undefined}
-    >
-      {label}
-    </span>
-  );
 }

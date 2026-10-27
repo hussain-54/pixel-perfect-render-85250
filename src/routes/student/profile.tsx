@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   PageHeader,
+  PageLoadState,
   Panel,
   ErrorState,
   LoadingRows,
@@ -68,12 +69,23 @@ function StudentProfile() {
     },
   });
 
-  if (studentQ.isLoading) return <LoadingRows rows={5} />;
-  if (studentQ.isError || !studentQ.data) return <ErrorState />;
+  if (studentQ.isLoading) {
+    return (
+      <PageLoadState title="Profile" subtitle="Contact and study preferences.">
+        <LoadingRows rows={5} />
+      </PageLoadState>
+    );
+  }
+  if (studentQ.isError || !studentQ.data) {
+    return (
+      <PageLoadState title="Profile">
+        <ErrorState />
+      </PageLoadState>
+    );
+  }
 
   const s = studentQ.data;
-  const consultantName =
-    s.consultantName ?? lookupConsultant(s.consultantId)?.name ?? null;
+  const consultantName = s.consultantName ?? lookupConsultant(s.consultantId)?.name ?? null;
   const values = form ?? {
     phone: s.phone,
     whatsapp: s.whatsapp,
@@ -106,12 +118,13 @@ function StudentProfile() {
   ];
 
   return (
-    <div>
+    <div className="space-y-4 md:space-y-5">
       <PageHeader
+        compact
         title="Profile"
         subtitle="Update your contact and study preferences. Name, email, and case details are managed by staff."
       />
-      <Panel title={s.name}>
+      <Panel compact title={s.name}>
         <div className="mb-4">
           <StatusBadge status={stageLabel(s.stage)} className="text-xs" />
         </div>

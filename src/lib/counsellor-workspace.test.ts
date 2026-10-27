@@ -62,6 +62,7 @@ describe("counsellor-workspace", () => {
       deadlinesThisWeekCount: 0,
     });
     expect(metrics.assignedStudents).toBe(2);
+    expect(metrics.awaitingInitialAssessment).toBe(1);
     expect(metrics.counsellingCompleted).toBe(1);
     expect(metrics.applicationsInProgress).toBe(3);
     expect(metrics.followUpsDue).toBe(2);

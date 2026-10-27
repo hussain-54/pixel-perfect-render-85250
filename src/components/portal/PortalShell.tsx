@@ -264,7 +264,9 @@ export function PortalShell({ role, nav, children, barTitle, session }: PortalSh
   );
 
   const footerBlock = (compact = false) => (
-    <div className={cn("mt-auto shrink-0 space-y-1.5 border-t border-white/10 p-3", compact && "p-3")}>
+    <div
+      className={cn("mt-auto shrink-0 space-y-1.5 border-t border-white/10 p-3", compact && "p-3")}
+    >
       <button
         type="button"
         className="flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left text-[0.8125rem] font-medium text-white/65 transition-colors hover:bg-white/10 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80"
@@ -387,7 +389,9 @@ export function PortalShell({ role, nav, children, barTitle, session }: PortalSh
                   className="h-9 pl-8"
                 />
                 {searchPanel ? (
-                  <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-40">{searchPanel}</div>
+                  <div className="absolute left-0 right-0 top-[calc(100%+4px)] z-40">
+                    {searchPanel}
+                  </div>
                 ) : null}
               </div>
             ) : null}
@@ -434,8 +438,8 @@ export function PortalShell({ role, nav, children, barTitle, session }: PortalSh
             {searchPanel ? <div className="mt-2">{searchPanel}</div> : null}
           </div>
         ) : null}
-        <main className="portal-main min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4 md:p-6 lg:p-7">
-          <div className="mx-auto w-full max-w-[90rem]">{children ?? <Outlet />}</div>
+        <main className="portal-main min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4 md:p-5 lg:p-6">
+          <div className="mx-auto w-full max-w-[88rem]">{children ?? <Outlet />}</div>
         </main>
       </div>
     </div>

@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   PageHeader,
+  PageLoadState,
   Panel,
   TableWrap,
   fmtDate,
@@ -64,7 +65,13 @@ function StudentApplications() {
     return map;
   }, [docsQ.data]);
 
-  if (studentQ.isLoading) return <LoadingRows rows={5} />;
+  if (studentQ.isLoading) {
+    return (
+      <PageLoadState title="Applications" subtitle="Track university files opened for your case.">
+        <LoadingRows rows={5} />
+      </PageLoadState>
+    );
+  }
 
   if (studentQ.isError || !studentQ.data) {
     const body = studentQ.isError
@@ -74,21 +81,21 @@ function StudentApplications() {
         )
       : "No student profile is linked to this account yet. Ask Front Desk to register you, or sign out if you use a staff/admin account.";
     return (
-      <div>
-        <PageHeader
-          title="Applications"
-          subtitle="Track university files opened for your case. Internal review is not the same as university submission."
-        />
+      <PageLoadState
+        title="Applications"
+        subtitle="Track university files opened for your case. Internal review is not the same as university submission."
+      >
         <ErrorState body={body} onRetry={() => void studentQ.refetch()} />
-      </div>
+      </PageLoadState>
     );
   }
 
   const apps = appsQ.data ?? [];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4 md:space-y-5">
       <PageHeader
+        compact
         title="Applications"
         subtitle="Track university files opened for your case. Internal review is not the same as university submission."
         actions={
@@ -98,7 +105,7 @@ function StudentApplications() {
         }
       />
 
-      <Panel title="How to read application status">
+      <Panel compact title="How to read application status">
         <ul className="grid gap-2 text-sm text-muted-foreground sm:grid-cols-2">
           <li>
             <span className="font-medium text-navy">Docs Pending / Under Review</span> — internal

@@ -4,6 +4,7 @@ import {
   buildFrontDeskRecordTimeline,
   computeFrontDeskDashboardMetrics,
   deriveFrontDeskNextAction,
+  frontDeskNextActionCta,
   isJourneyApplicationInProgress,
   resolveFrontDeskNotificationHref,
 } from "./front-desk-workspace";
@@ -97,6 +98,48 @@ describe("front-desk-workspace", () => {
     });
     expect(metrics.actionRequired).toBe(0);
     expect(metrics.feeVerification).toBe(1);
+    expect(metrics.unpaidVouchers).toBe(0);
+    expect(metrics.proofsAwaitingFinance).toBe(1);
+    expect(metrics.verifiedFees).toBe(0);
+  });
+
+  it("separates unpaid vouchers from claimed proofs and portal-pending", () => {
+    const metrics = computeFrontDeskDashboardMetrics({
+      intakeRows: [
+        { ...intakeBase, id: "u1", signupFeeStatus: "unpaid" },
+        {
+          ...intakeBase,
+          id: "c1",
+          assignmentStatus: "assigned",
+          counsellorName: "C",
+          signupFeeStatus: "claimed",
+        },
+        {
+          ...intakeBase,
+          id: "v1",
+          assignmentStatus: "assigned",
+          counsellorName: "C",
+          signupFeeStatus: "verified",
+          portalActivatedAt: null,
+        },
+        {
+          ...intakeBase,
+          id: "v2",
+          assignmentStatus: "assigned",
+          counsellorName: "C",
+          signupFeeStatus: "verified",
+          portalActivatedAt: "2026-10-10T00:00:00.000Z",
+        },
+      ],
+      feeRequests: [],
+    });
+    expect(metrics.unpaidVouchers).toBe(1);
+    expect(metrics.proofsAwaitingFinance).toBe(1);
+    expect(metrics.feeVerification).toBe(2);
+    expect(metrics.verifiedFees).toBe(2);
+    expect(metrics.portalLinkPending).toBe(1);
+    expect(metrics.assignedToCounsellors).toBe(3);
+    expect(frontDeskNextActionCta("assign_counsellor")).toBe("Assign counsellor");
   });
 
   it("computes KPIs without double-counting action required", () => {

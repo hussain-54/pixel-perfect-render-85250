@@ -15,8 +15,10 @@ import {
 } from "lucide-react";
 import {
   PageHeader,
+  PageLoadState,
   Panel,
   StatCard,
+  LiveBadge,
   TableWrap,
   fmtDate,
   LoadingRows,
@@ -125,19 +127,40 @@ function StaffDashboard() {
     onError: (err) => setReviewError(portalErrorMessage(err, "Review failed.")),
   });
 
-  if (dashQ.isLoading) return <LoadingRows rows={8} />;
+  const wbLoadTitle = "Workbench";
+
+  if (dashQ.isLoading) {
+    return (
+      <PageLoadState title={wbLoadTitle}>
+        <LoadingRows rows={8} />
+      </PageLoadState>
+    );
+  }
 
   if (dashQ.isError) {
     const msg = portalErrorMessage(dashQ.error);
     if (msg.toLowerCase().includes("permission") || String(dashQ.error).includes("403")) {
-      return <PermissionDenied body={msg} />;
+      return (
+        <PageLoadState title={wbLoadTitle}>
+          <PermissionDenied body={msg} />
+        </PageLoadState>
+      );
     }
-    return <ErrorState body={msg} onRetry={() => void dashQ.refetch()} />;
+    return (
+      <PageLoadState title={wbLoadTitle}>
+        <ErrorState body={msg} onRetry={() => void dashQ.refetch()} />
+      </PageLoadState>
+    );
   }
 
   const data = dashQ.data;
-  if (!data)
-    return <EmptyState title="No dashboard data" body="No authorized records available." />;
+  if (!data) {
+    return (
+      <PageLoadState title={wbLoadTitle}>
+        <EmptyState title="No dashboard data" body="No authorized records available." />
+      </PageLoadState>
+    );
+  }
 
   const unreadCount = (notifQ.data ?? []).filter((n) => !n.read).length;
   const lastSync = data.fetchedAt ? new Date(data.fetchedAt).toLocaleTimeString() : null;
@@ -170,11 +193,44 @@ function StaffDashboard() {
     void router.navigate({ to: href });
   }
 
+  function scrollToAttention() {
+    document
+      .getElementById("wb-attention-panel")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function admissionAppsSearch(opts: {
+    focus?: "docs" | "in_progress" | "submitted" | "offers" | "action";
+    applicationId?: string | null;
+    studentId?: string | null;
+  }) {
+    const search: {
+      focus?: "docs" | "in_progress" | "submitted" | "offers" | "action";
+      applicationId?: string;
+      studentId?: string;
+    } = {};
+    if (opts.focus) search.focus = opts.focus;
+    const applicationId = opts.applicationId?.trim();
+    if (applicationId) search.applicationId = applicationId;
+    else {
+      const studentId = opts.studentId?.trim();
+      if (studentId) search.studentId = studentId;
+    }
+    return search;
+  }
+
+  function admissionFocusForAttentionKind(kind: string): "docs" | "action" | undefined {
+    if (kind === "docs") return "docs";
+    if (kind === "handover" || kind === "stage") return "action";
+    return undefined;
+  }
+
   return (
-    <div className="space-y-5 md:space-y-6">
+    <div className="space-y-4 md:space-y-5">
       <PageHeader
-        title={isAdmission ? "Admissions Workbench" : "Counsellor Workbench"}
-        subtitle={`${workspaceTitle} · Signed in as ${data.greetingName}`}
+        compact
+        title={isAdmission ? "Admissions" : "Counsellor workbench"}
+        subtitle={`${data.greetingName} · ${workspaceTitle}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <LiveBadge status={liveStatus} lastSync={lastSync} />
@@ -220,199 +276,265 @@ function StaffDashboard() {
       />
 
       {isAdmission && am ? (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
-            label="Assigned to Me"
+            label="Assigned to me"
             value={String(am.assignedToMe)}
             hint={ADMISSION_METRIC_HINTS.assignedToMe}
             title={ADMISSION_METRIC_DEFINITIONS.assignedToMe}
             icon={<Users />}
+            onClick={() => void router.navigate({ to: "/staff/applications" })}
           />
           <StatCard
-            label="Awaiting Initial Review"
+            label="Awaiting initial review"
             value={String(am.awaitingInitialReview)}
             hint={ADMISSION_METRIC_HINTS.awaitingInitialReview}
             title={ADMISSION_METRIC_DEFINITIONS.awaitingInitialReview}
             icon={<Hourglass />}
+            onClick={() =>
+              void router.navigate({
+                to: "/staff/applications",
+                search: { focus: "action" },
+              })
+            }
           />
           <StatCard
-            label="Documents Missing"
+            label="Documents missing"
             value={String(am.documentsMissing)}
             hint={ADMISSION_METRIC_HINTS.documentsMissing}
             title={ADMISSION_METRIC_DEFINITIONS.documentsMissing}
             icon={<FileWarning />}
+            onClick={() =>
+              void router.navigate({ to: "/staff/applications", search: { focus: "docs" } })
+            }
           />
           <StatCard
-            label="In Progress"
+            label="In progress"
             value={String(am.inProgress)}
             hint={ADMISSION_METRIC_HINTS.inProgress}
             title={ADMISSION_METRIC_DEFINITIONS.inProgress}
             icon={<FolderKanban />}
+            onClick={() =>
+              void router.navigate({
+                to: "/staff/applications",
+                search: { focus: "in_progress" },
+              })
+            }
           />
           <StatCard
-            label="Returned for Correction"
+            label="Returned for correction"
             value={String(am.returnedForCorrection)}
             hint={ADMISSION_METRIC_HINTS.returnedForCorrection}
             title={ADMISSION_METRIC_DEFINITIONS.returnedForCorrection}
             icon={<RotateCcw />}
+            onClick={() =>
+              void router.navigate({
+                to: "/staff/applications",
+                search: { focus: "action" },
+              })
+            }
           />
           <StatCard
-            label="Submitted to University"
+            label="Submitted to university"
             value={String(am.submittedToUniversity)}
             hint={ADMISSION_METRIC_HINTS.submittedToUniversity}
             title={ADMISSION_METRIC_DEFINITIONS.submittedToUniversity}
             icon={<Send />}
+            onClick={() =>
+              void router.navigate({
+                to: "/staff/applications",
+                search: { focus: "submitted" },
+              })
+            }
           />
           <StatCard
-            label="Offers / Decisions"
+            label="Offers / decisions"
             value={String(am.offersDecisionsReceived)}
             hint={ADMISSION_METRIC_HINTS.offersDecisionsReceived}
             title={ADMISSION_METRIC_DEFINITIONS.offersDecisionsReceived}
             icon={<ClipboardCheck />}
+            onClick={() =>
+              void router.navigate({ to: "/staff/applications", search: { focus: "offers" } })
+            }
           />
           <StatCard
-            label="Action Required"
+            label="Action required"
             value={String(am.actionRequired)}
             hint={ADMISSION_METRIC_HINTS.actionRequired}
             title={ADMISSION_METRIC_DEFINITIONS.actionRequired}
             icon={<AlertCircle />}
+            onClick={() =>
+              void router.navigate({ to: "/staff/applications", search: { focus: "action" } })
+            }
           />
         </div>
       ) : (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           <StatCard
-            label="My Assigned Students"
+            label="My assigned students"
             value={String(m.assignedStudents)}
             hint={COUNSELLOR_METRIC_HINTS.assignedStudents}
             title={COUNSELLOR_METRIC_DEFINITIONS.assignedStudents}
             icon={<Users />}
+            onClick={() => void router.navigate({ to: "/staff/students" })}
           />
           <StatCard
-            label="Counselling Completed"
+            label="Awaiting assessment"
+            value={String(m.awaitingInitialAssessment ?? 0)}
+            hint={COUNSELLOR_METRIC_HINTS.awaitingInitialAssessment}
+            title={COUNSELLOR_METRIC_DEFINITIONS.awaitingInitialAssessment}
+            icon={<ClipboardCheck />}
+            onClick={scrollToAttention}
+          />
+          <StatCard
+            label="Counselling completed"
             value={String(m.counsellingCompleted ?? 0)}
             hint={COUNSELLOR_METRIC_HINTS.counsellingCompleted}
             title={COUNSELLOR_METRIC_DEFINITIONS.counsellingCompleted}
             icon={<ClipboardCheck />}
+            onClick={() => void router.navigate({ to: "/staff/students" })}
           />
           <StatCard
-            label="Follow-ups Due"
+            label="Follow-ups due"
             value={String(m.followUpsDue ?? 0)}
             hint={COUNSELLOR_METRIC_HINTS.followUpsDue}
             title={COUNSELLOR_METRIC_DEFINITIONS.followUpsDue}
             icon={<Clock3 />}
+            onClick={() => void router.navigate({ to: "/staff/tasks" })}
           />
           <StatCard
-            label="Applications In Progress"
+            label="Applications in progress"
             value={String(m.appsInProgress)}
             hint={COUNSELLOR_METRIC_HINTS.applicationsInProgress}
             title={COUNSELLOR_METRIC_DEFINITIONS.applicationsInProgress}
             icon={<FolderKanban />}
+            onClick={() => void router.navigate({ to: "/staff/applications" })}
           />
           <StatCard
-            label="Awaiting Response"
+            label="Awaiting response"
             value={String(m.awaitingResponse ?? 0)}
             hint={COUNSELLOR_METRIC_HINTS.awaitingResponse}
             title={COUNSELLOR_METRIC_DEFINITIONS.awaitingResponse}
             icon={<Hourglass />}
+            onClick={scrollToAttention}
           />
           <StatCard
-            label="Action Required"
+            label="Action required"
             value={String(m.actionRequired ?? 0)}
             hint={COUNSELLOR_METRIC_HINTS.actionRequired}
             title={COUNSELLOR_METRIC_DEFINITIONS.actionRequired}
             icon={<AlertCircle />}
+            onClick={scrollToAttention}
           />
         </div>
       )}
 
-      <Panel
-        title="Needs My Attention"
-        action={
-          <div className="flex flex-wrap items-center gap-2">
-            {!isAdmission && (m.actionRequired ?? 0) > (data.needsAttention ?? []).length ? (
-              <span className="text-xs text-navy/65">
-                Showing {(data.needsAttention ?? []).length} of {m.actionRequired}
-              </span>
-            ) : null}
-            {isAdmission && (am?.actionRequired ?? 0) > (data.needsAttention ?? []).length ? (
-              <span className="text-xs text-navy/65">
-                Showing {(data.needsAttention ?? []).length} of {am?.actionRequired}
-              </span>
-            ) : null}
-            <Button asChild size="sm" variant="outline">
-              <Link to={isAdmission ? "/staff/applications" : "/staff/students"}>
-                {isAdmission ? "Open applications" : "Open directory"}
-              </Link>
-            </Button>
-          </div>
-        }
-      >
-        {(data.needsAttention ?? []).length === 0 ? (
-          <EmptyState
-            title="Nothing needs attention"
-            body={
-              isAdmission
-                ? "Handovers awaiting review, document gaps, and approaching deadlines will appear here."
-                : "Lifecycle steps, returned cases, due tasks, and pending documents will appear here."
-            }
-          />
-        ) : (
-          <ul className="divide-y divide-border">
-            {(data.needsAttention ?? []).map((item) => {
-              const tab = (item.profileTab ?? "assessment") as ProfileTabId;
-              const actionLabel = item.primaryActionLabel ?? "Open record";
-              return (
-                <li
-                  key={item.id}
-                  className="flex flex-col gap-2.5 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between"
-                >
-                  <div className="min-w-0 space-y-1">
-                    <p className="text-sm font-semibold text-navy">
-                      {item.fullName}{" "}
-                      <span className="font-normal text-navy/60">· {item.caseId}</span>
-                    </p>
-                    <p className="text-sm font-medium text-navy/90">{item.title}</p>
-                    <p className="text-sm leading-snug text-navy/65 line-clamp-2">{item.detail}</p>
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 pt-0.5 text-xs text-navy/55">
-                      <span>{attentionKindLabel(item.kind)}</span>
-                      {item.urgencyGroup ? (
-                        <span>{attentionUrgencyLabel(item.urgencyGroup)}</span>
-                      ) : null}
-                      {item.workflowStatus ? <span>Status: {item.workflowStatus}</span> : null}
-                      {item.nextResponsibleRole ? (
-                        <span>Next: {item.nextResponsibleRole}</span>
-                      ) : null}
-                      {item.at ? <span>Updated {fmtDate(item.at.slice(0, 10))}</span> : null}
-                    </div>
-                  </div>
-                  <Button
-                    asChild
-                    size="sm"
-                    variant="navy"
-                    className="shrink-0 self-start sm:mt-0.5"
-                  >
-                    {isAdmission ? (
-                      <Link to="/staff/applications">{actionLabel}</Link>
-                    ) : (
-                      <Link
-                        to="/staff/students/$studentId"
-                        params={{ studentId: item.studentId }}
-                        search={{ tab }}
-                      >
-                        {actionLabel}
-                      </Link>
-                    )}
-                  </Button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </Panel>
-
-      <div className="grid gap-5 lg:grid-cols-2">
+      <div id="wb-attention-panel">
         <Panel
-          title={isAdmission ? "Recent Application Activity" : "Recent Student Activity"}
+          compact
+          title="Needs my attention"
+          action={
+            <div className="flex flex-wrap items-center gap-2">
+              {!isAdmission && (m.actionRequired ?? 0) > (data.needsAttention ?? []).length ? (
+                <span className="text-xs text-navy/65">
+                  Showing {(data.needsAttention ?? []).length} of {m.actionRequired}
+                </span>
+              ) : null}
+              {isAdmission && (am?.actionRequired ?? 0) > (data.needsAttention ?? []).length ? (
+                <span className="text-xs text-navy/65">
+                  Showing {(data.needsAttention ?? []).length} of {am?.actionRequired}
+                </span>
+              ) : null}
+              <Button asChild size="sm" variant="outline">
+                <Link to={isAdmission ? "/staff/applications" : "/staff/students"}>
+                  {isAdmission ? "Open applications" : "Open directory"}
+                </Link>
+              </Button>
+            </div>
+          }
+        >
+          {(data.needsAttention ?? []).length === 0 ? (
+            <EmptyState
+              title="Nothing needs attention"
+              body={
+                isAdmission
+                  ? "Handovers awaiting review, document gaps, and approaching deadlines will appear here."
+                  : "Lifecycle steps, returned cases, due tasks, and pending documents will appear here."
+              }
+            />
+          ) : (
+            <ul className="divide-y divide-border">
+              {(data.needsAttention ?? []).map((item) => {
+                const tab = (item.profileTab ?? "assessment") as ProfileTabId;
+                const actionLabel = item.primaryActionLabel ?? "Open record";
+                return (
+                  <li
+                    key={item.id}
+                    className="flex flex-col gap-2.5 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between"
+                  >
+                    <div className="min-w-0 space-y-1">
+                      <p className="text-sm font-semibold text-navy">
+                        {item.fullName}{" "}
+                        <span className="font-normal text-navy/60">· {item.caseId}</span>
+                      </p>
+                      <p className="text-sm font-medium text-navy/90">{item.title}</p>
+                      <p className="text-sm leading-snug text-navy/65 line-clamp-2">
+                        {item.detail}
+                      </p>
+                      <div className="flex flex-wrap gap-x-3 gap-y-1 pt-0.5 text-xs text-navy/55">
+                        <span>{attentionKindLabel(item.kind)}</span>
+                        {item.urgencyGroup ? (
+                          <span>{attentionUrgencyLabel(item.urgencyGroup)}</span>
+                        ) : null}
+                        {item.workflowStatus ? <span>Status: {item.workflowStatus}</span> : null}
+                        {item.nextResponsibleRole ? (
+                          <span>Next: {item.nextResponsibleRole}</span>
+                        ) : null}
+                        {item.at ? <span>Updated {fmtDate(item.at.slice(0, 10))}</span> : null}
+                      </div>
+                    </div>
+                    <Button
+                      asChild
+                      size="sm"
+                      variant="navy"
+                      className="shrink-0 self-start sm:mt-0.5"
+                    >
+                      {isAdmission ? (
+                        <Link
+                          to="/staff/applications"
+                          search={(() => {
+                            const focus = admissionFocusForAttentionKind(item.kind);
+                            return admissionAppsSearch({
+                              ...(focus ? { focus } : {}),
+                              applicationId: item.applicationId ?? null,
+                              studentId: item.studentId,
+                            });
+                          })()}
+                        >
+                          {actionLabel}
+                        </Link>
+                      ) : (
+                        <Link
+                          to="/staff/students/$studentId"
+                          params={{ studentId: item.studentId }}
+                          search={{ tab }}
+                        >
+                          {actionLabel}
+                        </Link>
+                      )}
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </Panel>
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <Panel
+          compact
+          title={isAdmission ? "Recent application activity" : "Recent student activity"}
           action={
             <Link
               to={isAdmission ? "/staff/applications" : "/staff/students"}
@@ -443,7 +565,7 @@ function StaffDashboard() {
               </thead>
               <tbody>
                 {(data.recentActivity ?? data.assignedOverview).map((s) => (
-                  <tr key={`${s.id}-${s.destination}`}>
+                  <tr key={`${s.id}-${s.destination}-${s.applicationId ?? ""}`}>
                     <td>
                       <div className="font-medium text-navy">{s.name}</div>
                       <div className="text-xs text-muted-foreground">
@@ -458,7 +580,15 @@ function StaffDashboard() {
                     <td>
                       <Button asChild size="sm" variant="outline">
                         {isAdmission ? (
-                          <Link to="/staff/applications">Open</Link>
+                          <Link
+                            to="/staff/applications"
+                            search={admissionAppsSearch({
+                              applicationId: s.applicationId ?? null,
+                              studentId: s.id,
+                            })}
+                          >
+                            Open
+                          </Link>
                         ) : (
                           <Link
                             to="/staff/students/$studentId"
@@ -719,63 +849,5 @@ function StaffDashboard() {
         </SheetContent>
       </Sheet>
     </div>
-  );
-}
-
-function LiveBadge({
-  status,
-  lastSync,
-}: {
-  status: "live" | "reconnecting" | "offline" | "connecting";
-  lastSync: string | null;
-}) {
-  const label =
-    status === "live"
-      ? "Live"
-      : status === "connecting"
-        ? "Connecting"
-        : status === "reconnecting"
-          ? "Reconnecting"
-          : "Offline";
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-1.5 rounded border px-2 py-1 text-[11px] font-semibold uppercase tracking-wide",
-        status === "live"
-          ? "border-emerald-200 bg-emerald-50 text-emerald-800"
-          : status === "offline"
-            ? "border-slate-200 bg-slate-100 text-slate-600"
-            : "border-amber-200 bg-amber-50 text-amber-800",
-      )}
-      title={
-        lastSync
-          ? `Data synced ${lastSync}. Badge reflects subscription health, not payload trust.`
-          : "Reflects Realtime subscription health"
-      }
-      aria-live="polite"
-    >
-      <span
-        className={cn(
-          "h-1.5 w-1.5 rounded-full",
-          status === "live"
-            ? "bg-emerald-600"
-            : status === "offline"
-              ? "bg-slate-400"
-              : "bg-amber-500",
-        )}
-        aria-hidden
-      />
-      {label}
-      {lastSync && status === "live" ? (
-        <span className="font-normal normal-case tracking-normal text-emerald-700/80">
-          · {lastSync}
-        </span>
-      ) : null}
-      {lastSync && status === "offline" ? (
-        <span className="font-normal normal-case tracking-normal text-slate-500">
-          · synced {lastSync}
-        </span>
-      ) : null}
-    </span>
   );
 }

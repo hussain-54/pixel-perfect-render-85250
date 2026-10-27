@@ -224,13 +224,14 @@ function FrontDeskIntakeListContent() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="fd-intake-no-print space-y-6">
+    <div className="space-y-4 md:space-y-5">
+      <div className="fd-intake-no-print space-y-4 md:space-y-5">
         <PageHeader
+          compact
           title="My registrations"
           subtitle="Your intake records — view, edit, assign, or download the registration PDF."
           actions={
-            <Button asChild>
+            <Button asChild size="sm">
               <Link to="/staff/register">Register student</Link>
             </Button>
           }
@@ -513,7 +514,7 @@ function FrontDeskIntakeListContent() {
                           </td>
                           <td className="px-2 py-2 sm:px-3">
                             {row.assignmentStatus === "assigned" ? (
-                              <span>{row.counsellorName || "Assigned"}</span>
+                              <span>{row.counsellorName || "Counsellor assigned"}</span>
                             ) : (
                               <div className="space-y-1.5">
                                 <StatusBadge status="Pending" />

@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   PageHeader,
+  PageLoadState,
   TableWrap,
   fmtDate,
   ErrorState,
@@ -102,14 +103,19 @@ function StudentDocuments() {
     },
   });
 
-  if (studentQ.isLoading) return <LoadingRows rows={5} />;
+  if (studentQ.isLoading) {
+    return (
+      <PageLoadState title="Documents" subtitle="Upload into existing requirements only.">
+        <LoadingRows rows={5} />
+      </PageLoadState>
+    );
+  }
   if (studentQ.isError || !studentQ.data) {
     return (
-      <div>
-        <PageHeader
-          title="Documents"
-          subtitle="Upload files into private storage. Officers review authorized copies only."
-        />
+      <PageLoadState
+        title="Documents"
+        subtitle="Upload files into private storage. Officers review authorized copies only."
+      >
         <ErrorState
           body={
             studentQ.isError
@@ -118,15 +124,16 @@ function StudentDocuments() {
           }
           onRetry={() => void studentQ.refetch()}
         />
-      </div>
+      </PageLoadState>
     );
   }
 
   const docs = docsQ.data ?? [];
 
   return (
-    <div>
+    <div className="space-y-4 md:space-y-5">
       <PageHeader
+        compact
         title="Documents"
         subtitle="Upload into existing requirements only. Officers review authorized copies — you cannot create new document types here."
       />

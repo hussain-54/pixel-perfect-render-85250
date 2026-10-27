@@ -3,7 +3,9 @@ import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-ro
 import { useMutation, useQuery } from "@tanstack/react-query";
 import {
   ErrorState,
+  LoadingRows,
   PageHeader,
+  PageLoadState,
   Panel,
   PermissionDenied,
   portalErrorMessage,
@@ -105,6 +107,7 @@ function FrontDeskRegisterPage() {
   const [form, setForm] = useState<FormState>(emptyForm);
   const [err, setErr] = useState<string | null>(null);
   const [success, setSuccess] = useState<{
+    studentId: string;
     caseId: string;
     name: string;
     email: string;
@@ -256,6 +259,7 @@ function FrontDeskRegisterPage() {
       }
 
       setSuccess({
+        studentId: result.student.id,
         caseId: result.student.caseId,
         name: result.student.name,
         email: result.student.email,
@@ -278,14 +282,27 @@ function FrontDeskRegisterPage() {
     if (/403|permission/i.test(msg)) return <PermissionDenied body={msg} />;
   }
 
-  if (success) {
+  if (desksQ.isLoading && !desksQ.data) {
     return (
-      <div className="mx-auto max-w-xl space-y-6">
+      <PageLoadState
+        title="Register student"
+        subtitle="Required fields marked *. Fee claims are not Accounts-verified."
+      >
+        <LoadingRows rows={6} />
+      </PageLoadState>
+    );
+  }
+
+  if (success) {
+    const needsAssign = success.assignmentStatus === "pending";
+    return (
+      <div className="mx-auto max-w-xl space-y-4 md:space-y-5">
         <PageHeader
+          compact
           title="Registration complete"
           subtitle="Share the case reference with the team."
         />
-        <Panel title="Confirmation">
+        <Panel compact title="Confirmation">
           <dl className="space-y-2 text-sm">
             <div className="flex justify-between gap-4">
               <dt className="text-muted-foreground">Case / reference</dt>
@@ -320,6 +337,23 @@ function FrontDeskRegisterPage() {
             </p>
           ) : null}
           <div className="mt-6 flex flex-wrap gap-2">
+            {needsAssign && success.studentId ? (
+              <Button type="button" variant="navy" asChild>
+                <Link
+                  to="/staff/intake/$studentId"
+                  params={{ studentId: success.studentId }}
+                  search={{ focus: "assign" }}
+                >
+                  Assign counsellor
+                </Link>
+              </Button>
+            ) : success.studentId ? (
+              <Button type="button" variant="navy" asChild>
+                <Link to="/staff/intake/$studentId" params={{ studentId: success.studentId }}>
+                  Open record
+                </Link>
+              </Button>
+            ) : null}
             <Button type="button" onClick={() => setSuccess(null)}>
               Register another
             </Button>
@@ -340,8 +374,9 @@ function FrontDeskRegisterPage() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl space-y-6">
+    <div className="mx-auto max-w-2xl space-y-4 md:space-y-5">
       <PageHeader
+        compact
         title="Register student"
         subtitle="Required fields marked *. Fee claims are not Accounts-verified."
       />

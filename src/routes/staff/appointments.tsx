@@ -3,6 +3,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   PageHeader,
+  PageLoadState,
   TableWrap,
   fmtDate,
   LoadingRows,
@@ -18,8 +19,10 @@ import {
 } from "@/lib/appointment-status-rules";
 import { getAppointments, lookupStudent, updateAppointmentStatus } from "@/services";
 import type { Appointment } from "@/types";
+import { enforceSpecialtyStaffModuleBeforeLoad } from "@/lib/staff-specialty-before-load";
 
 export const Route = createFileRoute("/staff/appointments")({
+  beforeLoad: ({ context }) => enforceSpecialtyStaffModuleBeforeLoad(context, "counselling"),
   component: StaffAppointments,
 });
 
@@ -55,25 +58,33 @@ function StaffAppointments() {
 
   const rows = [...(apptsQ.data ?? [])].sort((a, b) => b.date.localeCompare(a.date));
 
+  if (apptsQ.isLoading) {
+    return (
+      <PageLoadState
+        title="Appointments"
+        subtitle="Confirm, reschedule, or close consultation requests."
+      >
+        <LoadingRows rows={6} />
+      </PageLoadState>
+    );
+  }
+
   return (
-    <div>
+    <div className="space-y-4 md:space-y-5">
       <PageHeader
+        compact
         title="Appointments"
         subtitle="Confirm, reschedule, or close consultation requests for your students."
       />
       {message ? (
         <p
-          className={
-            statusM.isError ? "mb-3 text-sm text-destructive" : "mb-3 text-sm text-muted-foreground"
-          }
+          className={statusM.isError ? "text-sm text-destructive" : "text-sm text-muted-foreground"}
           role="status"
         >
           {message}
         </p>
       ) : null}
-      {apptsQ.isLoading ? (
-        <LoadingRows />
-      ) : !rows.length ? (
+      {!rows.length ? (
         <EmptyState title="No appointments" body="Student requests will appear here." />
       ) : (
         <TableWrap>

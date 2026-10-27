@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -48,16 +48,68 @@ type OwnerFilter = "all" | "has_owner" | "unassigned";
 type DocsFilter = "all" | "docs_pending";
 type ActionFilter = "all" | "action_required";
 
-export function ApplicationsPipeline() {
+export type ApplicationsPipelineFocus = "docs" | "in_progress" | "submitted" | "offers" | "action";
+
+type ProgressFilter = "all" | "active_processing";
+
+function filtersFromFocus(focus: ApplicationsPipelineFocus | undefined): {
+  stage: ApplicationPipelineStage | "all";
+  docs: DocsFilter;
+  action: ActionFilter;
+  progress: ProgressFilter;
+} {
+  switch (focus) {
+    case "docs":
+      return { stage: "all", docs: "docs_pending", action: "all", progress: "all" };
+    case "in_progress":
+      // Matches admission KPI: Under Review + Ready to Submit.
+      return { stage: "all", docs: "all", action: "all", progress: "active_processing" };
+    case "submitted":
+      return { stage: "Submitted", docs: "all", action: "all", progress: "all" };
+    case "offers":
+      return { stage: "Offer Received", docs: "all", action: "all", progress: "all" };
+    case "action":
+      return { stage: "all", docs: "all", action: "action_required", progress: "all" };
+    default:
+      return { stage: "all", docs: "all", action: "all", progress: "all" };
+  }
+}
+
+export function ApplicationsPipeline({
+  initialFocus,
+  initialApplicationId,
+  initialStudentId,
+}: {
+  initialFocus?: ApplicationsPipelineFocus;
+  initialApplicationId?: string;
+  initialStudentId?: string;
+} = {}) {
   const queryClient = useQueryClient();
+  const seeded = filtersFromFocus(initialFocus);
   const [view, setView] = useState<ViewMode>("table");
-  const [stageFilter, setStageFilter] = useState<ApplicationPipelineStage | "all">("all");
+  const [stageFilter, setStageFilter] = useState<ApplicationPipelineStage | "all">(seeded.stage);
   const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>("all");
-  const [docsFilter, setDocsFilter] = useState<DocsFilter>("all");
-  const [actionFilter, setActionFilter] = useState<ActionFilter>("all");
-  const [q, setQ] = useState("");
+  const [docsFilter, setDocsFilter] = useState<DocsFilter>(seeded.docs);
+  const [actionFilter, setActionFilter] = useState<ActionFilter>(seeded.action);
+  const [progressFilter, setProgressFilter] = useState<ProgressFilter>(seeded.progress);
+  const [q, setQ] = useState(initialStudentId ?? "");
+
   const [createOpen, setCreateOpen] = useState(false);
-  const [detailId, setDetailId] = useState<string | null>(null);
+  const [detailId, setDetailId] = useState<string | null>(initialApplicationId ?? null);
+
+  useEffect(() => {
+    const next = filtersFromFocus(initialFocus);
+    setStageFilter(next.stage);
+    setDocsFilter(next.docs);
+    setActionFilter(next.action);
+    setProgressFilter(next.progress);
+  }, [initialFocus]);
+  useEffect(() => {
+    if (initialStudentId) setQ(initialStudentId);
+  }, [initialStudentId]);
+  useEffect(() => {
+    if (initialApplicationId) setDetailId(initialApplicationId);
+  }, [initialApplicationId]);
   const [dragId, setDragId] = useState<string | null>(null);
   const [stageError, setStageError] = useState<string | null>(null);
   const [returnHandoverId, setReturnHandoverId] = useState<string | null>(null);
@@ -181,6 +233,13 @@ export function ApplicationsPipeline() {
 
   const displayRows = data.rows.filter((row) => {
     if (docsFilter === "docs_pending" && row.stage !== "Docs Pending") return false;
+    if (
+      progressFilter === "active_processing" &&
+      row.stage !== "Under Review" &&
+      row.stage !== "Ready to Submit"
+    ) {
+      return false;
+    }
     if (ownerFilter === "unassigned" && row.officerId) return false;
     if (ownerFilter === "has_owner" && !row.officerId) return false;
     if (actionFilter === "action_required") {
@@ -215,10 +274,11 @@ export function ApplicationsPipeline() {
   };
 
   return (
-    <div>
+    <div className="space-y-4">
       <PageHeader
-        title="Admissions Application Queue"
-        subtitle="Search, filter, and advance university applications. Handover status stays separate from application stage."
+        compact
+        title="Application queue"
+        subtitle="Filter and advance university applications. Handover status stays separate from application stage."
         actions={
           <>
             <div className="flex rounded-md border border-border p-0.5">

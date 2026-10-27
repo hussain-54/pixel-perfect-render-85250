@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   EmptyState,
   ErrorState,
+  InlineFeedback,
   Panel,
   StatCard,
   TableWrap,
@@ -885,6 +886,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                   variant="navy"
                   disabled={saveM.isPending}
                   onClick={() => {
+                    if (saveM.isPending) return;
                     setSaveMsg(null);
                     setFieldErrors({});
                     const payload = buildAssessmentPayload();
@@ -954,22 +956,22 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 Print Assessment
               </Button>
               {assessmentDirty ? (
-                <p className="text-xs text-amber-700">You have unsaved assessment changes.</p>
+                <InlineFeedback kind="warn">You have unsaved assessment changes.</InlineFeedback>
               ) : null}
               {saveMsg ? (
-                <p
-                  className={cn(
-                    "text-sm",
+                <InlineFeedback
+                  kind={
                     saveM.isError ||
-                      saveMsg.toLowerCase().includes("missing") ||
-                      saveMsg.toLowerCase().includes("overwrite") ||
-                      saveMsg.toLowerCase().includes("before")
-                      ? "text-danger"
-                      : "text-muted-foreground",
-                  )}
+                    saveMsg.toLowerCase().includes("missing") ||
+                    saveMsg.toLowerCase().includes("overwrite") ||
+                    saveMsg.toLowerCase().includes("before") ||
+                    saveMsg.toLowerCase().includes("could not")
+                      ? "err"
+                      : "ok"
+                  }
                 >
                   {saveMsg}
-                </p>
+                </InlineFeedback>
               ) : null}
             </div>
 

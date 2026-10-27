@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useRouterState } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   EmptyState,
   ErrorState,
   LoadingRows,
+  LiveBadge,
   PageHeader,
   PageLoadState,
   Panel,
@@ -36,7 +37,11 @@ import { downloadBase64File } from "@/lib/export-formats";
 import { isSignupFeeVerified } from "@/lib/signup-fee-gate";
 import type { SignupFeeLedgerStatusFilter } from "@/lib/signup-fee-ledger";
 import { describeSignupFeeOperationalStatus } from "@/lib/signup-fee-voucher";
-import { useFinanceWorkspaceRealtime } from "@/lib/use-finance-workspace-realtime";
+import {
+  FINANCE_SIGNUP_QUEUE_KEY,
+  FINANCE_UNIVERSITY_QUEUE_KEY,
+  useFinanceWorkspaceRealtime,
+} from "@/lib/use-finance-workspace-realtime";
 import { cn } from "@/lib/utils";
 
 type SignupFeeQueueStatusFilter = SignupFeeLedgerStatusFilter;
@@ -69,6 +74,8 @@ const SIGNUP_STATUS_TABS: { id: SignupFeeQueueStatusFilter; label: string }[] = 
 /** Shared fees workspace — also mounted at `/staff/finance` for specialty desks. */
 export function FinanceModulePage() {
   const queryClient = useQueryClient();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const onStaffDesk = pathname.startsWith("/staff/");
   const liveStatus = useFinanceWorkspaceRealtime(true);
   const [ledgerTab, setLedgerTab] = useState<LedgerTab>("signup");
   const [signupStatus, setSignupStatus] = useState<SignupFeeQueueStatusFilter>("claimed");
@@ -118,7 +125,7 @@ export function FinanceModulePage() {
   }, [statusFilter]);
 
   const feesQ = useQuery({
-    queryKey: ["admin", "university-fee-queue", uniFilters],
+    queryKey: [...FINANCE_UNIVERSITY_QUEUE_KEY, uniFilters],
     queryFn: () => listUniversityFeeQueue(uniFilters),
     staleTime: 15_000,
     enabled: ledgerTab === "university",
@@ -126,8 +133,7 @@ export function FinanceModulePage() {
 
   const signupQ = useQuery({
     queryKey: [
-      "admin",
-      "signup-fee-queue",
+      ...FINANCE_SIGNUP_QUEUE_KEY,
       signupStatus,
       signupSearchApplied,
       signupOffset,
@@ -148,11 +154,11 @@ export function FinanceModulePage() {
   });
 
   const invalidateUni = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["admin", "university-fee-queue"] });
+    await queryClient.invalidateQueries({ queryKey: [...FINANCE_UNIVERSITY_QUEUE_KEY] });
   };
 
   const invalidateSignup = async () => {
-    await queryClient.invalidateQueries({ queryKey: ["admin", "signup-fee-queue"] });
+    await queryClient.invalidateQueries({ queryKey: [...FINANCE_SIGNUP_QUEUE_KEY] });
   };
 
   const createM = useMutation({
@@ -290,9 +296,10 @@ export function FinanceModulePage() {
     (/403|permission/i.test(portalErrorMessage(feesQ.error)) ||
       portalErrorMessage(feesQ.error).includes("403"));
 
-  const financeTitle = "Finance — fees & verification";
-  const financeSubtitle =
-    "Review submitted signup-fee payment proofs, then verify through the trusted Accounts RPC. University fees stay on a separate ledger. Claimed is never verified.";
+  const financeTitle = onStaffDesk ? "Accounts & Finance" : "Finance — fees & verification";
+  const financeSubtitle = onStaffDesk
+    ? "Signup fee proofs and university fee ledgers. Verify only through the trusted Accounts RPC — claimed is never verified."
+    : "Admin view of signup-fee payment proofs and university fee ledgers. Verify only through the trusted Accounts RPC — claimed is never verified.";
 
   if (ledgerTab === "signup" && signupQ.isLoading && !signupQ.data) {
     return (
@@ -332,9 +339,17 @@ export function FinanceModulePage() {
   const formatCash = (rows: { currency: string; total: number }[]) =>
     rows.length ? rows.map((r) => `${r.currency} ${r.total.toLocaleString()}`).join(" · ") : "—";
 
+  function selectSignupStatus(next: SignupFeeQueueStatusFilter) {
+    setLedgerTab("signup");
+    setSignupStatus(next);
+    setSignupOffset(0);
+    setReviewFeeId(null);
+  }
+
   return (
-    <div className="space-y-6 md:space-y-8">
+    <div className="space-y-4 md:space-y-5">
       <PageHeader
+        compact
         title={financeTitle}
         subtitle={financeSubtitle}
         actions={<LiveBadge status={liveStatus} lastSync={lastSync} />}
@@ -373,35 +388,45 @@ export function FinanceModulePage() {
 
       {ledgerTab === "signup" ? (
         <>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
             <StatCard
               label="Awaiting review"
               value={signupQ.isLoading && !signupQ.data ? "…" : String(claimedCount)}
               hint="Claimed proofs — actionable queue"
+              selected={signupStatus === "claimed"}
+              onClick={() => selectSignupStatus("claimed")}
             />
             <StatCard
               label="Voucher unpaid"
               value={signupQ.isLoading && !signupQ.data ? "…" : String(unpaidCount)}
               hint="Issued obligation, no proof yet"
+              selected={signupStatus === "unpaid"}
+              onClick={() => selectSignupStatus("unpaid")}
             />
             <StatCard
               label="Verified"
               value={signupQ.isLoading && !signupQ.data ? "…" : String(verifiedCount)}
               hint="Cash received — excludes waived"
+              selected={signupStatus === "verified"}
+              onClick={() => selectSignupStatus("verified")}
             />
             <StatCard
               label="Rejected"
               value={signupQ.isLoading && !signupQ.data ? "…" : String(rejectedCount)}
               hint="Needs Front Desk correction"
+              selected={signupStatus === "rejected"}
+              onClick={() => selectSignupStatus("rejected")}
             />
             <StatCard
               label="Waived"
               value={signupQ.isLoading && !signupQ.data ? "…" : String(waivedCount)}
               hint="Not counted as cash received"
+              selected={signupStatus === "waived"}
+              onClick={() => selectSignupStatus("waived")}
             />
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-2">
             <StatCard
               label="Verified cash (all time)"
               value={signupQ.isLoading && !signupQ.data ? "…" : formatCash(verifiedByCurrency)}
@@ -415,6 +440,7 @@ export function FinanceModulePage() {
           </div>
 
           <Panel
+            compact
             title="Signup fee verification queue"
             action={
               <Button
@@ -1120,37 +1146,5 @@ export function FinanceModulePage() {
         </div>
       )}
     </div>
-  );
-}
-
-function LiveBadge({
-  status,
-  lastSync,
-}: {
-  status: "live" | "reconnecting" | "offline" | "connecting";
-  lastSync: string | null;
-}) {
-  const label =
-    status === "live"
-      ? "Live"
-      : status === "reconnecting" || status === "connecting"
-        ? "Reconnecting"
-        : lastSync
-          ? `Last updated ${lastSync}`
-          : "Offline";
-  return (
-    <span
-      className={cn(
-        "rounded px-2 py-1 text-[11px] font-semibold uppercase tracking-wide",
-        status === "live"
-          ? "bg-emerald-50 text-emerald-800"
-          : status === "offline"
-            ? "bg-slate-100 text-slate-600"
-            : "bg-amber-50 text-amber-800",
-      )}
-      title={lastSync ? `Synced ${lastSync}` : undefined}
-    >
-      {label}
-    </span>
   );
 }

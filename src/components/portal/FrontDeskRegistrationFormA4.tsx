@@ -347,7 +347,7 @@ export function FrontDeskRegistrationFormA4({
                     checked: row.assignmentStatus === "pending",
                   },
                   {
-                    label: row.counsellorName || "Assigned",
+                    label: row.counsellorName || "Counsellor assigned",
                     checked: row.assignmentStatus === "assigned",
                   },
                 ]}

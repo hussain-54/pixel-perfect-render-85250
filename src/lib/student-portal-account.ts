@@ -4,10 +4,7 @@
  */
 
 export type StudentPortalAccountStatus =
-  | "not_provisioned"
-  | "pending_setup"
-  | "pending_activation"
-  | "active";
+  "not_provisioned" | "pending_setup" | "pending_activation" | "active";
 
 export function studentPortalAccountStatus(input: {
   profileId: string | null | undefined;
@@ -102,6 +99,28 @@ export function studentFacingFeeLabel(status: string | null | undefined): string
       return "Payment pending";
     default:
       return "Not recorded";
+  }
+}
+
+/** Short StatCard hint for signup fee — status-aware, no ledger amounts. */
+export function studentFacingFeeHint(
+  status: string | null | undefined,
+  portalActivated: boolean,
+): string {
+  if (portalActivated) return "Portal access is active";
+  switch ((status ?? "").trim().toLowerCase()) {
+    case "rejected":
+      return "Payment was rejected — contact Front Desk with updated proof";
+    case "claimed":
+      return "Accounts is reviewing your payment proof";
+    case "verified":
+      return "Verified — portal activation may still be processing";
+    case "waived":
+      return "Fee waived — portal activation may still be processing";
+    case "unpaid":
+      return "Pay the voucher, then submit proof for Accounts";
+    default:
+      return "Unlocks after Accounts verification or waiver";
   }
 }
 

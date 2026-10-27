@@ -129,7 +129,7 @@ describe("admission-workspace", () => {
         linkPath: null,
         studentId: "abc",
       }),
-    ).toBe("/staff/students/abc");
+    ).toBe("/staff/applications?studentId=abc");
   });
 
   it("formats application refs without inventing business ids", () => {
