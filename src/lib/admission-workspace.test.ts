@@ -123,13 +123,26 @@ describe("admission-workspace", () => {
         linkPath: "/staff/applications",
         studentId: "abc",
       }),
-    ).toBe("/staff/applications");
+    ).toBe("/staff/applications?focus=handovers&studentId=abc");
     expect(
       resolveAdmissionNotificationHref({
         linkPath: null,
         studentId: "abc",
       }),
-    ).toBe("/staff/applications?studentId=abc");
+    ).toBe("/staff/applications?focus=handovers&studentId=abc");
+    expect(
+      resolveAdmissionNotificationHref({
+        linkPath: "/staff/applications",
+        studentId: null,
+      }),
+    ).toBe("/staff/applications?focus=handovers");
+  });
+
+  it("formats handover status labels for staff UI", async () => {
+    const { formatAdmissionHandoverStatusLabel } = await import("./admission-workspace");
+    expect(formatAdmissionHandoverStatusLabel("submitted")).toBe("Sent to Admission");
+    expect(formatAdmissionHandoverStatusLabel("accepted")).toBe("Received by Admission");
+    expect(formatAdmissionHandoverStatusLabel("returned")).toBe("Returned for Clarification");
   });
 
   it("formats application refs without inventing business ids", () => {

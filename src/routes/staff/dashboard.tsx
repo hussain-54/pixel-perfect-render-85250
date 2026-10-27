@@ -200,12 +200,12 @@ function StaffDashboard() {
   }
 
   function admissionAppsSearch(opts: {
-    focus?: "docs" | "in_progress" | "submitted" | "offers" | "action";
+    focus?: "docs" | "in_progress" | "submitted" | "offers" | "action" | "handovers" | "returned";
     applicationId?: string | null;
     studentId?: string | null;
   }) {
     const search: {
-      focus?: "docs" | "in_progress" | "submitted" | "offers" | "action";
+      focus?: "docs" | "in_progress" | "submitted" | "offers" | "action" | "handovers" | "returned";
       applicationId?: string;
       studentId?: string;
     } = {};
@@ -219,9 +219,12 @@ function StaffDashboard() {
     return search;
   }
 
-  function admissionFocusForAttentionKind(kind: string): "docs" | "action" | undefined {
+  function admissionFocusForAttentionKind(
+    kind: string,
+  ): "docs" | "action" | "handovers" | undefined {
     if (kind === "docs") return "docs";
-    if (kind === "handover" || kind === "stage") return "action";
+    if (kind === "handover") return "handovers";
+    if (kind === "stage") return "action";
     return undefined;
   }
 
@@ -229,7 +232,7 @@ function StaffDashboard() {
     <div className="space-y-4 md:space-y-5">
       <PageHeader
         compact
-        title={isAdmission ? "Admissions" : "Counsellor workbench"}
+        title={isAdmission ? "Admission Team Workspace" : "Counsellor workbench"}
         subtitle={`${data.greetingName} · ${workspaceTitle}`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
@@ -294,7 +297,7 @@ function StaffDashboard() {
             onClick={() =>
               void router.navigate({
                 to: "/staff/applications",
-                search: { focus: "action" },
+                search: { focus: "handovers" },
               })
             }
           />
@@ -330,7 +333,7 @@ function StaffDashboard() {
             onClick={() =>
               void router.navigate({
                 to: "/staff/applications",
-                search: { focus: "action" },
+                search: { focus: "returned" },
               })
             }
           />

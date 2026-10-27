@@ -1618,14 +1618,17 @@ export const portalHandoverToAdmission = createServerFn({ method: "POST" })
         .single();
       if (error) throw new Error(error.message);
 
+      // Journey stage is secondary to the handover row — never roll back a confirmed
+      // submit or report total failure when Admission already has the queue item.
+      let journeyStageSynced = true;
+      let journeyStageWarning: string | null = null;
       const { error: stageErr } = await client
         .from("students")
         .update({ journey_stage: "university_shortlisting" })
         .eq("id", data.studentId);
       if (stageErr) {
-        throw new Error(
-          `Admission handover was saved, but journey stage update failed: ${stageErr.message}. Confirm handover row ${handover.id} and re-run stage sync; do not treat the case as fully advanced.`,
-        );
+        journeyStageSynced = false;
+        journeyStageWarning = `Handover is in the Admission queue, but journey stage sync failed: ${stageErr.message}`;
       }
 
       const { writeAudit } = await import("@/services/db");
@@ -1634,7 +1637,11 @@ export const portalHandoverToAdmission = createServerFn({ method: "POST" })
         entity_type: "admission_handovers",
         entity_id: handover.id,
         student_id: data.studentId,
-        metadata: { status: "submitted" },
+        metadata: {
+          status: "submitted",
+          journeyStageSynced,
+          ...(journeyStageWarning ? { journeyStageWarning } : {}),
+        },
       });
 
       // Notify Admission Team desks (and optional to_owner) — best-effort.
@@ -1651,12 +1658,13 @@ export const portalHandoverToAdmission = createServerFn({ method: "POST" })
           if (p.id) recipientIds.add(p.id);
         }
         if (recipientIds.size) {
+          const linkPath = `/staff/applications?focus=handovers&studentId=${encodeURIComponent(data.studentId)}`;
           await client.from("notifications").insert(
             [...recipientIds].map((userId) => ({
               user_id: userId,
               title: "Admission handover submitted",
               body,
-              link_path: "/staff/applications",
+              link_path: linkPath,
               student_id: data.studentId,
             })),
           );
@@ -1668,6 +1676,8 @@ export const portalHandoverToAdmission = createServerFn({ method: "POST" })
       return {
         ok: true as const,
         alreadySubmitted: false as const,
+        journeyStageSynced,
+        ...(journeyStageWarning ? { warning: journeyStageWarning } : {}),
         handover: {
           id: handover.id,
           studentId: handover.student_id,
@@ -1977,6 +1987,10 @@ export const portalUpdateAdmissionHandover = createServerFn({ method: "POST" })
         .single();
       if (error) throw new Error(error.message);
 
+      // Handover status is already committed. Stage sync is best-effort so the UI
+      // never reports failure after a successful Accept/Return.
+      let journeyStageSynced = true;
+      let journeyStageWarning: string | null = null;
       if (data.action === "accept") {
         const { nextJourneyStageIfAdvanced } = await import("@/lib/journey-stage");
         const { data: student, error: studentLoadErr } = await client
@@ -1985,22 +1999,22 @@ export const portalUpdateAdmissionHandover = createServerFn({ method: "POST" })
           .eq("id", row.student_id)
           .maybeSingle();
         if (studentLoadErr) {
-          throw new AuthError(
-            `Handover accepted, but student record is not visible yet (${studentLoadErr.message}). Apply admission SELECT/mutate migration if needed.`,
-            409,
+          journeyStageSynced = false;
+          journeyStageWarning = `Handover accepted, but student record is not visible yet (${studentLoadErr.message}). Apply admission SELECT/mutate migration if needed.`;
+        } else {
+          const next = nextJourneyStageIfAdvanced(
+            student?.journey_stage,
+            "university_shortlisting",
           );
-        }
-        const next = nextJourneyStageIfAdvanced(student?.journey_stage, "university_shortlisting");
-        if (next) {
-          const { error: stageErr } = await client
-            .from("students")
-            .update({ journey_stage: next })
-            .eq("id", row.student_id);
-          if (stageErr) {
-            throw new AuthError(
-              `Handover accepted, but journey stage could not be updated (${stageErr.message}).`,
-              409,
-            );
+          if (next) {
+            const { error: stageErr } = await client
+              .from("students")
+              .update({ journey_stage: next })
+              .eq("id", row.student_id);
+            if (stageErr) {
+              journeyStageSynced = false;
+              journeyStageWarning = `Handover accepted, but journey stage could not be updated (${stageErr.message}).`;
+            }
           }
         }
       }
@@ -2011,7 +2025,11 @@ export const portalUpdateAdmissionHandover = createServerFn({ method: "POST" })
         entity_type: "admission_handovers",
         entity_id: row.id,
         student_id: row.student_id,
-        metadata: { status: nextStatus },
+        metadata: {
+          status: nextStatus,
+          journeyStageSynced,
+          ...(journeyStageWarning ? { journeyStageWarning } : {}),
+        },
       });
 
       // Notify originating counsellor — best-effort.
@@ -2024,6 +2042,7 @@ export const portalUpdateAdmissionHandover = createServerFn({ method: "POST" })
             .eq("id", row.student_id)
             .maybeSingle();
           const outcome = data.action === "accept" ? "accepted" : "returned";
+          const studentLink = `/staff/students/${encodeURIComponent(row.student_id)}`;
           await client.from("notifications").insert({
             user_id: counsellorId,
             title: `Admission handover ${outcome}`,
@@ -2033,7 +2052,7 @@ export const portalUpdateAdmissionHandover = createServerFn({ method: "POST" })
                 : `Admission returned ${stu?.full_name || "student"} (${stu?.case_id || row.student_id})${
                     note ? `: ${note}` : "."
                   }`,
-            link_path: "/staff/students",
+            link_path: studentLink,
             student_id: row.student_id,
           });
         }
@@ -2043,6 +2062,8 @@ export const portalUpdateAdmissionHandover = createServerFn({ method: "POST" })
 
       return {
         ok: true as const,
+        journeyStageSynced,
+        ...(journeyStageWarning ? { warning: journeyStageWarning } : {}),
         handover: {
           id: row.id,
           studentId: row.student_id,

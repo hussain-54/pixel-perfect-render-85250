@@ -138,10 +138,13 @@ export const portalGetApplicationsPipeline = createServerFn({ method: "GET" })
         const stageFilter = data.stage && data.stage !== "all" ? data.stage : null;
         if (stageFilter) apps = apps.filter((a) => a.status === stageFilter);
         if (data.studentId) {
+          // Deep-link filter: empty apps if not visible (do not 403 the whole workspace —
+          // incoming handovers may still load for submitted cases).
           if (!students.some((s) => s.id === data.studentId)) {
-            throw new AuthError("You do not have access to this student record.", 403);
+            apps = [];
+          } else {
+            apps = apps.filter((a) => a.studentId === data.studentId);
           }
-          apps = apps.filter((a) => a.studentId === data.studentId);
         }
         const q = data.q?.trim().toLowerCase();
         if (q) {
@@ -149,6 +152,7 @@ export const portalGetApplicationsPipeline = createServerFn({ method: "GET" })
             const st = students.find((s) => s.id === a.studentId);
             return (
               a.id.toLowerCase().includes(q) ||
+              a.studentId.toLowerCase().includes(q) ||
               a.university.toLowerCase().includes(q) ||
               a.program.toLowerCase().includes(q) ||
               (st?.name ?? "").toLowerCase().includes(q) ||
@@ -212,8 +216,11 @@ export const portalGetApplicationsPipeline = createServerFn({ method: "GET" })
         apps = apps.filter((a) => a.status === stageFilter);
       }
       if (data.studentId) {
-        assertStudentVisible(session, data.studentId);
-        apps = apps.filter((a) => a.studentId === data.studentId);
+        if (!students.some((s) => s.id === data.studentId)) {
+          apps = [];
+        } else {
+          apps = apps.filter((a) => a.studentId === data.studentId);
+        }
       }
       const q = data.q?.trim().toLowerCase();
       if (q) {
@@ -221,6 +228,7 @@ export const portalGetApplicationsPipeline = createServerFn({ method: "GET" })
           const st = students.find((s) => s.id === a.studentId);
           return (
             a.id.toLowerCase().includes(q) ||
+            a.studentId.toLowerCase().includes(q) ||
             a.university.toLowerCase().includes(q) ||
             a.program.toLowerCase().includes(q) ||
             (st?.name ?? "").toLowerCase().includes(q) ||

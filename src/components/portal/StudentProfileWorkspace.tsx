@@ -574,7 +574,15 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                                   "This student is already in the Admission Team queue.",
                               );
                             } else {
-                              setLifecycleMsg("Forwarded to the Admission Team.");
+                              const warning =
+                                result && "warning" in result && typeof result.warning === "string"
+                                  ? result.warning
+                                  : null;
+                              setLifecycleMsg(
+                                warning
+                                  ? `Sent to Admission. Note: ${warning}`
+                                  : "Sent to Admission — case is in the Admission Team queue.",
+                              );
                               setHandoverSummary("");
                               setShowHandoverNote(false);
                             }
@@ -585,6 +593,12 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                             });
                             await queryClient.invalidateQueries({
                               queryKey: ["officer", "admission-handovers"],
+                            });
+                            await queryClient.invalidateQueries({
+                              queryKey: ["officer", "dashboard"],
+                            });
+                            await queryClient.invalidateQueries({
+                              queryKey: ["officer", "applications-pipeline"],
                             });
                           } catch (e) {
                             setLifecycleMsg(
@@ -606,9 +620,16 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
               ) : null}
 
               {lifecycleSnap?.handover ? (
-                <details className="mt-3 text-xs text-muted-foreground">
+                <details className="mt-3 text-xs text-muted-foreground" open>
                   <summary className="cursor-pointer font-medium text-navy">
-                    Handover status: {lifecycleSnap.handover.status}
+                    Handover status:{" "}
+                    {lifecycleSnap.handover.status === "submitted"
+                      ? "Sent to Admission"
+                      : lifecycleSnap.handover.status === "accepted"
+                        ? "Received by Admission"
+                        : lifecycleSnap.handover.status === "returned"
+                          ? "Returned for Clarification"
+                          : lifecycleSnap.handover.status}
                   </summary>
                   <p className="mt-1">
                     Last update{" "}

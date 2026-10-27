@@ -4,11 +4,15 @@ import { enforceSpecialtyStaffModuleBeforeLoad } from "@/lib/staff-specialty-bef
 import { useCounsellorWorkbenchRealtime } from "@/lib/use-counsellor-workbench-realtime";
 
 export type ApplicationsSearch = {
-  /** Workbench KPI deep-link: docs | in_progress | submitted | offers | action */
-  focus?: "docs" | "in_progress" | "submitted" | "offers" | "action";
+  /**
+   * Workbench KPI deep-link:
+   * handovers = counsellor incoming queue; returned = clarification empty-state;
+   * docs | in_progress | submitted | offers | action = application stage filters.
+   */
+  focus?: "docs" | "in_progress" | "submitted" | "offers" | "action" | "handovers" | "returned";
   /** Open pipeline detail dialog for this application. */
   applicationId?: string;
-  /** Prefill queue search (case id / student). */
+  /** Deep-link a student (UUID) into the handover panel + app filter — not free-text search. */
   studentId?: string;
 };
 
@@ -22,7 +26,9 @@ export const Route = createFileRoute("/staff/applications")({
       focus === "in_progress" ||
       focus === "submitted" ||
       focus === "offers" ||
-      focus === "action"
+      focus === "action" ||
+      focus === "handovers" ||
+      focus === "returned"
     ) {
       out.focus = focus;
     }

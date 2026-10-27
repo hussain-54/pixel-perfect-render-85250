@@ -282,21 +282,45 @@ export function buildAdmissionAttentionItems(input: {
   return [...byKey.values()].slice(0, limit);
 }
 
+/** Deep-link focus values for /staff/applications (handover queue vs app stages). */
+export type AdmissionApplicationsFocus =
+  "docs" | "in_progress" | "submitted" | "offers" | "action" | "handovers" | "returned";
+
 export function resolveAdmissionNotificationHref(input: {
   linkPath: string | null | undefined;
   studentId: string | null | undefined;
 }): string {
-  const path = (input.linkPath ?? "").trim();
-  if (path.startsWith("/staff/applications")) return path.split("?")[0] || "/staff/applications";
-  if (path.startsWith("/staff/documents")) return "/staff/documents";
-  if (path.startsWith("/staff/offers")) return "/staff/offers";
-  // Prefer the applications queue for Admission desks; student profile is secondary.
+  const raw = (input.linkPath ?? "").trim();
+  const basePath = raw.split("?")[0] || "";
   const studentId = input.studentId?.trim();
-  if (studentId) {
-    return `/staff/applications?studentId=${encodeURIComponent(studentId)}`;
+  const withStudent = (path: string, focus?: AdmissionApplicationsFocus) => {
+    const params = new URLSearchParams();
+    if (focus) params.set("focus", focus);
+    if (studentId) params.set("studentId", studentId);
+    const qs = params.toString();
+    return qs ? `${path}?${qs}` : path;
+  };
+
+  if (basePath.startsWith("/staff/applications")) {
+    // Preserve student deep-link; open the incoming handover queue when no apps yet.
+    return withStudent("/staff/applications", "handovers");
   }
-  if (path.startsWith("/staff/students")) return "/staff/applications";
+  if (basePath.startsWith("/staff/documents")) return "/staff/documents";
+  if (basePath.startsWith("/staff/offers")) return "/staff/offers";
+  if (studentId) {
+    return withStudent("/staff/applications", "handovers");
+  }
+  if (basePath.startsWith("/staff/students")) return "/staff/applications?focus=handovers";
   return "/staff/applications";
+}
+
+/** Human-readable handover status for staff UI (aligned with DB enum). */
+export function formatAdmissionHandoverStatusLabel(status: string | null | undefined): string {
+  const s = (status ?? "").trim().toLowerCase();
+  if (s === "submitted") return "Sent to Admission";
+  if (s === "accepted") return "Received by Admission";
+  if (s === "returned") return "Returned for Clarification";
+  return status?.trim() || "—";
 }
 
 export function pipelineStageLabels(): { key: ApplicationPipelineStage; label: string }[] {

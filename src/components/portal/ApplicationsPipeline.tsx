@@ -40,7 +40,11 @@ import {
   type ApplicationPipelineRow,
   type ApplicationStageTarget,
 } from "@/types/applications-pipeline";
-import { deriveAdmissionNextAction, formatApplicationRef } from "@/lib/admission-workspace";
+import {
+  deriveAdmissionNextAction,
+  formatAdmissionHandoverStatusLabel,
+  formatApplicationRef,
+} from "@/lib/admission-workspace";
 import { cn } from "@/lib/utils";
 
 type ViewMode = "table" | "board";
@@ -48,7 +52,8 @@ type OwnerFilter = "all" | "has_owner" | "unassigned";
 type DocsFilter = "all" | "docs_pending";
 type ActionFilter = "all" | "action_required";
 
-export type ApplicationsPipelineFocus = "docs" | "in_progress" | "submitted" | "offers" | "action";
+export type ApplicationsPipelineFocus =
+  "docs" | "in_progress" | "submitted" | "offers" | "action" | "handovers" | "returned";
 
 type ProgressFilter = "all" | "active_processing";
 
@@ -57,21 +62,83 @@ function filtersFromFocus(focus: ApplicationsPipelineFocus | undefined): {
   docs: DocsFilter;
   action: ActionFilter;
   progress: ProgressFilter;
+  emphasizeHandovers: boolean;
+  showReturnedNotice: boolean;
 } {
   switch (focus) {
     case "docs":
-      return { stage: "all", docs: "docs_pending", action: "all", progress: "all" };
+      return {
+        stage: "all",
+        docs: "docs_pending",
+        action: "all",
+        progress: "all",
+        emphasizeHandovers: false,
+        showReturnedNotice: false,
+      };
     case "in_progress":
       // Matches admission KPI: Under Review + Ready to Submit.
-      return { stage: "all", docs: "all", action: "all", progress: "active_processing" };
+      return {
+        stage: "all",
+        docs: "all",
+        action: "all",
+        progress: "active_processing",
+        emphasizeHandovers: false,
+        showReturnedNotice: false,
+      };
     case "submitted":
-      return { stage: "Submitted", docs: "all", action: "all", progress: "all" };
+      return {
+        stage: "Submitted",
+        docs: "all",
+        action: "all",
+        progress: "all",
+        emphasizeHandovers: false,
+        showReturnedNotice: false,
+      };
     case "offers":
-      return { stage: "Offer Received", docs: "all", action: "all", progress: "all" };
+      return {
+        stage: "Offer Received",
+        docs: "all",
+        action: "all",
+        progress: "all",
+        emphasizeHandovers: false,
+        showReturnedNotice: false,
+      };
     case "action":
-      return { stage: "all", docs: "all", action: "action_required", progress: "all" };
+      return {
+        stage: "all",
+        docs: "all",
+        action: "action_required",
+        progress: "all",
+        emphasizeHandovers: true,
+        showReturnedNotice: false,
+      };
+    case "handovers":
+      return {
+        stage: "all",
+        docs: "all",
+        action: "all",
+        progress: "all",
+        emphasizeHandovers: true,
+        showReturnedNotice: false,
+      };
+    case "returned":
+      return {
+        stage: "all",
+        docs: "all",
+        action: "all",
+        progress: "all",
+        emphasizeHandovers: false,
+        showReturnedNotice: true,
+      };
     default:
-      return { stage: "all", docs: "all", action: "all", progress: "all" };
+      return {
+        stage: "all",
+        docs: "all",
+        action: "all",
+        progress: "all",
+        emphasizeHandovers: false,
+        showReturnedNotice: false,
+      };
   }
 }
 
@@ -92,10 +159,16 @@ export function ApplicationsPipeline({
   const [docsFilter, setDocsFilter] = useState<DocsFilter>(seeded.docs);
   const [actionFilter, setActionFilter] = useState<ActionFilter>(seeded.action);
   const [progressFilter, setProgressFilter] = useState<ProgressFilter>(seeded.progress);
-  const [q, setQ] = useState(initialStudentId ?? "");
+  const [emphasizeHandovers, setEmphasizeHandovers] = useState(seeded.emphasizeHandovers);
+  const [showReturnedNotice, setShowReturnedNotice] = useState(seeded.showReturnedNotice);
+  /** Free-text search only — never seed with a UUID deep-link. */
+  const [q, setQ] = useState("");
+  /** Deep-linked student UUID from KPI / notification — filters apps + highlights handover. */
+  const [focusStudentId, setFocusStudentId] = useState(initialStudentId?.trim() || "");
 
   const [createOpen, setCreateOpen] = useState(false);
   const [detailId, setDetailId] = useState<string | null>(initialApplicationId ?? null);
+  const [handoverSuccessMsg, setHandoverSuccessMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const next = filtersFromFocus(initialFocus);
@@ -103,9 +176,11 @@ export function ApplicationsPipeline({
     setDocsFilter(next.docs);
     setActionFilter(next.action);
     setProgressFilter(next.progress);
+    setEmphasizeHandovers(next.emphasizeHandovers);
+    setShowReturnedNotice(next.showReturnedNotice);
   }, [initialFocus]);
   useEffect(() => {
-    if (initialStudentId) setQ(initialStudentId);
+    setFocusStudentId(initialStudentId?.trim() || "");
   }, [initialStudentId]);
   useEffect(() => {
     if (initialApplicationId) setDetailId(initialApplicationId);
@@ -129,13 +204,19 @@ export function ApplicationsPipeline({
   });
 
   const filters = useMemo(() => {
-    const next: { q?: string; stage: ApplicationPipelineStage | "all" } = {
+    const next: {
+      q?: string;
+      stage: ApplicationPipelineStage | "all";
+      studentId?: string;
+    } = {
       stage: stageFilter,
     };
     const trimmed = q.trim();
     if (trimmed) next.q = trimmed;
+    const sid = focusStudentId.trim();
+    if (sid) next.studentId = sid;
     return next;
-  }, [q, stageFilter]);
+  }, [q, stageFilter, focusStudentId]);
 
   const pipelineQ = useQuery({
     queryKey: ["officer", "applications-pipeline", filters],
@@ -171,13 +252,21 @@ export function ApplicationsPipeline({
   const handoverM = useMutation({
     mutationFn: (input: { handoverId: string; action: "accept" | "return"; note?: string }) =>
       updateAdmissionHandover(input),
-    onSuccess: async () => {
+    onSuccess: async (result, variables) => {
       setStageError(null);
       setReturnHandoverId(null);
       setReturnNote("");
+      const warning =
+        result && "warning" in result && typeof result.warning === "string" ? result.warning : null;
+      const label =
+        variables.action === "accept" ? "Received by Admission" : "Returned for Clarification";
+      setHandoverSuccessMsg(warning ? `${label}. Note: ${warning}` : `${label}.`);
       await invalidate();
     },
-    onError: (err) => setStageError(portalErrorMessage(err, "Handover update failed.")),
+    onError: (err) => {
+      setHandoverSuccessMsg(null);
+      setStageError(portalErrorMessage(err, "Handover update failed."));
+    },
   });
 
   const stageM = useMutation({
@@ -219,17 +308,34 @@ export function ApplicationsPipeline({
     return map;
   }, [handoversQ.data]);
 
-  if (pipelineQ.isLoading) return <LoadingRows rows={8} />;
-  if (pipelineQ.isError) {
+  if (pipelineQ.isLoading && handoversQ.isLoading) return <LoadingRows rows={8} />;
+  if (pipelineQ.isError && !pipelineQ.data) {
     const msg = portalErrorMessage(pipelineQ.error);
     if (String(pipelineQ.error).includes("403") || msg.toLowerCase().includes("permission")) {
       return <PermissionDenied body={msg} />;
     }
-    return <ErrorState body={msg} onRetry={() => void pipelineQ.refetch()} />;
+    // Still allow handover queue when applications fail separately.
+    if (!handoversQ.data && handoversQ.isError) {
+      return <ErrorState body={msg} onRetry={() => void pipelineQ.refetch()} />;
+    }
   }
 
-  const data = pipelineQ.data;
-  if (!data) return <EmptyState title="No applications data" />;
+  const data = pipelineQ.data ?? {
+    rows: [] as ApplicationPipelineRow[],
+    counts: {
+      all: 0,
+      "Docs Pending": 0,
+      "Under Review": 0,
+      "Ready to Submit": 0,
+      Submitted: 0,
+      "Offer Received": 0,
+    },
+    students: [] as { id: string; name: string; caseId: string }[],
+    canCreate: false,
+  };
+  if (pipelineQ.isError && !pipelineQ.data) {
+    // Fall through with empty apps so the incoming handover queue remains usable.
+  }
 
   const displayRows = data.rows.filter((row) => {
     if (docsFilter === "docs_pending" && row.stage !== "Docs Pending") return false;
@@ -273,12 +379,22 @@ export function ApplicationsPipeline({
     requestStageChange(id, toStage);
   };
 
+  const incomingHandovers = handoversQ.data?.handovers ?? [];
+  const highlightedHandovers = focusStudentId
+    ? incomingHandovers.filter((h) => h.studentId === focusStudentId)
+    : incomingHandovers;
+  const handoverCount = incomingHandovers.length;
+  const docsPendingCount = data.counts["Docs Pending"] ?? 0;
+  const inProgressCount =
+    (data.counts["Under Review"] ?? 0) + (data.counts["Ready to Submit"] ?? 0);
+  const submittedCount = data.counts.Submitted ?? 0;
+
   return (
     <div className="space-y-4">
       <PageHeader
         compact
-        title="Application queue"
-        subtitle="Filter and advance university applications. Handover status stays separate from application stage."
+        title="Admission Team Workspace"
+        subtitle="Review counsellor handovers, then verify documents and advance university applications. Handover status stays separate from application stage."
         actions={
           <>
             <div className="flex rounded-md border border-border p-0.5">
@@ -306,76 +422,160 @@ export function ApplicationsPipeline({
         }
       />
 
-      {(handoversQ.data?.handovers?.length ?? 0) > 0 ? (
-        <Panel title="Counsellor handovers awaiting review" className="mb-4">
-          <p className="mb-3 text-xs text-muted-foreground">
-            Handover status is not an application stage. Accept to take ownership, or return with a
-            note for the counsellor.
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <WorkspaceKpi
+          label="Files from Counsellors"
+          value={handoverCount}
+          active={emphasizeHandovers}
+          onClick={() => {
+            setEmphasizeHandovers(true);
+            setShowReturnedNotice(false);
+            setFocusStudentId("");
+          }}
+        />
+        <WorkspaceKpi label="Docs under review" value={docsPendingCount} />
+        <WorkspaceKpi label="Applications in pipeline" value={data.counts.all} />
+        <WorkspaceKpi label="Submitted to university" value={submittedCount + inProgressCount} />
+      </div>
+
+      {showReturnedNotice ? (
+        <Panel title="Returned for clarification" className="mb-4">
+          <p className="text-sm text-muted-foreground">
+            Cases returned to a counsellor leave the Admission incoming queue by design. The
+            counsellor sees <strong>Returned for Clarification</strong> and can forward again when
+            ready. Re-submitted cases appear under Files from Counsellors.
           </p>
-          <TableWrap>
-            <thead>
-              <tr>
-                <th>Student</th>
-                <th>Summary</th>
-                <th>Handed over</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {handoversQ.data!.handovers.map((h) => (
-                <tr key={h.id}>
-                  <td className="font-medium text-navy">
-                    <Link
-                      to="/staff/students/$studentId"
-                      params={{ studentId: h.studentId }}
-                      search={{ tab: "applications" }}
-                      className="hover:underline"
-                    >
-                      {h.studentName ?? h.studentCaseId ?? h.studentId.slice(0, 8)}
-                    </Link>
-                    {h.studentCaseId ? (
-                      <p className="text-xs text-muted-foreground">{h.studentCaseId}</p>
-                    ) : null}
-                  </td>
-                  <td className="max-w-md text-sm text-muted-foreground">{h.summary}</td>
-                  <td>{fmtDate(h.handedOverAt)}</td>
-                  <td>
-                    <div className="flex flex-wrap gap-1">
-                      <Button
-                        size="sm"
-                        variant="navy"
-                        disabled={handoverM.isPending}
-                        onClick={() => {
-                          if (
-                            window.confirm(
-                              "Accept this handover and take admissions ownership for this student?",
-                            )
-                          ) {
-                            handoverM.mutate({ handoverId: h.id, action: "accept" });
-                          }
-                        }}
-                      >
-                        Accept
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        disabled={handoverM.isPending}
-                        onClick={() => {
-                          setReturnHandoverId(h.id);
-                          setReturnNote("");
-                        }}
-                      >
-                        Return
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </TableWrap>
         </Panel>
       ) : null}
+
+      {handoverSuccessMsg ? (
+        <div className="rounded-md border border-border bg-surface/60 px-3 py-2 text-sm text-navy">
+          {handoverSuccessMsg}
+        </div>
+      ) : null}
+
+      <div id="admission-handover-queue">
+        <Panel
+          title="Incoming counsellor handovers"
+          className={cn("mb-4", emphasizeHandovers && "ring-2 ring-royal/30")}
+        >
+          <p className="mb-3 text-xs text-muted-foreground">
+            Status: {formatAdmissionHandoverStatusLabel("submitted")}. Accept to take ownership, or
+            return with a note. This queue is not an application stage.
+          </p>
+          {focusStudentId ? (
+            <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span>
+                Filtered to deep-linked student{" "}
+                <span className="font-mono text-navy">{focusStudentId.slice(0, 8)}…</span>
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2"
+                onClick={() => setFocusStudentId("")}
+              >
+                Clear filter
+              </Button>
+            </div>
+          ) : null}
+          {handoversQ.isLoading ? (
+            <LoadingRows rows={3} />
+          ) : handoversQ.isError ? (
+            <ErrorState
+              body={portalErrorMessage(handoversQ.error, "Could not load counsellor handovers.")}
+              onRetry={() => void handoversQ.refetch()}
+            />
+          ) : highlightedHandovers.length === 0 ? (
+            <EmptyState
+              title={
+                focusStudentId && handoverCount > 0
+                  ? "No matching handover for this student"
+                  : "No incoming handovers"
+              }
+              body={
+                focusStudentId && handoverCount > 0
+                  ? "This student may already have been accepted, returned, or is not in the submitted queue."
+                  : "When a counsellor forwards a prepared student, the case appears here automatically."
+              }
+            />
+          ) : (
+            <TableWrap>
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th>Status</th>
+                  <th>Summary</th>
+                  <th>Handed over</th>
+                  <th>Next action</th>
+                  <th>Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {highlightedHandovers.map((h) => (
+                  <tr
+                    key={h.id}
+                    className={cn(focusStudentId && h.studentId === focusStudentId && "bg-royal/5")}
+                  >
+                    <td className="font-medium text-navy">
+                      <Link
+                        to="/staff/students/$studentId"
+                        params={{ studentId: h.studentId }}
+                        search={{ tab: "applications" }}
+                        className="hover:underline"
+                      >
+                        {h.studentName ?? h.studentCaseId ?? h.studentId.slice(0, 8)}
+                      </Link>
+                      {h.studentCaseId ? (
+                        <p className="text-xs text-muted-foreground">{h.studentCaseId}</p>
+                      ) : null}
+                    </td>
+                    <td>
+                      <StatusBadge status={formatAdmissionHandoverStatusLabel(h.status)} />
+                    </td>
+                    <td className="max-w-md text-sm text-muted-foreground">{h.summary}</td>
+                    <td>{fmtDate(h.handedOverAt)}</td>
+                    <td className="text-xs text-muted-foreground">
+                      Review counsellor handover — Accept or Return
+                    </td>
+                    <td>
+                      <div className="flex flex-wrap gap-1">
+                        <Button
+                          size="sm"
+                          variant="navy"
+                          disabled={handoverM.isPending}
+                          onClick={() => {
+                            if (
+                              window.confirm(
+                                "Accept this handover and take admissions ownership for this student?",
+                              )
+                            ) {
+                              handoverM.mutate({ handoverId: h.id, action: "accept" });
+                            }
+                          }}
+                        >
+                          Accept
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={handoverM.isPending}
+                          onClick={() => {
+                            setReturnHandoverId(h.id);
+                            setReturnNote("");
+                          }}
+                        >
+                          Return
+                        </Button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </TableWrap>
+          )}
+        </Panel>
+      </div>
 
       <div className="mb-4 flex flex-wrap gap-2">
         <StageChip
@@ -402,7 +602,10 @@ export function ApplicationsPipeline({
             placeholder="Student, case, app ID, university, or program…"
             aria-label="Search applications"
             value={q}
-            onChange={(e) => setQ(e.target.value)}
+            onChange={(e) => {
+              setQ(e.target.value);
+              if (focusStudentId) setFocusStudentId("");
+            }}
           />
         </div>
         <FilterSelect
@@ -434,6 +637,18 @@ export function ApplicationsPipeline({
           ]}
         />
       </div>
+
+      {pipelineQ.isError ? (
+        <div className="mb-4">
+          <ErrorState
+            body={portalErrorMessage(
+              pipelineQ.error,
+              "Could not load the applications pipeline. Incoming handovers may still be available above.",
+            )}
+            onRetry={() => void pipelineQ.refetch()}
+          />
+        </div>
+      ) : null}
 
       {stageError ? (
         <div className="mb-4">
@@ -857,6 +1072,40 @@ export function ApplicationsPipeline({
       </Dialog>
     </div>
   );
+}
+
+function WorkspaceKpi({
+  label,
+  value,
+  active,
+  onClick,
+}: {
+  label: string;
+  value: number;
+  active?: boolean;
+  onClick?: () => void;
+}) {
+  const body = (
+    <>
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <b className="mt-1 block text-2xl font-semibold text-navy">{value}</b>
+    </>
+  );
+  if (onClick) {
+    return (
+      <button
+        type="button"
+        onClick={onClick}
+        className={cn(
+          "rounded-xl border border-border bg-white px-4 py-3 text-left transition-colors hover:border-royal/40",
+          active && "ring-2 ring-royal/30",
+        )}
+      >
+        {body}
+      </button>
+    );
+  }
+  return <div className="rounded-xl border border-border bg-white px-4 py-3">{body}</div>;
 }
 
 function FilterSelect({
