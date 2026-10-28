@@ -67,7 +67,7 @@ describe("front-desk-workspace", () => {
     expect(next.label).toMatch(/awaiting Finance/i);
   });
 
-  it("excludes cancelled coordination from actionable KPI counts", () => {
+  it("excludes historical cancelled coordination from actionable KPI counts", () => {
     const metrics = computeFrontDeskDashboardMetrics({
       intakeRows: [
         {
@@ -85,8 +85,8 @@ describe("front-desk-workspace", () => {
           caseId: "GR-1",
           fullName: "Hina Khan",
           status: "cancelled",
-          signupFeeStatus: null,
-          summary: "No fee record",
+          signupFeeStatus: "claimed",
+          summary: "Had fee ledger",
           coordinatorNote: "Forwarded then cancelled",
           forwardedAt: "2026-09-01T00:00:00.000Z",
           resolvedAt: "2026-09-02T00:00:00.000Z",
@@ -101,6 +101,64 @@ describe("front-desk-workspace", () => {
     expect(metrics.unpaidVouchers).toBe(0);
     expect(metrics.proofsAwaitingFinance).toBe(1);
     expect(metrics.verifiedFees).toBe(0);
+  });
+
+  it("keeps needs-correction cancelled in attention but not historical cancelled", () => {
+    const items = buildFrontDeskAttentionItems({
+      intakeRows: [
+        {
+          ...intakeBase,
+          id: "corr",
+          assignmentStatus: "assigned",
+          counsellorName: "C",
+          signupFeeStatus: null,
+        },
+        {
+          ...intakeBase,
+          id: "hist",
+          caseId: "GR-2",
+          fullName: "Hist",
+          assignmentStatus: "assigned",
+          counsellorName: "C",
+          signupFeeStatus: "claimed",
+        },
+      ],
+      feeRequests: [
+        {
+          id: "c1",
+          studentId: "corr",
+          caseId: "GR-1",
+          fullName: "Ada",
+          status: "cancelled",
+          signupFeeStatus: null,
+          summary: "Fix docs",
+          coordinatorNote: null,
+          forwardedAt: null,
+          resolvedAt: "2026-10-05T00:00:00.000Z",
+          createdAt: "2026-10-04T00:00:00.000Z",
+          updatedAt: "2026-10-05T00:00:00.000Z",
+          feeVerifiedAt: null,
+        },
+        {
+          id: "c2",
+          studentId: "hist",
+          caseId: "GR-2",
+          fullName: "Hist",
+          status: "cancelled",
+          signupFeeStatus: "claimed",
+          summary: "Old",
+          coordinatorNote: null,
+          forwardedAt: "2026-09-01T00:00:00.000Z",
+          resolvedAt: "2026-09-02T00:00:00.000Z",
+          createdAt: "2026-09-01T00:00:00.000Z",
+          updatedAt: "2026-09-02T00:00:00.000Z",
+          feeVerifiedAt: null,
+        },
+      ],
+    });
+    expect(items.some((i) => i.kind === "fee_correction" && i.studentId === "corr")).toBe(true);
+    expect(items.some((i) => i.studentId === "hist")).toBe(false);
+    expect(items.some((i) => /historical/i.test(i.title))).toBe(false);
   });
 
   it("separates unpaid vouchers from claimed proofs and portal-pending", () => {

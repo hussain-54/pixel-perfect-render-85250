@@ -38,11 +38,79 @@ export type FrontDeskAttentionItem = {
   studentId: string;
   caseId: string;
   fullName: string;
-  kind: "unassigned" | "fee_open" | "fee_stuck" | "fee_correction";
+  kind: "unassigned" | "fee_open" | "fee_stuck" | "fee_correction" | "fee_rejected";
   title: string;
   detail: string;
   at: string;
 };
+
+/** Signup fee ledger row exists for this coordination request (status string from RPC). */
+export function feeLedgerExistsForRequest(signupFeeStatus: string | null | undefined): boolean {
+  const fee = (signupFeeStatus ?? "").toLowerCase();
+  return (
+    fee === "unpaid" ||
+    fee === "claimed" ||
+    fee === "verified" ||
+    fee === "waived" ||
+    fee === "rejected"
+  );
+}
+
+/**
+ * Cancelled counsellor coordination with no fee ledger row — still needs FD/counsellor follow-up.
+ * Distinct from historical cancelled rows that already have a signup fee status.
+ */
+export function cancelledCoordinationNeedsCorrection(input: {
+  status: string;
+  signupFeeStatus: string | null | undefined;
+}): boolean {
+  return (
+    input.status.trim().toLowerCase() === "cancelled" &&
+    !feeLedgerExistsForRequest(input.signupFeeStatus)
+  );
+}
+
+/** Historical cancelled coordination — keep in history tabs, never in actionable attention. */
+export function isHistoricalCancelledCoordination(input: {
+  status: string;
+  signupFeeStatus: string | null | undefined;
+}): boolean {
+  return (
+    input.status.trim().toLowerCase() === "cancelled" &&
+    feeLedgerExistsForRequest(input.signupFeeStatus)
+  );
+}
+
+/** Student IDs that drive the Action required KPI / filter (aligned with metrics). */
+export function frontDeskActionRequiredStudentIds(input: {
+  intakeRows: IntakeLike[];
+  feeRequests: FeeReqLike[];
+}): Set<string> {
+  const ids = new Set<string>();
+  for (const req of input.feeRequests) {
+    if (req.status === "cancelled" || req.status === "resolved") continue;
+    if (req.status === "open") {
+      ids.add(req.studentId);
+      continue;
+    }
+    if (
+      requestStuckAfterFeeDecision({
+        requestStatus: req.status,
+        signupFeeStatus: req.signupFeeStatus,
+      })
+    ) {
+      ids.add(req.studentId);
+    }
+  }
+  for (const req of input.feeRequests) {
+    if (cancelledCoordinationNeedsCorrection(req)) ids.add(req.studentId);
+  }
+  for (const row of input.intakeRows) {
+    if (row.assignmentStatus === "pending") ids.add(row.id);
+    if ((row.signupFeeStatus ?? "").toLowerCase() === "rejected") ids.add(row.id);
+  }
+  return ids;
+}
 
 type IntakeLike = {
   id: string;
@@ -105,23 +173,19 @@ export function deriveFrontDeskNextAction(input: {
       };
     }
     if (req.status === "cancelled") {
-      // Fee ledger is authoritative when a signup fee row already exists.
-      const fee = (input.signupFeeStatus ?? req.signupFeeStatus ?? "").toLowerCase();
       if (
-        fee === "unpaid" ||
-        fee === "claimed" ||
-        fee === "verified" ||
-        fee === "waived" ||
-        fee === "rejected"
+        cancelledCoordinationNeedsCorrection({
+          status: req.status,
+          signupFeeStatus: req.signupFeeStatus ?? input.signupFeeStatus,
+        })
       ) {
-        // Fall through — cancelled coordination is historical, not the next action.
-      } else {
         return {
           code: "return_or_correct",
           label: "Needs correction — follow up with counsellor",
           priority: 2,
         };
       }
+      // Historical cancelled with fee ledger — fall through to fee/assignment rules.
     }
     if (req.status === "open" || (req.status === "in_progress" && !req.forwardedAt)) {
       return {
@@ -210,30 +274,7 @@ export function computeFrontDeskDashboardMetrics(input: {
     isJourneyApplicationInProgress(r.journeyStage),
   ).length;
 
-  const openOrStuckFeeIds = new Set<string>();
-  for (const req of input.feeRequests) {
-    // Cancelled coordination is historical — never drives actionable counts / Finance queues.
-    if (req.status === "cancelled" || req.status === "resolved") continue;
-    if (req.status === "open") {
-      openOrStuckFeeIds.add(req.studentId);
-      continue;
-    }
-    if (
-      requestStuckAfterFeeDecision({
-        requestStatus: req.status,
-        signupFeeStatus: req.signupFeeStatus,
-      })
-    ) {
-      openOrStuckFeeIds.add(req.studentId);
-    }
-  }
-  const rejectedIds = input.intakeRows
-    .filter((r) => (r.signupFeeStatus ?? "").toLowerCase() === "rejected")
-    .map((r) => r.id);
-  const unassignedIds = new Set(
-    input.intakeRows.filter((r) => r.assignmentStatus === "pending").map((r) => r.id),
-  );
-  const actionRequired = new Set([...openOrStuckFeeIds, ...unassignedIds, ...rejectedIds]).size;
+  const actionRequired = frontDeskActionRequiredStudentIds(input).size;
 
   return {
     totalRegistrations,
@@ -250,17 +291,17 @@ export function computeFrontDeskDashboardMetrics(input: {
   };
 }
 
-/** Primary CTA label for a Front Desk next-action code. */
-export function frontDeskNextActionCta(
-  code: string,
-): "Assign counsellor" | "Open record" | "Sync fee" | "Send to Finance" | "View" {
+/**
+ * Primary CTA for the registrations table (navigates to the intake record).
+ * Fee mutations (Send / Sync) live on the Signup Fee Coordination panel — do not
+ * label a mere record link as a Finance action.
+ */
+export function frontDeskNextActionCta(code: string): "Assign counsellor" | "Open record" | "View" {
   switch (code) {
     case "assign_counsellor":
       return "Assign counsellor";
     case "sync_fee_request":
-      return "Sync fee";
     case "forward_fee_request":
-      return "Send to Finance";
     case "await_finance":
     case "return_or_correct":
       return "Open record";
@@ -308,30 +349,37 @@ export function buildFrontDeskAttentionItems(input: {
       });
       continue;
     }
-    if (req.status === "cancelled") {
-      const fee = (req.signupFeeStatus ?? "").toLowerCase();
-      const feeExists =
-        fee === "unpaid" ||
-        fee === "claimed" ||
-        fee === "verified" ||
-        fee === "waived" ||
-        fee === "rejected";
+    // Historical cancelled (fee ledger exists) never enter actionable attention.
+    if (cancelledCoordinationNeedsCorrection(req)) {
       items.push({
         id: `corr-${req.id}`,
         studentId: req.studentId,
         caseId: req.caseId,
         fullName: req.fullName,
         kind: "fee_correction",
-        title: feeExists ? "Historical cancelled coordination" : "Fee request needs correction",
-        detail: feeExists
-          ? "Cancelled counsellor request — not a fee ledger row. Use Signup fee voucher status above."
-          : req.coordinatorNote || req.summary || "Returned for counsellor correction.",
+        title: "Fee request needs correction",
+        detail: req.coordinatorNote || req.summary || "Returned for counsellor correction.",
         at: req.updatedAt || req.createdAt,
       });
     }
   }
 
   const feeStudentIds = new Set(items.map((i) => i.studentId));
+  for (const row of input.intakeRows) {
+    if ((row.signupFeeStatus ?? "").toLowerCase() === "rejected" && !feeStudentIds.has(row.id)) {
+      items.push({
+        id: `rejected-${row.id}`,
+        studentId: row.id,
+        caseId: row.caseId,
+        fullName: row.fullName,
+        kind: "fee_rejected",
+        title: "Signup fee rejected",
+        detail: "Accounts rejected the fee — coordinate a corrected claim with the counsellor.",
+        at: row.updatedAt || row.createdAt,
+      });
+      feeStudentIds.add(row.id);
+    }
+  }
   for (const row of input.intakeRows) {
     if (row.assignmentStatus !== "pending") continue;
     if (feeStudentIds.has(row.id)) continue;

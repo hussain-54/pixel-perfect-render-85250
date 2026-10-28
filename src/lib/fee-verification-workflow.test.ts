@@ -85,9 +85,11 @@ describe("fee verification workflow", () => {
       }),
     ).toBe(false);
     expect(feeVerificationTabForStatus("in_progress")).toBe("awaiting_finance");
-    expect(feeVerificationTabForStatus("cancelled")).toBe("cancelled");
+    expect(feeVerificationTabForStatus("cancelled")).toBe("needs_correction");
+    expect(feeVerificationTabForStatus("cancelled", "claimed")).toBe("cancelled");
     expect(feeVerificationStatusesForTab("open")).toEqual(["open"]);
     expect(feeVerificationStatusesForTab("cancelled")).toEqual(["cancelled"]);
+    expect(feeVerificationStatusesForTab("needs_correction")).toEqual(["cancelled"]);
     expect(normalizeRpcRowList(null)).toEqual([]);
     expect(normalizeRpcRowList({ id: "1" })).toEqual([{ id: "1" }]);
     expect(normalizeRpcRowList([{ id: "1" }, { id: "2" }])).toHaveLength(2);

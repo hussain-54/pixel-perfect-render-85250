@@ -46,6 +46,7 @@ import { isFrontDeskBusinessRole } from "@/lib/staff-business-access";
 import {
   buildFrontDeskAttentionItems,
   deriveFrontDeskNextAction,
+  frontDeskActionRequiredStudentIds,
   frontDeskNextActionCta,
   resolveFrontDeskNotificationHref,
 } from "@/lib/front-desk-workspace";
@@ -56,7 +57,7 @@ import {
 import {
   describeFeeClaimDisplay,
   feeStatusAllowsAdmissionHandover,
-  feeVerificationStatusesForTab,
+  feeVerificationRowMatchesTab,
   requestCompletedWithoutFeeAuthorization,
   requestStuckAfterFeeDecision,
   type FeeVerificationQueueTab,
@@ -79,14 +80,21 @@ export const Route = createFileRoute("/staff/front-desk")({
   component: FrontDeskDashboardPage,
 });
 
-const TABS: { id: FeeVerificationQueueTab; label: string }[] = [
-  { id: "open", label: "Open" },
-  { id: "awaiting_finance", label: "Awaiting Finance" },
-  { id: "cancelled", label: "Cancelled (historical)" },
-  { id: "completed", label: "Completed" },
+const FEE_TABS: {
+  id: FeeVerificationQueueTab;
+  label: string;
+  scope: "fd" | "finance" | "history";
+}[] = [
+  { id: "open", label: "Open (Front Desk)", scope: "fd" },
+  { id: "awaiting_finance", label: "Awaiting Finance", scope: "finance" },
+  { id: "needs_correction", label: "Needs correction", scope: "fd" },
+  { id: "completed", label: "Completed", scope: "history" },
+  { id: "cancelled", label: "Cancelled (history)", scope: "history" },
 ];
 
 type RegSortKey = "createdAt" | "updatedAt" | "fullName";
+type KpiFilter =
+  "all" | "awaiting" | "assigned" | "unpaid" | "claimed" | "verified" | "portal" | "action";
 
 function FrontDeskDashboardPage() {
   const router = useRouter();
@@ -101,12 +109,12 @@ function FrontDeskDashboardPage() {
   const [regAssign, setRegAssign] = useState("all");
   const [regFee, setRegFee] = useState("all");
   const [regPortal, setRegPortal] = useState("all");
-  const [kpiFilter, setKpiFilter] = useState<string>("all");
-  const [regSort, setRegSort] = useState<RegSortKey>("createdAt");
+  const [kpiFilter, setKpiFilter] = useState<KpiFilter>("all");
+  const [regSort, setRegSort] = useState<RegSortKey>("updatedAt");
   const [regPage, setRegPage] = useState(0);
   const regPageSize = 10;
 
-  function applyKpiFilter(next: string) {
+  function applyKpiFilter(next: KpiFilter) {
     setKpiFilter(next);
     setRegPage(0);
     setRegSearch("");
@@ -157,9 +165,17 @@ function FrontDeskDashboardPage() {
       setRegFee("all");
       setRegPortal("all");
       document
-        .getElementById("fd-attention-panel")
+        .getElementById("fd-records-panel")
         ?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
+  }
+
+  function selectFeeTab(next: FeeVerificationQueueTab) {
+    setTab(next);
+    setActionMsg(null);
+    document
+      .getElementById("fd-fee-verification-panel")
+      ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }
 
   const feeReqQ = useQuery({
@@ -224,17 +240,20 @@ function FrontDeskDashboardPage() {
   });
 
   const allRows = useMemo(() => feeReqQ.data?.rows ?? [], [feeReqQ.data?.rows]);
-  const filteredRows = useMemo(() => {
-    const allowed = new Set(feeVerificationStatusesForTab(tab));
-    return allRows.filter((r) => allowed.has(r.status));
-  }, [allRows, tab]);
+  const filteredRows = useMemo(
+    () => allRows.filter((r) => feeVerificationRowMatchesTab(r, tab)),
+    [allRows, tab],
+  );
 
-  const openCount = feeReqQ.data?.openCount ?? filteredCountFallback(allRows, "open");
-  const awaitingCount =
-    feeReqQ.data?.awaitingFinanceCount ?? filteredCountFallback(allRows, "in_progress");
-  const correctionCount =
-    feeReqQ.data?.needsCorrectionCount ?? filteredCountFallback(allRows, "cancelled");
-  const completedCount = feeReqQ.data?.completedCount ?? filteredCountFallback(allRows, "resolved");
+  const openCount = allRows.filter((r) => r.status === "open").length;
+  const awaitingCount = allRows.filter((r) => r.status === "in_progress").length;
+  const needsCorrectionCount = allRows.filter((r) =>
+    feeVerificationRowMatchesTab(r, "needs_correction"),
+  ).length;
+  const cancelledHistoryCount = allRows.filter((r) =>
+    feeVerificationRowMatchesTab(r, "cancelled"),
+  ).length;
+  const completedCount = allRows.filter((r) => r.status === "resolved").length;
   const stuckCount = allRows.filter((r) =>
     requestStuckAfterFeeDecision({
       requestStatus: r.status,
@@ -244,19 +263,34 @@ function FrontDeskDashboardPage() {
 
   const unreadCount = (notifQ.data ?? []).filter((n) => !n.read).length;
 
-  const attentionItems = useMemo(() => {
-    const intakeRows = dashQ.data?.intakeRows ?? dashQ.data?.recentRegistrations ?? [];
-    return buildFrontDeskAttentionItems({
-      intakeRows,
-      feeRequests: allRows,
-      limit: 10,
-    });
-  }, [dashQ.data, allRows]);
+  const intakeSource = useMemo(
+    () => dashQ.data?.intakeRows ?? dashQ.data?.recentRegistrations ?? [],
+    [dashQ.data],
+  );
+
+  const actionStudentIds = useMemo(
+    () =>
+      frontDeskActionRequiredStudentIds({
+        intakeRows: intakeSource,
+        feeRequests: allRows,
+      }),
+    [intakeSource, allRows],
+  );
+
+  const attentionItems = useMemo(
+    () =>
+      buildFrontDeskAttentionItems({
+        intakeRows: intakeSource,
+        feeRequests: allRows,
+        limit: 8,
+      }),
+    [intakeSource, allRows],
+  );
 
   const registrationRows = useMemo(() => {
-    const source = dashQ.data?.intakeRows ?? dashQ.data?.recentRegistrations ?? [];
     const q = regSearch.trim().toLowerCase();
-    let list = source.filter((r) => {
+    let list = intakeSource.filter((r) => {
+      if (kpiFilter === "action" && !actionStudentIds.has(r.id)) return false;
       if (regAssign === "pending" && r.assignmentStatus !== "pending") return false;
       if (regAssign === "assigned" && r.assignmentStatus !== "assigned") return false;
       if (regFee !== "all" && (r.signupFeeStatus || "unpaid") !== regFee) return false;
@@ -276,7 +310,7 @@ function FrontDeskDashboardPage() {
       return String(b[regSort] || "").localeCompare(String(a[regSort] || ""));
     });
     return list;
-  }, [dashQ.data, regSearch, regAssign, regFee, regPortal, regSort]);
+  }, [intakeSource, regSearch, regAssign, regFee, regPortal, regSort, kpiFilter, actionStudentIds]);
 
   const regPageCount = Math.max(1, Math.ceil(registrationRows.length / regPageSize));
   const regPageRows = registrationRows.slice(
@@ -318,7 +352,7 @@ function FrontDeskDashboardPage() {
           body="No registrations are available yet."
           action={
             <Button asChild size="sm">
-              <Link to="/staff/register">Register New Student</Link>
+              <Link to="/staff/register">Register Student</Link>
             </Button>
           }
         />
@@ -334,7 +368,7 @@ function FrontDeskDashboardPage() {
     ? new Date(Math.max(...lastSyncMs)).toLocaleTimeString()
     : null;
   const actionRequired =
-    typeof data.actionRequired === "number" ? data.actionRequired : attentionItems.length;
+    typeof data.actionRequired === "number" ? data.actionRequired : actionStudentIds.size;
 
   async function openNotification(n: {
     id: string;
@@ -357,12 +391,14 @@ function FrontDeskDashboardPage() {
     void router.navigate({ to: href });
   }
 
+  const activeFeeTabLabel = FEE_TABS.find((t) => t.id === tab)?.label ?? tab;
+
   return (
-    <div className="space-y-4 md:space-y-5">
+    <div className="mx-auto w-full max-w-7xl space-y-3 md:space-y-4">
       <PageHeader
         compact
-        title="Front Desk"
-        subtitle={`${data.greetingName} · Intake & tracking`}
+        title={fdTitle}
+        subtitle={`${data.greetingName} · Intake, assignment & fee coordination`}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <LiveBadge status={liveStatus} lastSync={lastSync} />
@@ -376,7 +412,7 @@ function FrontDeskDashboardPage() {
               }
               onClick={() => setNotifOpen(true)}
             >
-              <Bell className="mr-2 h-4 w-4" aria-hidden />
+              <Bell className="mr-1.5 h-4 w-4" aria-hidden />
               Alerts
               {unreadCount > 0 ? (
                 <span className="ml-1.5 inline-flex min-w-[1.25rem] items-center justify-center rounded-full bg-navy px-1.5 text-[10px] font-semibold text-white">
@@ -384,22 +420,19 @@ function FrontDeskDashboardPage() {
                 </span>
               ) : null}
             </Button>
-            <Button asChild size="sm">
+            <Button asChild size="sm" variant="navy">
               <Link to="/staff/register">
-                <UserPlus className="mr-2 h-4 w-4" />
-                Register
+                <UserPlus className="mr-1.5 h-4 w-4" />
+                Register Student
               </Link>
-            </Button>
-            <Button asChild size="sm" variant="outline">
-              <Link to="/staff/intake">Registrations</Link>
             </Button>
           </div>
         }
       />
 
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8">
         <StatCard
-          label="Registrations"
+          label="Total registrations"
           value={String(data.myRegistrations)}
           icon={<Users />}
           selected={kpiFilter === "all"}
@@ -421,17 +454,17 @@ function FrontDeskDashboardPage() {
           onClick={() => applyKpiFilter("assigned")}
         />
         <StatCard
-          label="Voucher unpaid"
+          label="Voucher pending"
           value={String(data.unpaidVouchers ?? 0)}
-          hint="Issued, payment not claimed"
+          hint="Issued, not claimed"
           icon={<BadgeDollarSign />}
           selected={kpiFilter === "unpaid"}
           onClick={() => applyKpiFilter("unpaid")}
         />
         <StatCard
-          label="Proofs awaiting Finance"
+          label="Proofs ↔ Finance"
           value={String(data.proofsAwaitingFinance ?? 0)}
-          hint="Claimed — not verified cash"
+          hint="Claimed — not verified"
           icon={<BadgeDollarSign />}
           selected={kpiFilter === "claimed"}
           onClick={() => applyKpiFilter("claimed")}
@@ -446,7 +479,7 @@ function FrontDeskDashboardPage() {
         <StatCard
           label="Portal link pending"
           value={String(data.portalLinkPending ?? 0)}
-          hint="Fee authorized; activation pending"
+          hint="Fee authorized"
           icon={<Link2 />}
           selected={kpiFilter === "portal"}
           onClick={() => applyKpiFilter("portal")}
@@ -454,337 +487,358 @@ function FrontDeskDashboardPage() {
         <StatCard
           label="Action required"
           value={String(actionRequired)}
-          hint="Unassigned, rejected, or open requests"
+          hint="Unassigned, rejected, open/stuck, or needs correction"
           icon={<AlertCircle />}
           selected={kpiFilter === "action"}
           onClick={() => applyKpiFilter("action")}
         />
       </div>
 
-      <div id="fd-attention-panel">
+      <div id="fd-records-panel">
         <Panel
           compact
-          title="Needs attention"
+          title="Student records & action queue"
           action={
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setTab("open");
-                document
-                  .getElementById("fd-fee-verification-panel")
-                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}
-            >
-              Fee queue
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              {attentionItems.length > 0 ? (
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={kpiFilter === "action" ? "navy" : "outline"}
+                  onClick={() => applyKpiFilter("action")}
+                >
+                  Needs attention · {attentionItems.length}
+                </Button>
+              ) : (
+                <span className="text-xs text-muted-foreground">No attention items</span>
+              )}
+              <Button asChild variant="outline" size="sm">
+                <Link to="/staff/intake">Full list</Link>
+              </Button>
+            </div>
           }
         >
-          {attentionItems.length === 0 ? (
+          <div className="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+            <div>
+              <Label htmlFor="fd-dash-search">Search</Label>
+              <Input
+                id="fd-dash-search"
+                value={regSearch}
+                onChange={(e) => {
+                  setRegSearch(e.target.value);
+                  setKpiFilter("all");
+                  setRegPage(0);
+                }}
+                placeholder="Name, case, destination…"
+                className="h-9"
+              />
+            </div>
+            <div>
+              <Label htmlFor="fd-dash-assign">Counsellor</Label>
+              <select
+                id="fd-dash-assign"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={regAssign}
+                onChange={(e) => {
+                  setRegAssign(e.target.value);
+                  setKpiFilter("all");
+                  setRegPage(0);
+                }}
+              >
+                <option value="all">All</option>
+                <option value="pending">Awaiting assignment</option>
+                <option value="assigned">Assigned</option>
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="fd-dash-fee">Signup fee</Label>
+              <select
+                id="fd-dash-fee"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={regFee}
+                onChange={(e) => {
+                  setRegFee(e.target.value);
+                  setKpiFilter("all");
+                  setRegPage(0);
+                }}
+              >
+                <option value="all">All</option>
+                <option value="unpaid">Voucher unpaid</option>
+                <option value="claimed">Proof submitted</option>
+                <option value="verified">Verified</option>
+                <option value="waived">Waived</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="fd-dash-portal">Portal</Label>
+              <select
+                id="fd-dash-portal"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={regPortal}
+                onChange={(e) => {
+                  setRegPortal(e.target.value);
+                  setKpiFilter("all");
+                  setRegPage(0);
+                }}
+              >
+                <option value="all">All</option>
+                <option value="pending">Link pending</option>
+                <option value="active">Activated</option>
+              </select>
+            </div>
+            <div>
+              <Label htmlFor="fd-dash-sort">Sort</Label>
+              <select
+                id="fd-dash-sort"
+                className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                value={regSort}
+                onChange={(e) => setRegSort(e.target.value as RegSortKey)}
+              >
+                <option value="updatedAt">Last updated</option>
+                <option value="createdAt">Registration date</option>
+                <option value="fullName">Student name</option>
+              </select>
+            </div>
+          </div>
+
+          {kpiFilter !== "all" || regAssign !== "all" || regFee !== "all" || regPortal !== "all" ? (
+            <div className="mb-2 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+              <span>
+                Filter active
+                {kpiFilter === "action" ? " · Action required" : ""}
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="h-7 px-2"
+                onClick={() => applyKpiFilter("all")}
+              >
+                Clear filters
+              </Button>
+            </div>
+          ) : null}
+
+          {registrationRows.length === 0 ? (
             <EmptyState
-              title="Nothing needs attention"
-              body="New fee-verification requests and unassigned registrations will appear here."
+              title="No matching student records"
+              body={
+                kpiFilter === "action"
+                  ? "Nothing currently needs Front Desk action. Clear the Action required filter to see all registrations."
+                  : "Adjust filters or register a new student."
+              }
+              action={
+                <div className="flex flex-wrap gap-2">
+                  {kpiFilter !== "all" ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => applyKpiFilter("all")}
+                    >
+                      Clear filters
+                    </Button>
+                  ) : null}
+                  <Button asChild size="sm">
+                    <Link to="/staff/register">Register Student</Link>
+                  </Button>
+                </div>
+              }
             />
           ) : (
-            <ul className="divide-y divide-border">
-              {attentionItems.map((item) => (
-                <li
-                  key={item.id}
-                  className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium text-navy">
-                      {item.fullName}{" "}
-                      <span className="font-normal text-muted-foreground">· {item.caseId}</span>
-                    </p>
-                    <p className="text-sm text-navy/90">{item.title}</p>
-                    <p className="text-xs text-muted-foreground line-clamp-2">{item.detail}</p>
-                  </div>
+            <>
+              <TableWrap compact>
+                <thead>
+                  <tr>
+                    <th>Student</th>
+                    <th className="hidden md:table-cell">Destination / course</th>
+                    <th className="hidden lg:table-cell">Counsellor</th>
+                    <th>Fee</th>
+                    <th className="hidden xl:table-cell">Portal</th>
+                    <th className="hidden lg:table-cell">Updated</th>
+                    <th>Next action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {regPageRows.map((row) => {
+                    const openReq =
+                      allRows.find(
+                        (r) =>
+                          r.studentId === row.id &&
+                          (r.status === "open" ||
+                            r.status === "in_progress" ||
+                            feeVerificationRowMatchesTab(r, "needs_correction")),
+                      ) ?? null;
+                    const next = deriveFrontDeskNextAction({
+                      assignmentStatus: row.assignmentStatus,
+                      signupFeeStatus: row.signupFeeStatus,
+                      openFeeRequest: openReq,
+                    });
+                    const portalLabel = studentPortalAccountStatusLabel(
+                      intakePortalStatusFromRow({
+                        profileId: row.profileId,
+                        portalActivatedAt: row.portalActivatedAt,
+                      }),
+                    );
+                    const dest = [row.destination, row.program].filter(Boolean).join(" · ") || "—";
+                    const needsAction = actionStudentIds.has(row.id);
+                    return (
+                      <tr
+                        key={row.id}
+                        className={cn(needsAction && kpiFilter === "action" && "bg-amber-50/60")}
+                      >
+                        <td>
+                          <div className="font-medium text-navy">{row.fullName}</div>
+                          <div className="text-xs text-muted-foreground">{row.caseId}</div>
+                          {needsAction ? (
+                            <span className="mt-0.5 inline-block text-[10px] font-semibold uppercase tracking-wide text-amber-800">
+                              Attention
+                            </span>
+                          ) : null}
+                        </td>
+                        <td className="hidden max-w-[10rem] truncate text-xs text-muted-foreground md:table-cell">
+                          {dest}
+                        </td>
+                        <td className="hidden lg:table-cell">
+                          {row.assignmentStatus === "pending" ? (
+                            <StatusBadge status="Pending" />
+                          ) : (
+                            <span className="text-sm">
+                              {row.counsellorName || "Counsellor assigned"}
+                            </span>
+                          )}
+                        </td>
+                        <td className="text-xs">
+                          {describePersistedSignupFeeStatus(row.signupFeeStatus).label}
+                        </td>
+                        <td className="hidden text-xs text-muted-foreground xl:table-cell">
+                          {portalLabel}
+                        </td>
+                        <td className="hidden text-xs text-muted-foreground lg:table-cell">
+                          {fmtDate(row.updatedAt)}
+                        </td>
+                        <td>
+                          <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
+                            <span className="max-w-[12rem] text-xs text-muted-foreground">
+                              {next.label}
+                            </span>
+                            <Button
+                              asChild
+                              size="sm"
+                              variant="navy"
+                              className="shrink-0 self-start"
+                            >
+                              <Link
+                                to="/staff/intake/$studentId"
+                                params={{ studentId: row.id }}
+                                {...(next.code === "assign_counsellor"
+                                  ? { search: { focus: "assign" as const } }
+                                  : {})}
+                              >
+                                {frontDeskNextActionCta(next.code)}
+                              </Link>
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </TableWrap>
+              <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
+                <span>
+                  {registrationRows.length} record{registrationRows.length === 1 ? "" : "s"} · Page{" "}
+                  {regPage + 1} of {regPageCount}
+                </span>
+                <div className="flex gap-2">
                   <Button
-                    asChild
+                    type="button"
                     size="sm"
-                    variant="navy"
-                    className="shrink-0 self-start sm:self-center"
+                    variant="outline"
+                    disabled={regPage <= 0}
+                    onClick={() => setRegPage((p) => Math.max(0, p - 1))}
                   >
-                    <Link
-                      to="/staff/intake/$studentId"
-                      params={{ studentId: item.studentId }}
-                      {...(item.kind === "unassigned"
-                        ? { search: { focus: "assign" as const } }
-                        : {})}
-                    >
-                      {item.kind === "unassigned" ? "Assign counsellor" : "Open record"}
-                    </Link>
+                    Previous
                   </Button>
-                </li>
-              ))}
-            </ul>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={regPage + 1 >= regPageCount}
+                    onClick={() => setRegPage((p) => Math.min(regPageCount - 1, p + 1))}
+                  >
+                    Next
+                  </Button>
+                </div>
+              </div>
+            </>
           )}
         </Panel>
       </div>
 
-      <Panel
-        compact
-        title="Registrations"
-        action={
-          <Button asChild variant="outline" size="sm">
-            <Link to="/staff/intake">View all</Link>
-          </Button>
-        }
-      >
-        <div className="mb-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-          <div>
-            <Label htmlFor="fd-dash-search">Search</Label>
-            <Input
-              id="fd-dash-search"
-              value={regSearch}
-              onChange={(e) => {
-                setRegSearch(e.target.value);
-                setKpiFilter("all");
-                setRegPage(0);
-              }}
-              placeholder="Name, case, destination…"
-              className="h-9"
-            />
-          </div>
-          <div>
-            <Label htmlFor="fd-dash-assign">Counsellor</Label>
-            <select
-              id="fd-dash-assign"
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-              value={regAssign}
-              onChange={(e) => {
-                setRegAssign(e.target.value);
-                setKpiFilter("all");
-                setRegPage(0);
-              }}
-            >
-              <option value="all">All</option>
-              <option value="pending">Awaiting assignment</option>
-              <option value="assigned">Assigned</option>
-            </select>
-          </div>
-          <div>
-            <Label htmlFor="fd-dash-fee">Signup fee</Label>
-            <select
-              id="fd-dash-fee"
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-              value={regFee}
-              onChange={(e) => {
-                setRegFee(e.target.value);
-                setKpiFilter("all");
-                setRegPage(0);
-              }}
-            >
-              <option value="all">All</option>
-              <option value="unpaid">Voucher unpaid</option>
-              <option value="claimed">Proof submitted</option>
-              <option value="verified">Verified</option>
-              <option value="waived">Waived</option>
-              <option value="rejected">Rejected</option>
-            </select>
-          </div>
-          <div>
-            <Label htmlFor="fd-dash-portal">Portal</Label>
-            <select
-              id="fd-dash-portal"
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-              value={regPortal}
-              onChange={(e) => {
-                setRegPortal(e.target.value);
-                setKpiFilter("all");
-                setRegPage(0);
-              }}
-            >
-              <option value="all">All</option>
-              <option value="pending">Link pending</option>
-              <option value="active">Activated</option>
-            </select>
-          </div>
-          <div>
-            <Label htmlFor="fd-dash-sort">Sort</Label>
-            <select
-              id="fd-dash-sort"
-              className="flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
-              value={regSort}
-              onChange={(e) => setRegSort(e.target.value as RegSortKey)}
-            >
-              <option value="createdAt">Registration date</option>
-              <option value="updatedAt">Last updated</option>
-              <option value="fullName">Student name</option>
-            </select>
-          </div>
-        </div>
-
-        {registrationRows.length === 0 ? (
-          <EmptyState
-            title="No matching registrations"
-            body="Adjust filters or register a new student."
-            action={
-              <Button asChild size="sm">
-                <Link to="/staff/register">Register New Student</Link>
-              </Button>
-            }
-          />
-        ) : (
-          <>
-            <TableWrap compact>
-              <thead>
-                <tr>
-                  <th>Student</th>
-                  <th className="hidden md:table-cell">Destination</th>
-                  <th className="hidden lg:table-cell">Counsellor</th>
-                  <th>Fee</th>
-                  <th className="hidden xl:table-cell">Portal</th>
-                  <th className="hidden lg:table-cell">Updated</th>
-                  <th>Next action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {regPageRows.map((row) => {
-                  const openReq =
-                    allRows.find(
-                      (r) =>
-                        r.studentId === row.id &&
-                        (r.status === "open" || r.status === "in_progress"),
-                    ) ?? null;
-                  const next = deriveFrontDeskNextAction({
-                    assignmentStatus: row.assignmentStatus,
-                    signupFeeStatus: row.signupFeeStatus,
-                    openFeeRequest: openReq,
-                  });
-                  const portalLabel = studentPortalAccountStatusLabel(
-                    intakePortalStatusFromRow({
-                      profileId: row.profileId,
-                      portalActivatedAt: row.portalActivatedAt,
-                    }),
-                  );
-                  const dest = [row.destination, row.program].filter(Boolean).join(" · ") || "—";
-                  return (
-                    <tr key={row.id}>
-                      <td>
-                        <div className="font-medium text-navy">{row.fullName}</div>
-                        <div className="text-xs text-muted-foreground">{row.caseId}</div>
-                      </td>
-                      <td className="hidden max-w-[10rem] truncate text-xs text-muted-foreground md:table-cell">
-                        {dest}
-                      </td>
-                      <td className="hidden lg:table-cell">
-                        {row.assignmentStatus === "pending" ? (
-                          <StatusBadge status="Pending" />
-                        ) : (
-                          <span className="text-sm">
-                            {row.counsellorName || "Counsellor assigned"}
-                          </span>
-                        )}
-                      </td>
-                      <td className="text-xs">
-                        {describePersistedSignupFeeStatus(row.signupFeeStatus).label}
-                      </td>
-                      <td className="hidden text-xs text-muted-foreground xl:table-cell">
-                        {portalLabel}
-                      </td>
-                      <td className="hidden text-xs text-muted-foreground lg:table-cell">
-                        {fmtDate(row.updatedAt)}
-                      </td>
-                      <td>
-                        <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center">
-                          <span className="max-w-[11rem] text-xs text-muted-foreground">
-                            {next.label}
-                          </span>
-                          <Button asChild size="sm" variant="navy" className="shrink-0 self-start">
-                            <Link
-                              to="/staff/intake/$studentId"
-                              params={{ studentId: row.id }}
-                              {...(next.code === "assign_counsellor"
-                                ? { search: { focus: "assign" as const } }
-                                : {})}
-                            >
-                              {frontDeskNextActionCta(next.code)}
-                            </Link>
-                          </Button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </TableWrap>
-            <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
-              <span>
-                {registrationRows.length} record{registrationRows.length === 1 ? "" : "s"} · Page{" "}
-                {regPage + 1} of {regPageCount}
-              </span>
-              <div className="flex gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={regPage <= 0}
-                  onClick={() => setRegPage((p) => Math.max(0, p - 1))}
-                >
-                  Previous
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  disabled={regPage + 1 >= regPageCount}
-                  onClick={() => setRegPage((p) => Math.min(regPageCount - 1, p + 1))}
-                >
-                  Next
-                </Button>
-              </div>
-            </div>
-          </>
-        )}
-      </Panel>
-
       <div id="fd-fee-verification-panel">
         <Panel
           compact
-          title="Counsellor fee-verification requests"
+          title="Signup fee coordination"
           action={
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                disabled={feeReqQ.isFetching}
-                onClick={() => void feeReqQ.refetch()}
-              >
-                {feeReqQ.isFetching ? "Refreshing…" : "Refresh"}
-              </Button>
-              <Button asChild variant="outline" size="sm">
-                <Link to="/staff/finance">Accounts / Finance</Link>
-              </Button>
-            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={feeReqQ.isFetching}
+              onClick={() => void feeReqQ.refetch()}
+            >
+              {feeReqQ.isFetching ? "Refreshing…" : "Refresh"}
+            </Button>
           }
         >
-          <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted-foreground">
-            <span>
-              Open: <strong className="text-navy">{feeReqQ.isError ? "—" : openCount}</strong>
-            </span>
-            <span>
-              Awaiting Finance:{" "}
-              <strong className="text-navy">{feeReqQ.isError ? "—" : awaitingCount}</strong>
-            </span>
-            <span>
-              Needs correction:{" "}
-              <strong className="text-navy">{feeReqQ.isError ? "—" : correctionCount}</strong>
-            </span>
-            <span>
-              Completed:{" "}
-              <strong className="text-navy">{feeReqQ.isError ? "—" : completedCount}</strong>
-            </span>
-            {lastSync ? <span>Synced {lastSync}</span> : null}
+          <p className="mb-3 text-xs text-muted-foreground">
+            Counsellor coordination requests only — not proof of payment. Finance verifies or waives
+            on the fee ledger.
+          </p>
+
+          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
+            {(
+              [
+                ["open", "Open", openCount, "fd"],
+                ["awaiting_finance", "Awaiting Finance", awaitingCount, "finance"],
+                ["needs_correction", "Needs correction", needsCorrectionCount, "fd"],
+                ["completed", "Completed", completedCount, "history"],
+                ["cancelled", "Cancelled", cancelledHistoryCount, "history"],
+              ] as const
+            ).map(([id, label, count, scope]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => selectFeeTab(id)}
+                className={cn(
+                  "rounded-lg border px-3 py-2 text-left transition-colors",
+                  tab === id
+                    ? "border-navy bg-navy text-white"
+                    : "border-border bg-white hover:border-navy/40",
+                )}
+              >
+                <span
+                  className={cn(
+                    "block text-[10px] font-semibold uppercase tracking-wide",
+                    tab === id ? "text-white/80" : "text-muted-foreground",
+                  )}
+                >
+                  {label}
+                  {scope === "finance" ? " · Finance" : scope === "fd" ? " · FD" : " · History"}
+                </span>
+                <span className="mt-0.5 block text-xl font-semibold">
+                  {feeReqQ.isError ? "—" : count}
+                </span>
+              </button>
+            ))}
           </div>
 
           {stuckCount > 0 ? (
             <p className="mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-950">
               {stuckCount} request{stuckCount === 1 ? "" : "s"} out of sync — use Sync from fee (fee
-              already decided).
+              already decided by Accounts).
             </p>
           ) : null}
 
@@ -795,13 +849,13 @@ function FrontDeskDashboardPage() {
             </p>
           ) : null}
 
-          <div className="mb-4 flex flex-wrap gap-1 border-b border-border pb-2">
-            {TABS.map((t) => (
+          <div className="mb-3 flex flex-wrap gap-1 border-b border-border pb-2">
+            {FEE_TABS.map((t) => (
               <button
                 key={t.id}
                 type="button"
                 className={cn(
-                  "rounded px-3 py-1.5 text-xs font-semibold uppercase tracking-wide",
+                  "rounded px-2.5 py-1.5 text-xs font-semibold",
                   tab === t.id ? "bg-navy text-white" : "text-muted-foreground hover:bg-accent",
                 )}
                 onClick={() => setTab(t.id)}
@@ -814,7 +868,7 @@ function FrontDeskDashboardPage() {
           {actionMsg ? <p className="mb-3 text-xs text-navy">{actionMsg}</p> : null}
 
           {feeReqQ.isLoading && !feeReqQ.data ? (
-            <p className="text-sm text-muted-foreground">Loading fee-verification requests…</p>
+            <p className="text-sm text-muted-foreground">Loading fee coordination requests…</p>
           ) : feeReqQ.isError ? (
             <div className="space-y-2">
               <p className="text-sm text-danger">
@@ -823,7 +877,7 @@ function FrontDeskDashboardPage() {
               <p className="text-xs text-muted-foreground">
                 {portalErrorMessage(
                   feeReqQ.error,
-                  "Apply migrations 20261020150000–20261020170000 on Supabase if the schema is missing.",
+                  "Apply fee-verification migrations on Supabase if the schema is missing.",
                 )}
               </p>
               <Button
@@ -839,193 +893,219 @@ function FrontDeskDashboardPage() {
             allRows.length > 0 ? (
               <div className="space-y-3">
                 <EmptyState
-                  title="No requests in this filter"
-                  body="Requests exist in other statuses. Clear the filter or switch tabs."
+                  title={`No requests in “${activeFeeTabLabel}”`}
+                  body={`${allRows.length} request${allRows.length === 1 ? "" : "s"} exist in other statuses. Switch tabs or open Front Desk tasks.`}
                 />
-                <Button type="button" size="sm" variant="outline" onClick={() => setTab("open")}>
-                  Show Open
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" size="sm" variant="outline" onClick={() => setTab("open")}>
+                    Show Open
+                  </Button>
+                  {needsCorrectionCount > 0 ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setTab("needs_correction")}
+                    >
+                      Needs correction ({needsCorrectionCount})
+                    </Button>
+                  ) : null}
+                  {awaitingCount > 0 ? (
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setTab("awaiting_finance")}
+                    >
+                      Awaiting Finance ({awaitingCount})
+                    </Button>
+                  ) : null}
+                </div>
               </div>
             ) : (
               <EmptyState
-                title="No open fee-verification requests"
-                body="When a counsellor successfully returns a case for signup-fee verification, it appears here. Accounts verifies or waives fees — Front Desk coordinates only."
+                title="No fee coordination requests"
+                body="When a counsellor requests signup-fee verification, it appears under Open. Accounts verifies or waives fees — Front Desk coordinates only."
               />
             )
           ) : (
-            <TableWrap>
-              <table className="w-full text-left text-sm">
-                <thead>
-                  <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
-                    <th className="px-3 py-2">Student</th>
-                    <th className="hidden px-3 py-2 md:table-cell">Counsellor</th>
-                    <th className="hidden px-3 py-2 lg:table-cell">Summary</th>
-                    <th className="px-3 py-2">Statuses</th>
-                    <th className="px-3 py-2">Next / actions</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {filteredRows.map((row) => {
-                    const feeOk = feeStatusAllowsAdmissionHandover(row.signupFeeStatus);
-                    const forwarded = Boolean(row.forwardedAt) || row.status === "in_progress";
-                    const stuck = requestStuckAfterFeeDecision({
-                      requestStatus: row.status,
-                      signupFeeStatus: row.signupFeeStatus,
-                    });
-                    const resolvedWithoutFee = requestCompletedWithoutFeeAuthorization({
-                      requestStatus: row.status,
-                      signupFeeStatus: row.signupFeeStatus,
-                    });
-                    const claim = describeFeeClaimDisplay({
-                      signupFeeStatus: row.signupFeeStatus,
-                      feeAmount: row.feeAmount,
-                      feeCurrency: row.feeCurrency,
-                      feePaymentMethod: row.feePaymentMethod,
-                      feeReferenceReceipt: row.feeReferenceReceipt,
-                    });
-                    return (
-                      <tr key={row.id} className="border-b border-border/60 align-top">
-                        <td className="px-3 py-2">
-                          <div className="font-medium text-navy">{row.fullName}</div>
-                          <div className="text-xs text-muted-foreground">{row.caseId}</div>
-                          <div className="text-[11px] text-muted-foreground">
-                            Submitted {fmtDate(row.createdAt.slice(0, 10))}
+            <TableWrap compact>
+              <thead>
+                <tr>
+                  <th>Student</th>
+                  <th className="hidden md:table-cell">Note</th>
+                  <th>Status</th>
+                  <th>Next / actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filteredRows.map((row) => {
+                  const feeOk = feeStatusAllowsAdmissionHandover(row.signupFeeStatus);
+                  const forwarded = Boolean(row.forwardedAt) || row.status === "in_progress";
+                  const stuck = requestStuckAfterFeeDecision({
+                    requestStatus: row.status,
+                    signupFeeStatus: row.signupFeeStatus,
+                  });
+                  const resolvedWithoutFee = requestCompletedWithoutFeeAuthorization({
+                    requestStatus: row.status,
+                    signupFeeStatus: row.signupFeeStatus,
+                  });
+                  const claim = describeFeeClaimDisplay({
+                    signupFeeStatus: row.signupFeeStatus,
+                    feeAmount: row.feeAmount,
+                    feeCurrency: row.feeCurrency,
+                    feePaymentMethod: row.feePaymentMethod,
+                    feeReferenceReceipt: row.feeReferenceReceipt,
+                  });
+                  const isHistory = tab === "cancelled" || tab === "completed";
+                  return (
+                    <tr key={row.id} className="align-top">
+                      <td>
+                        <div className="font-medium text-navy">{row.fullName}</div>
+                        <div className="text-xs text-muted-foreground">{row.caseId}</div>
+                        <div className="text-[11px] text-muted-foreground">
+                          {row.counsellorName || "—"} · {fmtDate(row.createdAt.slice(0, 10))}
+                        </div>
+                      </td>
+                      <td className="hidden max-w-[14rem] text-xs text-muted-foreground md:table-cell">
+                        {row.summary || "—"}
+                        {row.coordinatorNote ? (
+                          <div className="mt-1 text-[11px] text-amber-800">
+                            Note: {row.coordinatorNote}
                           </div>
-                          <div className="mt-1 text-xs text-muted-foreground md:hidden">
-                            {row.counsellorName || "—"}
+                        ) : null}
+                        <div className="mt-1">
+                          Fee ledger: {claim.hasFeeRecord ? claim.feeStatusLabel : "No fee row"} ·{" "}
+                          {claim.claimLabel}
+                        </div>
+                      </td>
+                      <td>
+                        <StatusBadge status={row.status} />
+                        {forwarded && row.status !== "resolved" && row.status !== "cancelled" ? (
+                          <div className="mt-1 text-[11px] font-medium text-navy">
+                            With Accounts / Finance
                           </div>
-                        </td>
-                        <td className="hidden px-3 py-2 md:table-cell">
-                          {row.counsellorName || "—"}
-                        </td>
-                        <td className="hidden max-w-[14rem] px-3 py-2 text-xs text-muted-foreground lg:table-cell">
-                          {row.summary}
-                          {row.coordinatorNote ? (
-                            <div className="mt-1 text-[11px] text-amber-800">
-                              Note: {row.coordinatorNote}
-                            </div>
-                          ) : null}
-                          <div className="mt-1 capitalize">
-                            Fee: {claim.feeStatusLabel} · {claim.claimLabel}
+                        ) : null}
+                        {stuck ? (
+                          <div className="mt-1 text-[11px] font-medium text-amber-900">
+                            Out of sync — fee decided
                           </div>
-                        </td>
-                        <td className="px-3 py-2">
-                          <StatusBadge status={row.status} />
+                        ) : null}
+                        {tab === "cancelled" ? (
                           <div className="mt-1 text-[11px] text-muted-foreground">
-                            Updated {fmtDate(row.updatedAt.slice(0, 10))}
+                            Historical — not an active task
                           </div>
-                          {forwarded && row.status !== "resolved" ? (
-                            <div className="mt-1 text-[11px] font-medium text-navy">
-                              Forwarded to Accounts
-                            </div>
-                          ) : null}
-                          {stuck ? (
-                            <div className="mt-1 text-[11px] font-medium text-amber-900">
-                              Out of sync — fee decided
-                            </div>
-                          ) : null}
-                          {resolvedWithoutFee ? (
-                            <div className="mt-1 text-[11px] font-medium text-danger">
-                              Closed but fee gate not satisfied
-                            </div>
-                          ) : null}
-                        </td>
-                        <td className="px-3 py-2">
-                          <p className="mb-2 text-xs text-muted-foreground">
-                            {feeOk
+                        ) : null}
+                        {resolvedWithoutFee ? (
+                          <div className="mt-1 text-[11px] font-medium text-danger">
+                            Closed but fee gate not satisfied
+                          </div>
+                        ) : null}
+                      </td>
+                      <td>
+                        <p className="mb-2 text-xs text-muted-foreground">
+                          {isHistory
+                            ? tab === "cancelled"
+                              ? "History only — use fee ledger status on the student record"
+                              : feeOk
+                                ? "Completed · fee authorized"
+                                : "Completed · check fee gate"
+                            : feeOk
                               ? "Fee authorized"
-                              : resolvedWithoutFee
-                                ? "Fee gate not satisfied"
-                                : stuck
-                                  ? "Out of sync — Sync from fee"
-                                  : forwarded
-                                    ? "Awaiting Finance verification"
+                              : stuck
+                                ? "Sync from fee"
+                                : forwarded
+                                  ? "Awaiting Finance verification"
+                                  : tab === "needs_correction"
+                                    ? "Follow up with counsellor"
                                     : "Send to Accounts when ready"}
-                          </p>
-                          <div className="flex flex-wrap gap-1.5">
-                            <Button asChild size="sm" variant="outline">
-                              <Link
-                                to="/staff/intake/$studentId"
-                                params={{ studentId: row.studentId }}
-                              >
-                                View record
-                              </Link>
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          <Button asChild size="sm" variant="outline">
+                            <Link
+                              to="/staff/intake/$studentId"
+                              params={{ studentId: row.studentId }}
+                            >
+                              Open record
+                            </Link>
+                          </Button>
+                          {!isHistory && stuck ? (
+                            <Button
+                              size="sm"
+                              variant="navy"
+                              disabled={reconcileM.isPending}
+                              onClick={() => {
+                                setActionMsg(null);
+                                reconcileM.mutate(row.studentId);
+                              }}
+                            >
+                              Sync from fee
                             </Button>
-                            {stuck ? (
-                              <Button
-                                size="sm"
-                                variant="navy"
-                                disabled={reconcileM.isPending}
-                                onClick={() => {
-                                  setActionMsg(null);
-                                  reconcileM.mutate(row.studentId);
-                                }}
-                              >
-                                Sync from fee
-                              </Button>
-                            ) : null}
-                            {!stuck &&
-                            (row.status === "open" ||
-                              (row.status === "in_progress" && !row.forwardedAt)) ? (
-                              <Button
-                                size="sm"
-                                variant="navy"
-                                disabled={forwardM.isPending}
-                                onClick={() => {
-                                  setActionMsg(null);
-                                  forwardM.mutate(row.id);
-                                }}
-                              >
-                                Send to Accounts
-                              </Button>
-                            ) : null}
-                            {!stuck && (row.status === "open" || row.status === "in_progress") ? (
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setReturnForId(row.id);
-                                  setReturnReason("");
-                                  setActionMsg(null);
-                                }}
-                              >
-                                Return
-                              </Button>
-                            ) : null}
-                          </div>
-                          {returnForId === row.id ? (
-                            <div className="mt-2 space-y-2 rounded border border-border p-2">
-                              <Textarea
-                                placeholder="Required reason for counsellor (min 5 characters)"
-                                value={returnReason}
-                                onChange={(e) => setReturnReason(e.target.value)}
-                                aria-label="Return reason"
-                              />
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="destructive"
-                                  disabled={returnM.isPending || returnReason.trim().length < 5}
-                                  onClick={() => returnM.mutate()}
-                                >
-                                  Confirm return
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => setReturnForId(null)}
-                                >
-                                  Cancel
-                                </Button>
-                              </div>
-                            </div>
                           ) : null}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                          {!isHistory &&
+                          !stuck &&
+                          (row.status === "open" ||
+                            (row.status === "in_progress" && !row.forwardedAt)) ? (
+                            <Button
+                              size="sm"
+                              variant="navy"
+                              disabled={forwardM.isPending}
+                              onClick={() => {
+                                setActionMsg(null);
+                                forwardM.mutate(row.id);
+                              }}
+                            >
+                              Send to Accounts
+                            </Button>
+                          ) : null}
+                          {!isHistory &&
+                          !stuck &&
+                          (row.status === "open" || row.status === "in_progress") ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setReturnForId(row.id);
+                                setReturnReason("");
+                                setActionMsg(null);
+                              }}
+                            >
+                              Return
+                            </Button>
+                          ) : null}
+                        </div>
+                        {returnForId === row.id ? (
+                          <div className="mt-2 space-y-2 rounded border border-border p-2">
+                            <Textarea
+                              placeholder="Required reason for counsellor (min 5 characters)"
+                              value={returnReason}
+                              onChange={(e) => setReturnReason(e.target.value)}
+                              aria-label="Return reason"
+                            />
+                            <div className="flex gap-2">
+                              <Button
+                                size="sm"
+                                variant="destructive"
+                                disabled={returnM.isPending || returnReason.trim().length < 5}
+                                onClick={() => returnM.mutate()}
+                              >
+                                Confirm return
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => setReturnForId(null)}
+                              >
+                                Cancel
+                              </Button>
+                            </div>
+                          </div>
+                        ) : null}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
             </TableWrap>
           )}
         </Panel>
@@ -1083,8 +1163,4 @@ function FrontDeskDashboardPage() {
       </Sheet>
     </div>
   );
-}
-
-function filteredCountFallback(rows: { status: string }[], status: string): number {
-  return rows.filter((r) => r.status === status).length;
 }

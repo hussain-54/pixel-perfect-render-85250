@@ -81,12 +81,25 @@ export function frontDeskCanSeeFeeVerificationRequest(input: {
   return Boolean(input.isFrontDesk && input.viewerUserId);
 }
 
-export type FeeVerificationQueueTab = "open" | "awaiting_finance" | "cancelled" | "completed";
+export type FeeVerificationQueueTab =
+  "open" | "awaiting_finance" | "needs_correction" | "cancelled" | "completed";
 
-export function feeVerificationTabForStatus(status: string): FeeVerificationQueueTab {
+export function feeVerificationTabForStatus(
+  status: string,
+  signupFeeStatus?: string | null,
+): FeeVerificationQueueTab {
   const s = status.trim().toLowerCase();
   if (s === "in_progress") return "awaiting_finance";
-  if (s === "cancelled") return "cancelled";
+  if (s === "cancelled") {
+    const fee = (signupFeeStatus ?? "").toLowerCase();
+    const feeExists =
+      fee === "unpaid" ||
+      fee === "claimed" ||
+      fee === "verified" ||
+      fee === "waived" ||
+      fee === "rejected";
+    return feeExists ? "cancelled" : "needs_correction";
+  }
   if (s === "resolved") return "completed";
   return "open";
 }
@@ -95,6 +108,7 @@ export function feeVerificationStatusesForTab(tab: FeeVerificationQueueTab): str
   switch (tab) {
     case "awaiting_finance":
       return ["in_progress"];
+    case "needs_correction":
     case "cancelled":
       return ["cancelled"];
     case "completed":
@@ -103,6 +117,25 @@ export function feeVerificationStatusesForTab(tab: FeeVerificationQueueTab): str
     default:
       return ["open"];
   }
+}
+
+/** Client filter for tabs that share DB status `cancelled` but differ by fee ledger. */
+export function feeVerificationRowMatchesTab(
+  row: { status: string; signupFeeStatus?: string | null },
+  tab: FeeVerificationQueueTab,
+): boolean {
+  const allowed = feeVerificationStatusesForTab(tab);
+  if (!allowed.includes(row.status)) return false;
+  if (tab !== "needs_correction" && tab !== "cancelled") return true;
+  const fee = (row.signupFeeStatus ?? "").toLowerCase();
+  const feeExists =
+    fee === "unpaid" ||
+    fee === "claimed" ||
+    fee === "verified" ||
+    fee === "waived" ||
+    fee === "rejected";
+  if (tab === "needs_correction") return !feeExists;
+  return feeExists;
 }
 
 /** Fee obligation reached an authorized Accounts decision (not merely claimed). */
