@@ -73,6 +73,8 @@ export function StatCard({
   title,
   onClick,
   selected = false,
+  /** White bordered KPI card (default). Use `bare` for denser inline metrics. */
+  variant = "card",
 }: {
   label: string;
   value: ReactNode;
@@ -83,6 +85,7 @@ export function StatCard({
   /** When set, card is a filter/control button (keyboard accessible). */
   onClick?: () => void;
   selected?: boolean;
+  variant?: "card" | "bare";
 }) {
   const body = (
     <>
@@ -90,17 +93,23 @@ export function StatCard({
         <span className="text-xs font-semibold leading-snug tracking-wide">{label}</span>
         {icon ? <span className="shrink-0 text-royal [&_svg]:size-4">{icon}</span> : null}
       </div>
-      <div className="mt-1.5 font-display text-xl font-semibold leading-none text-navy sm:text-[1.375rem]">
+      <div className="mt-1.5 font-display text-xl font-semibold leading-none tabular-nums text-navy sm:text-[1.375rem]">
         {value}
       </div>
-      {hint ? <p className="mt-1.5 text-xs leading-snug text-navy/65 sm:text-sm">{hint}</p> : null}
+      {hint ? <p className="mt-1.5 text-xs leading-snug text-navy/65">{hint}</p> : null}
     </>
   );
   const shellClass = cn(
-    "flex h-full min-h-[5.25rem] flex-col border-b border-border pb-3 pt-1 text-left",
+    "flex h-full min-h-[5.25rem] flex-col text-left",
+    variant === "card"
+      ? "rounded-lg border border-border bg-card p-3 shadow-soft"
+      : "border-b border-border pb-3 pt-1",
     onClick &&
-      "w-full rounded-md px-1 transition-colors hover:bg-navy/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal/40",
-    selected && "border-b-royal bg-navy/[0.04]",
+      "w-full transition-colors hover:border-navy/25 hover:bg-navy/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal/40",
+    selected &&
+      (variant === "card"
+        ? "border-royal/50 bg-navy/[0.04] ring-1 ring-royal/30"
+        : "border-b-royal bg-navy/[0.04]"),
   );
 
   if (onClick) {

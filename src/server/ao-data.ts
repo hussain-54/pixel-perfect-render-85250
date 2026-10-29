@@ -663,26 +663,29 @@ export async function buildOfficerDashboardFromDb(
       awaitingResponse: workbenchMetrics.awaitingResponse,
       actionRequired: workbenchMetrics.actionRequired,
     },
-    todaysTasks: tasks.slice(0, 8).map((t) => {
-      const st = t.student_id ? students.find((s) => s.id === t.student_id) : undefined;
-      const dueAt = t.due_at ?? t.created_at;
-      const pastDue = isTaskPastDue(dueAt, today);
-      const dueToday = isTaskDueToday(dueAt, today);
-      return {
-        id: t.id,
-        title: t.title,
-        studentId: t.student_id,
-        studentName: st?.name ?? null,
-        dueAt,
-        priority:
-          t.priority === "high" || t.priority === "overdue" || pastDue
-            ? ("overdue" as const)
-            : dueToday
-              ? ("due_today" as const)
-              : ("normal" as const),
-        ...(t.reminder_ref ? { reminderRef: t.reminder_ref } : {}),
-      };
-    }),
+    todaysTasks: tasks
+      .filter((t) => isTaskDueOnOrBeforeToday(t.due_at ?? t.created_at, today))
+      .slice(0, 8)
+      .map((t) => {
+        const st = t.student_id ? students.find((s) => s.id === t.student_id) : undefined;
+        const dueAt = t.due_at ?? t.created_at;
+        const pastDue = isTaskPastDue(dueAt, today);
+        const dueToday = isTaskDueToday(dueAt, today);
+        return {
+          id: t.id,
+          title: t.title,
+          studentId: t.student_id,
+          studentName: st?.name ?? null,
+          dueAt,
+          priority:
+            t.priority === "high" || t.priority === "overdue" || pastDue
+              ? ("overdue" as const)
+              : dueToday
+                ? ("due_today" as const)
+                : ("normal" as const),
+          ...(t.reminder_ref ? { reminderRef: t.reminder_ref } : {}),
+        };
+      }),
     assignedOverview: recentSnaps.slice(0, 8).map((s) => ({
       id: s.id,
       name: s.name,
@@ -693,6 +696,14 @@ export async function buildOfficerDashboardFromDb(
       caseId: s.caseId,
       lastActivity: s.lastActivity,
       nextActionLabel: nextActionLabelForSnap(s),
+      hasAssessment: s.hasAssessment,
+      hasConsent: s.hasConsent,
+      signupFeeStatus: s.signupFeeStatus,
+      openFeeRequestStatus: s.openFeeRequestStatus,
+      handoverStatus: s.handoverStatus,
+      hasOverdueTask: s.hasOverdueTask,
+      hasDueTodayTask: s.hasDueTodayTask,
+      docsPendingReview: s.docsPendingReview,
     })),
     docsWaiting: docs
       .filter((d) => d.status === "Pending Review")
@@ -709,22 +720,33 @@ export async function buildOfficerDashboardFromDb(
         };
       }),
     upcomingDeadlines: deadlineRows.slice(0, 8),
-    needsAttention: attention.map((a) => ({
-      id: a.id,
-      studentId: a.studentId,
-      caseId: a.caseId,
-      fullName: a.fullName,
-      kind: a.kind,
-      title: a.title,
-      detail: a.detail,
-      at: a.at,
-      priority: a.priority,
-      urgencyGroup: a.urgencyGroup,
-      workflowStatus: a.workflowStatus,
-      nextResponsibleRole: a.nextResponsibleRole,
-      primaryActionLabel: a.primaryActionLabel,
-      profileTab: a.profileTab,
-    })),
+    needsAttention: attention.map((a) => {
+      const snap = snaps.find((s) => s.id === a.studentId);
+      return {
+        id: a.id,
+        studentId: a.studentId,
+        caseId: a.caseId,
+        fullName: a.fullName,
+        kind: a.kind,
+        title: a.title,
+        detail: a.detail,
+        at: a.at,
+        priority: a.priority,
+        urgencyGroup: a.urgencyGroup,
+        workflowStatus: a.workflowStatus,
+        nextResponsibleRole: a.nextResponsibleRole,
+        primaryActionLabel: a.primaryActionLabel,
+        profileTab: a.profileTab,
+        hasAssessment: Boolean(snap?.hasAssessment),
+        hasConsent: Boolean(snap?.hasConsent),
+        signupFeeStatus: snap?.signupFeeStatus ?? null,
+        openFeeRequestStatus: snap?.openFeeRequestStatus ?? null,
+        handoverStatus: snap?.handoverStatus ?? null,
+        hasOverdueTask: Boolean(snap?.hasOverdueTask),
+        hasDueTodayTask: Boolean(snap?.hasDueTodayTask),
+        docsPendingReview: snap?.docsPendingReview ?? 0,
+      };
+    }),
     recentActivity: recentSnaps.slice(0, 8).map((s) => ({
       id: s.id,
       name: s.name,
@@ -735,6 +757,14 @@ export async function buildOfficerDashboardFromDb(
       caseId: s.caseId,
       lastActivity: s.lastActivity,
       nextActionLabel: nextActionLabelForSnap(s),
+      hasAssessment: s.hasAssessment,
+      hasConsent: s.hasConsent,
+      signupFeeStatus: s.signupFeeStatus,
+      openFeeRequestStatus: s.openFeeRequestStatus,
+      handoverStatus: s.handoverStatus,
+      hasOverdueTask: s.hasOverdueTask,
+      hasDueTodayTask: s.hasDueTodayTask,
+      docsPendingReview: s.docsPendingReview,
     })),
     fetchedAt: new Date().toISOString(),
   };
@@ -751,6 +781,12 @@ export async function buildStudentsDirectoryFromDb(
     archived?: boolean;
     page?: number;
     pageSize?: number;
+    focus?:
+      | "awaiting_assessment"
+      | "consent_recorded"
+      | "awaiting_response"
+      | "action_required"
+      | "follow_ups";
   },
 ) {
   const client = requireAoSupabaseClient();
@@ -802,43 +838,42 @@ export async function buildStudentsDirectoryFromDb(
     : { data: [] as { id: string; full_name: string }[] };
 
   const nameById = new Map((profiles ?? []).map((p) => [p.id, p.full_name]));
-  const pageSize = Math.min(Math.max(filters.pageSize ?? 20, 1), 50);
-  const page = Math.max(filters.page ?? 1, 1);
-  const total = students.length;
-  const pageRows = students.slice((page - 1) * pageSize, page * pageSize);
-  const pageIds = pageRows.map((s) => s.id);
 
-  const allApps = await listAppsForStudents(
-    client,
-    allVisible.map((s) => s.id),
-  );
+  const { nextActionLabelForSnap, studentMatchesKpiFilter, isTaskPastDue, isTaskDueToday } =
+    await import("@/lib/counsellor-workspace");
 
-  const { nextActionLabelForSnap } = await import("@/lib/counsellor-workspace");
+  const focus = filters.focus;
   const consentedIds = new Set<string>();
   const assessedIds = new Set<string>();
   const feeByStudent = new Map<string, string | null>();
   const openFeeByStudent = new Map<string, string | null>();
   const handoverByStudent = new Map<string, string | null>();
-  if (pageIds.length) {
-    const [agreementsRes, assessmentsRes, feesRes, feeReqRes, handoverRes] = await Promise.all([
-      client
-        .from("counselling_agreements")
-        .select("student_id")
-        .in("student_id", pageIds)
-        .eq("consented", true),
-      client.from("student_assessments").select("student_id").in("student_id", pageIds),
-      client.from("signup_fee_payments").select("student_id, status").in("student_id", pageIds),
-      client
-        .from("counselling_fee_verification_requests")
-        .select("student_id, status, updated_at")
-        .in("student_id", pageIds)
-        .order("updated_at", { ascending: false }),
-      client
-        .from("admission_handovers")
-        .select("student_id, status, handed_over_at")
-        .in("student_id", pageIds)
-        .order("handed_over_at", { ascending: false }),
-    ]);
+  const overdueStudentIds = new Set<string>();
+  const dueTodayStudentIds = new Set<string>();
+
+  async function hydrateLifecycle(ids: string[]) {
+    if (!ids.length) return;
+    const [agreementsRes, assessmentsRes, feesRes, feeReqRes, handoverRes, tasks] =
+      await Promise.all([
+        client
+          .from("counselling_agreements")
+          .select("student_id")
+          .in("student_id", ids)
+          .eq("consented", true),
+        client.from("student_assessments").select("student_id").in("student_id", ids),
+        client.from("signup_fee_payments").select("student_id, status").in("student_id", ids),
+        client
+          .from("counselling_fee_verification_requests")
+          .select("student_id, status, updated_at")
+          .in("student_id", ids)
+          .order("updated_at", { ascending: false }),
+        client
+          .from("admission_handovers")
+          .select("student_id, status, handed_over_at")
+          .in("student_id", ids)
+          .order("handed_over_at", { ascending: false }),
+        listOpenTasksForDesk(client, session, ids),
+      ]);
     for (const row of agreementsRes.data ?? []) {
       if (row.student_id) consentedIds.add(row.student_id);
     }
@@ -860,12 +895,56 @@ export async function buildStudentsDirectoryFromDb(
       if (!row.student_id || handoverByStudent.has(row.student_id)) continue;
       handoverByStudent.set(row.student_id, String(row.status ?? "").toLowerCase());
     }
+    const now = new Date();
+    for (const t of tasks) {
+      if (!t.student_id) continue;
+      const dueAt = t.due_at ?? t.created_at;
+      if (isTaskPastDue(dueAt, now)) overdueStudentIds.add(t.student_id);
+      else if (isTaskDueToday(dueAt, now)) dueTodayStudentIds.add(t.student_id);
+    }
   }
+
+  // KPI focus requires lifecycle for the full filtered set so counts match dashboard cards.
+  if (focus) {
+    await hydrateLifecycle(students.map((s) => s.id));
+    students = students.filter((s) =>
+      studentMatchesKpiFilter(
+        {
+          hasAssessment: assessedIds.has(s.id),
+          hasConsent: consentedIds.has(s.id),
+          signupFeeStatus: feeByStudent.get(s.id) ?? null,
+          openFeeRequestStatus: openFeeByStudent.get(s.id) ?? null,
+          handoverStatus: handoverByStudent.get(s.id) ?? null,
+          hasOverdueTask: overdueStudentIds.has(s.id),
+          hasDueTodayTask: dueTodayStudentIds.has(s.id),
+          docsPendingReview: 0,
+        },
+        focus,
+      ),
+    );
+  }
+
+  const pageSize = Math.min(Math.max(filters.pageSize ?? 20, 1), 50);
+  const page = Math.max(filters.page ?? 1, 1);
+  const total = students.length;
+  const pageRows = students.slice((page - 1) * pageSize, page * pageSize);
+
+  if (!focus) {
+    await hydrateLifecycle(pageRows.map((s) => s.id));
+  }
+
+  const allApps = await listAppsForStudents(
+    client,
+    allVisible.map((s) => s.id),
+  );
 
   return {
     rows: pageRows.map((s) => {
       const studentApps = apps.filter((a) => a.studentId === s.id);
       const hasConsent = consentedIds.has(s.id);
+      const hasAssessment = assessedIds.has(s.id);
+      const hasOverdueTask = overdueStudentIds.has(s.id);
+      const hasDueTodayTask = dueTodayStudentIds.has(s.id);
       const nextActionLabel = nextActionLabelForSnap({
         id: s.id,
         caseId: s.caseId,
@@ -873,14 +952,14 @@ export async function buildStudentsDirectoryFromDb(
         destination: s.destination,
         stageLabel: stageLabel(s.stage),
         lastActivity: s.lastActivity,
-        hasAssessment: assessedIds.has(s.id),
+        hasAssessment,
         hasConsent,
         signupFeeStatus: feeByStudent.get(s.id) ?? null,
         openFeeRequestStatus: openFeeByStudent.get(s.id) ?? null,
         handoverStatus: handoverByStudent.get(s.id) ?? null,
         docsPendingReview: 0,
-        hasOverdueTask: false,
-        hasDueTodayTask: false,
+        hasOverdueTask,
+        hasDueTodayTask,
       });
       return {
         id: s.id,
@@ -898,6 +977,11 @@ export async function buildStudentsDirectoryFromDb(
         lastActivity: s.lastActivity,
         nextActionLabel,
         hasConsent,
+        hasAssessment,
+        followUpDue: hasOverdueTask || hasDueTodayTask,
+        signupFeeStatus: feeByStudent.get(s.id) ?? null,
+        openFeeRequestStatus: openFeeByStudent.get(s.id) ?? null,
+        handoverStatus: handoverByStudent.get(s.id) ?? null,
       };
     }),
     total,

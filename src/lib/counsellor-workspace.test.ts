@@ -1,13 +1,18 @@
 import { describe, expect, it } from "vitest";
 import {
+  attentionMatchesKpiFilter,
+  attentionMatchesListFilter,
   buildCounsellorAttentionItems,
+  buildCounsellorPrioritySummary,
   computeCounsellorWorkbenchMetrics,
   counsellorHasActionableNext,
   isTaskDueOnOrBeforeToday,
   isTaskDueToday,
   isTaskPastDue,
   profileTabForAttentionKind,
+  resolveAttentionOpenTarget,
   resolveCounsellorNotificationHref,
+  studentMatchesKpiFilter,
   urgencyGroupFromPriority,
 } from "./counsellor-workspace";
 
@@ -184,5 +189,61 @@ describe("counsellor-workspace", () => {
     ]);
     expect(items[0]?.kind).toBe("task");
     expect(items[0]?.title).toBe("Follow-up task due today");
+  });
+
+  it("filters KPI and attention lists from persisted snap fields", () => {
+    expect(studentMatchesKpiFilter({ ...base, hasAssessment: false }, "awaiting_assessment")).toBe(
+      true,
+    );
+    expect(studentMatchesKpiFilter({ ...base, hasConsent: true }, "consent_recorded")).toBe(true);
+    expect(
+      studentMatchesKpiFilter(
+        { ...base, openFeeRequestStatus: "open", hasAssessment: true, hasConsent: true },
+        "awaiting_response",
+      ),
+    ).toBe(true);
+    expect(
+      attentionMatchesKpiFilter(
+        { kind: "task", title: "Follow-up" },
+        { ...base, hasDueTodayTask: true },
+        "follow_ups",
+      ),
+    ).toBe(true);
+    expect(
+      attentionMatchesListFilter(
+        { urgencyGroup: "critical", at: "2026-10-22T12:00:00.000Z", kind: "handover" },
+        "urgent",
+      ),
+    ).toBe(true);
+  });
+
+  it("routes task attention to tasks workspace", () => {
+    expect(resolveAttentionOpenTarget({ kind: "task", studentId: "s1" }).to).toBe("/staff/tasks");
+    expect(
+      resolveAttentionOpenTarget({ kind: "lifecycle", studentId: "s1", profileTab: "assessment" }),
+    ).toEqual({
+      to: "/staff/students/$studentId",
+      params: { studentId: "s1" },
+      search: { tab: "assessment" },
+    });
+  });
+
+  it("builds a compact priority summary from live metrics", () => {
+    expect(
+      buildCounsellorPrioritySummary({
+        actionRequired: 2,
+        followUpsDue: 1,
+        awaitingInitialAssessment: 0,
+        awaitingResponse: 3,
+      }),
+    ).toContain("2 need action");
+    expect(
+      buildCounsellorPrioritySummary({
+        actionRequired: 0,
+        followUpsDue: 0,
+        awaitingInitialAssessment: 0,
+        awaitingResponse: 0,
+      }),
+    ).toBe("No urgent priorities today");
   });
 });

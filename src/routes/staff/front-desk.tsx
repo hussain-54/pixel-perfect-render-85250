@@ -33,6 +33,7 @@ import {
 import { isFrontDeskBusinessRole } from "@/lib/staff-business-access";
 import {
   buildFrontDeskAttentionItems,
+  frontDeskIntakeFocusSearch,
   resolveFrontDeskNotificationHref,
 } from "@/lib/front-desk-workspace";
 import {
@@ -355,7 +356,7 @@ function FrontDeskDashboardPage() {
             <Button asChild size="sm" variant="navy">
               <Link to="/staff/register">
                 <UserPlus className="mr-2 h-4 w-4" />
-                Register
+                Register Student
               </Link>
             </Button>
             <Button asChild size="sm" variant="outline">
@@ -469,22 +470,51 @@ function FrontDeskDashboardPage() {
                         </p>
                         <p className="text-xs text-muted-foreground line-clamp-2">{item.detail}</p>
                       </div>
-                      <Button
-                        asChild
-                        size="sm"
-                        variant="navy"
-                        className="shrink-0 self-start sm:self-center"
-                      >
-                        <Link
-                          to="/staff/intake/$studentId"
-                          params={{ studentId: item.studentId }}
-                          {...(item.kind === "unassigned"
-                            ? { search: { focus: "assign" as const } }
-                            : {})}
+                      {item.kind === "fee_stuck" ? (
+                        <div className="flex shrink-0 flex-wrap gap-1.5 self-start sm:self-center">
+                          <Button
+                            size="sm"
+                            variant="navy"
+                            disabled={reconcileM.isPending}
+                            onClick={() => {
+                              setActionMsg(null);
+                              reconcileM.mutate(item.studentId);
+                            }}
+                          >
+                            {reconcileM.isPending ? "Syncing…" : "Sync"}
+                          </Button>
+                          <Button asChild size="sm" variant="outline">
+                            <Link
+                              to="/staff/intake/$studentId"
+                              params={{ studentId: item.studentId }}
+                              search={frontDeskIntakeFocusSearch({
+                                kind: item.kind,
+                                requestId: item.requestId ?? null,
+                              })}
+                            >
+                              Open
+                            </Link>
+                          </Button>
+                        </div>
+                      ) : (
+                        <Button
+                          asChild
+                          size="sm"
+                          variant="navy"
+                          className="shrink-0 self-start sm:self-center"
                         >
-                          {attentionActionLabel(item.kind)}
-                        </Link>
-                      </Button>
+                          <Link
+                            to="/staff/intake/$studentId"
+                            params={{ studentId: item.studentId }}
+                            search={frontDeskIntakeFocusSearch({
+                              kind: item.kind,
+                              requestId: item.requestId ?? null,
+                            })}
+                          >
+                            {attentionActionLabel(item.kind)}
+                          </Link>
+                        </Button>
+                      )}
                     </li>
                   ))}
                 </ul>
@@ -780,7 +810,7 @@ function FrontDeskDashboardPage() {
                                 : forwarded
                                   ? "Awaiting Finance verification"
                                   : tab === "needs_correction"
-                                    ? "Follow up with counsellor"
+                                    ? "Open Fix — issue voucher / proof, then counsellor re-requests"
                                     : "Send to Accounts when ready"}
                         </p>
                         <div className="flex flex-wrap gap-1.5">
@@ -788,8 +818,12 @@ function FrontDeskDashboardPage() {
                             <Link
                               to="/staff/intake/$studentId"
                               params={{ studentId: row.studentId }}
+                              search={{
+                                focus: "fee" as const,
+                                requestId: row.id,
+                              }}
                             >
-                              Open record
+                              {tab === "needs_correction" ? "Fix" : "Open record"}
                             </Link>
                           </Button>
                           {!isHistory && stuck ? (

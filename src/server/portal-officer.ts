@@ -302,6 +302,12 @@ export const portalGetStudentsDirectory = createServerFn({ method: "GET" })
           archived?: boolean;
           page?: number;
           pageSize?: number;
+          focus?:
+            | "awaiting_assessment"
+            | "consent_recorded"
+            | "awaiting_response"
+            | "action_required"
+            | "follow_ups";
         } = {};
         if (data.q !== undefined) directoryFilters.q = data.q;
         if (data.country !== undefined) directoryFilters.country = data.country;
@@ -311,6 +317,7 @@ export const portalGetStudentsDirectory = createServerFn({ method: "GET" })
         if (data.archived !== undefined) directoryFilters.archived = data.archived;
         if (data.page !== undefined) directoryFilters.page = data.page;
         if (data.pageSize !== undefined) directoryFilters.pageSize = data.pageSize;
+        if (data.focus !== undefined) directoryFilters.focus = data.focus;
         return (await buildStudentsDirectoryFromDb(
           session,
           directoryFilters,

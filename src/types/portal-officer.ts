@@ -38,6 +38,15 @@ export type OfficerDashboardStudent = {
   nextActionLabel?: string;
   /** Pipeline application id when this row is application-centric (Admission). */
   applicationId?: string | null;
+  /** Counsellor KPI filter fields (omitted on Admission rows). */
+  hasAssessment?: boolean;
+  hasConsent?: boolean;
+  signupFeeStatus?: string | null;
+  openFeeRequestStatus?: string | null;
+  handoverStatus?: string | null;
+  hasOverdueTask?: boolean;
+  hasDueTodayTask?: boolean;
+  docsPendingReview?: number;
 };
 
 export type OfficerDashboardAttentionItem = {
@@ -60,6 +69,15 @@ export type OfficerDashboardAttentionItem = {
   primaryActionLabel?: string;
   /** Counsellor student-profile tab deep link. */
   profileTab?: string;
+  /** Snap fields for dashboard KPI filtering (counsellor workbench). */
+  hasAssessment?: boolean;
+  hasConsent?: boolean;
+  signupFeeStatus?: string | null;
+  openFeeRequestStatus?: string | null;
+  handoverStatus?: string | null;
+  hasOverdueTask?: boolean;
+  hasDueTodayTask?: boolean;
+  docsPendingReview?: number;
 };
 
 export type OfficerDashboardDoc = {
@@ -129,8 +147,20 @@ export type StudentDirectoryRow = {
   lastActivity: string;
   nextActionLabel?: string;
   hasConsent?: boolean;
+  hasAssessment?: boolean;
   followUpDue?: boolean;
+  openFeeRequestStatus?: string | null;
+  handoverStatus?: string | null;
+  signupFeeStatus?: string | null;
 };
+
+/** Dashboard KPI deep-link into My Students directory. */
+export type StudentDirectoryFocus =
+  | "awaiting_assessment"
+  | "consent_recorded"
+  | "awaiting_response"
+  | "action_required"
+  | "follow_ups";
 
 export type StudentDirectoryFilters = {
   q?: string;
@@ -143,6 +173,8 @@ export type StudentDirectoryFilters = {
   archived?: boolean;
   page?: number;
   pageSize?: number;
+  /** When set, directory totals/rows match the counsellor KPI definition. */
+  focus?: StudentDirectoryFocus;
 };
 
 export type StudentDirectoryResult = {

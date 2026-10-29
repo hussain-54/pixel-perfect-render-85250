@@ -42,6 +42,8 @@ export type FrontDeskAttentionItem = {
   title: string;
   detail: string;
   at: string;
+  /** Fee-verification request id when the attention item is request-scoped. */
+  requestId?: string;
 };
 
 /** Signup fee ledger row exists for this coordination request (status string from RPC). */
@@ -296,18 +298,64 @@ export function computeFrontDeskDashboardMetrics(input: {
  * Fee mutations (Send / Sync) live on the Signup Fee Coordination panel — do not
  * label a mere record link as a Finance action.
  */
-export function frontDeskNextActionCta(code: string): "Assign counsellor" | "Open record" | "View" {
+export function frontDeskNextActionCta(
+  code: string,
+):
+  | "Assign counsellor"
+  | "Sync request"
+  | "Send to Accounts"
+  | "View request"
+  | "Fix fee coordination"
+  | "Open record"
+  | "View" {
   switch (code) {
     case "assign_counsellor":
       return "Assign counsellor";
     case "sync_fee_request":
+      return "Sync request";
     case "forward_fee_request":
+      return "Send to Accounts";
     case "await_finance":
+      return "View request";
     case "return_or_correct":
-      return "Open record";
+      return "Fix fee coordination";
     default:
       return "View";
   }
+}
+
+/** Deep-link search for Front Desk intake record from attention / queue actions. */
+export function frontDeskIntakeFocusSearch(input: {
+  kind: FrontDeskAttentionItem["kind"];
+  requestId?: string | null | undefined;
+}): { focus: "assign" | "fee"; requestId?: string } {
+  if (input.kind === "unassigned") return { focus: "assign" };
+  const search: { focus: "assign" | "fee"; requestId?: string } = { focus: "fee" };
+  const requestId = input.requestId?.trim();
+  if (requestId) search.requestId = requestId;
+  return search;
+}
+
+/**
+ * Prefer open/in_progress requests; otherwise surface cancelled coordination that still
+ * needs a fee ledger (needs_correction) so next-action / Fix UX is accurate.
+ */
+export function selectActionableFeeRequest<
+  T extends { status: string; signupFeeStatus?: string | null },
+>(feeRequests: T[]): T | null {
+  const open = feeRequests.find((r) => {
+    const s = r.status.trim().toLowerCase();
+    return s === "open" || s === "in_progress";
+  });
+  if (open) return open;
+  return (
+    feeRequests.find((r) =>
+      cancelledCoordinationNeedsCorrection({
+        status: r.status,
+        signupFeeStatus: r.signupFeeStatus,
+      }),
+    ) ?? null
+  );
 }
 
 export function buildFrontDeskAttentionItems(input: {
@@ -333,6 +381,7 @@ export function buildFrontDeskAttentionItems(input: {
         title: "Fee request out of sync",
         detail: "Accounts decided the fee; sync the counsellor request.",
         at: req.updatedAt || req.createdAt,
+        requestId: req.id,
       });
       continue;
     }
@@ -346,6 +395,7 @@ export function buildFrontDeskAttentionItems(input: {
         title: "Fee verification awaiting Front Desk",
         detail: req.summary || "Counsellor requested signup-fee verification.",
         at: req.createdAt,
+        requestId: req.id,
       });
       continue;
     }
@@ -360,6 +410,7 @@ export function buildFrontDeskAttentionItems(input: {
         title: "Fee request needs correction",
         detail: req.coordinatorNote || req.summary || "Returned for counsellor correction.",
         at: req.updatedAt || req.createdAt,
+        requestId: req.id,
       });
     }
   }
@@ -540,6 +591,11 @@ export function resolveFrontDeskNotificationHref(input: {
 }): string {
   const studentId = input.studentId?.trim();
   if (studentId) {
+    // Fee-related notifications should land on the fee correction / voucher workflow.
+    const path = (input.linkPath ?? "").toLowerCase();
+    if (path.includes("fee") || path.includes("finance") || path.includes("verification")) {
+      return `/staff/intake/${studentId}?focus=fee`;
+    }
     return `/staff/intake/${studentId}`;
   }
   const path = (input.linkPath ?? "").trim();

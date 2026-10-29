@@ -429,3 +429,138 @@ export function attentionUrgencyLabel(group: string): string {
       return "Normal";
   }
 }
+
+/** Dashboard KPI selection — filters workspace panels; null = show all. */
+export type CounsellorKpiFilter =
+  | "assigned"
+  | "awaiting_assessment"
+  | "consent_recorded"
+  | "follow_ups"
+  | "apps_in_progress"
+  | "awaiting_response"
+  | "action_required";
+
+export type AttentionListFilter = "all" | "urgent" | "today";
+
+export type CounsellorCaseFilterSnap = Pick<
+  CounsellorWorkbenchStudentSnap,
+  | "hasAssessment"
+  | "hasConsent"
+  | "signupFeeStatus"
+  | "openFeeRequestStatus"
+  | "handoverStatus"
+  | "hasOverdueTask"
+  | "hasDueTodayTask"
+  | "docsPendingReview"
+>;
+
+/** True when due_at falls on the local calendar day of `at` (or is overdue for "today" urgency). */
+export function attentionMatchesListFilter(
+  item: { urgencyGroup?: string | null; at: string; kind: string },
+  filter: AttentionListFilter,
+  now = new Date(),
+): boolean {
+  if (filter === "all") return true;
+  if (filter === "urgent") {
+    return item.urgencyGroup === "critical" || item.urgencyGroup === "high";
+  }
+  // Today: updated today, or task/lifecycle items that are due-oriented (overdue/due today urgency).
+  const start = Date.parse(startOfLocalDayIso(now));
+  const end = Date.parse(endOfLocalDayIso(now));
+  const at = Date.parse(item.at);
+  if (!Number.isNaN(at) && at >= start && at <= end) return true;
+  return item.urgencyGroup === "critical" || item.urgencyGroup === "high";
+}
+
+export function studentMatchesKpiFilter(
+  snap: CounsellorCaseFilterSnap,
+  filter: CounsellorKpiFilter | null,
+): boolean {
+  if (!filter || filter === "assigned") return true;
+  if (filter === "awaiting_assessment") return !snap.hasAssessment;
+  if (filter === "consent_recorded") return snap.hasConsent;
+  if (filter === "follow_ups") return snap.hasOverdueTask || snap.hasDueTodayTask;
+  if (filter === "awaiting_response") {
+    const fee = (snap.openFeeRequestStatus ?? "").toLowerCase();
+    const hand = (snap.handoverStatus ?? "").toLowerCase();
+    return fee === "open" || fee === "in_progress" || hand === "submitted";
+  }
+  if (filter === "action_required") return studentNeedsCounsellorAction(snap as CounsellorWorkbenchStudentSnap);
+  if (filter === "apps_in_progress") return false; // apps live on applications route, not student snaps
+  return true;
+}
+
+export function attentionMatchesKpiFilter(
+  item: { kind: string; title: string },
+  snap: CounsellorCaseFilterSnap | undefined,
+  filter: CounsellorKpiFilter | null,
+): boolean {
+  if (!filter || filter === "assigned") return true;
+  if (filter === "follow_ups") return item.kind === "task";
+  if (filter === "apps_in_progress") return false;
+  if (snap) return studentMatchesKpiFilter(snap, filter);
+  if (filter === "awaiting_assessment") {
+    return item.kind === "lifecycle" && /assessment/i.test(item.title);
+  }
+  if (filter === "consent_recorded") return false;
+  if (filter === "awaiting_response") {
+    return item.kind === "fee" || item.kind === "handover" || /admission|front desk|accounts/i.test(item.title);
+  }
+  if (filter === "action_required") return true;
+  return true;
+}
+
+/** Where the attention primary action should navigate. */
+export function resolveAttentionOpenTarget(item: {
+  kind: string;
+  studentId: string;
+  profileTab?: string | null | undefined;
+}):
+  | { to: "/staff/tasks" }
+  | {
+      to: "/staff/students/$studentId";
+      params: { studentId: string };
+      search: { tab: ProfileTabId };
+    } {
+  if (item.kind === "task") {
+    return { to: "/staff/tasks" };
+  }
+  if (item.kind === "document") {
+    return {
+      to: "/staff/students/$studentId",
+      params: { studentId: item.studentId },
+      search: { tab: "documents" },
+    };
+  }
+  const kind = item.kind as CounsellorAttentionItem["kind"];
+  const tab = (item.profileTab ?? profileTabForAttentionKind(kind)) as ProfileTabId;
+  return {
+    to: "/staff/students/$studentId",
+    params: { studentId: item.studentId },
+    search: { tab },
+  };
+}
+
+/** Compact header line: today's priority counts from live metrics. */
+export function buildCounsellorPrioritySummary(m: {
+  actionRequired: number;
+  followUpsDue: number;
+  awaitingInitialAssessment: number;
+  awaitingResponse: number;
+}): string {
+  const parts: string[] = [];
+  if (m.actionRequired > 0) {
+    parts.push(`${m.actionRequired} need${m.actionRequired === 1 ? "s" : ""} action`);
+  }
+  if (m.followUpsDue > 0) {
+    parts.push(`${m.followUpsDue} follow-up${m.followUpsDue === 1 ? "" : "s"} due`);
+  }
+  if (m.awaitingInitialAssessment > 0) {
+    parts.push(`${m.awaitingInitialAssessment} awaiting assessment`);
+  }
+  if (m.awaitingResponse > 0) {
+    parts.push(`${m.awaitingResponse} awaiting response`);
+  }
+  if (!parts.length) return "No urgent priorities today";
+  return parts.slice(0, 3).join(" · ");
+}

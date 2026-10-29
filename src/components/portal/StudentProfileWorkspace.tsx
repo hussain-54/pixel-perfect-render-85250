@@ -77,17 +77,29 @@ function Field({
   label,
   children,
   error,
+  hint,
+  optional = false,
 }: {
   label: string;
   children: ReactNode;
   error?: string | null | undefined;
+  hint?: string | null | undefined;
+  optional?: boolean;
 }) {
   return (
     <label className="block text-sm">
-      <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-        {label}
+      <span className="mb-1 flex flex-wrap items-baseline gap-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+        <span>{label}</span>
+        {optional ? (
+          <span className="font-normal normal-case tracking-normal text-navy/40">(optional)</span>
+        ) : null}
       </span>
       {children}
+      {hint && !error ? (
+        <span className="mt-1 block text-xs font-normal normal-case tracking-normal text-navy/50">
+          {hint}
+        </span>
+      ) : null}
       {error ? <span className="mt-1 block text-xs text-danger">{error}</span> : null}
     </label>
   );
@@ -396,6 +408,34 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
               ))}
             </ol>
 
+            <div
+              className={cn(
+                "rounded-md border px-4 py-3",
+                lifecycleSnap?.hasConsent
+                  ? "border-emerald-200 bg-emerald-50/60"
+                  : "border-amber-200 bg-amber-50/50",
+              )}
+              aria-live="polite"
+            >
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                Counsellor consent
+              </p>
+              <p className="mt-1 font-semibold text-navy">
+                {feeQ.isLoading
+                  ? "Checking consent…"
+                  : lifecycleSnap?.hasConsent
+                    ? "Consent recorded"
+                    : "Consent pending"}
+              </p>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                {lifecycleSnap?.hasConsent
+                  ? "Persisted counselling agreement is on file. Opening this page does not change consent status."
+                  : hasSavedAssessment
+                    ? "Use Record consent below when the student has agreed. Status updates only after a successful save."
+                    : "Save the assessment first, then record consent before fee verification or Admission."}
+              </p>
+            </div>
+
             <div className="rounded-md border border-border bg-white px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {nextStep.feeStatusLabel}
@@ -643,11 +683,23 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
 
               {lifecycleSnap?.feeRequest &&
               !["open", "in_progress"].includes(lifecycleSnap.feeRequest.status) ? (
-                <details className="mt-2 text-xs text-muted-foreground">
+                <details
+                  className="mt-2 text-xs text-muted-foreground"
+                  open={lifecycleSnap.feeRequest.status === "cancelled"}
+                >
                   <summary className="cursor-pointer font-medium text-navy">
-                    Last fee request: {lifecycleSnap.feeRequest.status.replaceAll("_", " ")}
+                    Fee request: {lifecycleSnap.feeRequest.status.replaceAll("_", " ")}
+                    {lifecycleSnap.feeRequest.status === "cancelled"
+                      ? " — correction needed"
+                      : ""}
                   </summary>
                   <p className="mt-1">{lifecycleSnap.feeRequest.summary || "—"}</p>
+                  {lifecycleSnap.feeRequest.status === "cancelled" ? (
+                    <p className="mt-1 text-amber-800">
+                      Front Desk or Finance returned this request. Review the note, then send a new
+                      verification request when ready. Counsellors cannot mark fees verified.
+                    </p>
+                  ) : null}
                 </details>
               ) : null}
             </div>
@@ -684,20 +736,25 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
           </TabsList>
 
           <TabsContent value="assessment" className="space-y-5">
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard label="Eligibility" value={form.eligibility || "—"} />
-              <StatCard label="Language" value={form.languageScore || form.languageTest || "—"} />
-              <StatCard label="Annual budget" value={form.annualBudget || "—"} />
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <StatCard variant="bare" label="Eligibility" value={form.eligibility || "—"} />
               <StatCard
+                variant="bare"
+                label="Language"
+                value={form.languageScore || form.languageTest || "—"}
+              />
+              <StatCard variant="bare" label="Annual budget" value={form.annualBudget || "—"} />
+              <StatCard
+                variant="bare"
                 label="Apps submitted"
                 value={`${workspace.appsSubmittedCount} of ${form.applicationTarget || 0} target`}
               />
             </div>
 
-            <div className="grid gap-6 lg:grid-cols-2">
-              <Panel title="Academic background">
+            <div className="grid gap-4 lg:grid-cols-2">
+              <Panel compact title="1. Academic background">
                 <div className="grid gap-3">
-                  <Field label="Last qualification">
+                  <Field label="Last qualification" optional hint="Highest completed qualification">
                     <CatalogOrCustom
                       value={form.lastQualification}
                       other={qualificationOther}
@@ -707,14 +764,14 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                       onOther={setQualificationOther}
                     />
                   </Field>
-                  <Field label="Marks / CGPA">
+                  <Field label="Marks / CGPA" optional>
                     <Input
                       value={form.marksCgpa}
                       disabled={!fieldsEditable}
                       onChange={(e) => setField("marksCgpa", e.target.value)}
                     />
                   </Field>
-                  <Field label="Education gap">
+                  <Field label="Education gap" optional hint="e.g. 1 year">
                     <Input
                       value={form.educationGap}
                       disabled={!fieldsEditable}
@@ -722,14 +779,14 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                       onChange={(e) => setField("educationGap", e.target.value)}
                     />
                   </Field>
-                  <Field label="Work experience (years)">
+                  <Field label="Work experience (years)" optional>
                     <Input
                       value={form.workExperience}
                       disabled={!fieldsEditable}
                       onChange={(e) => setField("workExperience", e.target.value)}
                     />
                   </Field>
-                  <Field label="Study level">
+                  <Field label="Study level" optional>
                     <CatalogOrCustom
                       value={form.preferredLevel}
                       other={levelOther}
@@ -742,11 +799,15 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 </div>
               </Panel>
 
-              <Panel title="Eligibility and study plan">
+              <Panel compact title="2. Eligibility & language">
                 <div className="grid gap-3">
-                  <Field label="Eligibility outcome *" error={fieldErrors.eligibility ?? null}>
+                  <Field
+                    label="Eligibility outcome *"
+                    error={fieldErrors.eligibility ?? null}
+                    hint="Required for handover. Blank saves as Pending Review."
+                  >
                     <select
-                      className="h-11 w-full rounded-md border border-input bg-white px-3 text-sm"
+                      className="field-control w-full"
                       value={form.eligibility}
                       disabled={!fieldsEditable}
                       onChange={(e) => {
@@ -766,19 +827,30 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                       ))}
                     </select>
                   </Field>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="English test">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Field label="English test" optional>
                       <CatalogOrCustom
                         value={form.languageTest}
                         other={langOther}
                         options={COUNSELLOR_LANGUAGE_TESTS}
                         disabled={!fieldsEditable}
-                        onValue={(v) => setField("languageTest", v)}
+                        onValue={(v) => {
+                          setField("languageTest", v);
+                          if (v === "Not taken yet") setField("languageScore", "");
+                        }}
                         onOther={setLangOther}
                         searchable={false}
                       />
                     </Field>
-                    <Field label="Test score">
+                    <Field
+                      label="Test score"
+                      optional
+                      hint={
+                        form.languageTest === "Not taken yet"
+                          ? "Disabled when test not taken"
+                          : undefined
+                      }
+                    >
                       <Input
                         value={form.languageScore}
                         disabled={!fieldsEditable || form.languageTest === "Not taken yet"}
@@ -786,7 +858,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                       />
                     </Field>
                   </div>
-                  <Field label="Annual budget">
+                  <Field label="Annual budget" optional>
                     <Input
                       value={form.annualBudget}
                       disabled={!fieldsEditable}
@@ -794,7 +866,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                       onChange={(e) => setField("annualBudget", e.target.value)}
                     />
                   </Field>
-                  <Field label="Funding source">
+                  <Field label="Funding source" optional>
                     <CatalogOrCustom
                       value={form.fundingSource}
                       other={fundingOther}
@@ -805,7 +877,11 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                       searchable={false}
                     />
                   </Field>
-                  <Field label="Application target" error={fieldErrors.applicationTarget ?? null}>
+                  <Field
+                    label="Application target"
+                    error={fieldErrors.applicationTarget ?? null}
+                    hint="How many university applications you plan with this student"
+                  >
                     <Input
                       type="number"
                       min={0}
@@ -822,7 +898,12 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                       }}
                     />
                   </Field>
-                  <Field label="Preferred destination">
+                </div>
+              </Panel>
+
+              <Panel compact title="3. Destination & intake">
+                <div className="grid gap-3">
+                  <Field label="Preferred destination" optional>
                     <CatalogOrCustom
                       value={form.targetCountries}
                       other={countryOther}
@@ -832,10 +913,10 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                       onOther={setCountryOther}
                     />
                   </Field>
-                  <div className="grid grid-cols-2 gap-3">
-                    <Field label="Intake season">
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <Field label="Intake season" optional>
                       <select
-                        className="h-11 w-full rounded-md border border-input bg-white px-3 text-sm"
+                        className="field-control w-full"
                         value={intakeSeason}
                         disabled={!fieldsEditable}
                         onChange={(e) => setIntakeSeason(e.target.value as IntakeSeason | "")}
@@ -848,9 +929,9 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                         ))}
                       </select>
                     </Field>
-                    <Field label="Intake year">
+                    <Field label="Intake year" optional>
                       <select
-                        className="h-11 w-full rounded-md border border-input bg-white px-3 text-sm"
+                        className="field-control w-full"
                         value={intakeYear === "" ? "" : String(intakeYear)}
                         disabled={!fieldsEditable}
                         onChange={(e) =>
@@ -874,14 +955,20 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                       </span>
                     </p>
                   ) : null}
-                  <Field label="Counsellor notes / study plan">
+                </div>
+              </Panel>
+
+              <Panel compact title="4. Counsellor notes">
+                <div className="grid gap-3">
+                  <Field label="Study plan / counselling notes" optional>
                     <Textarea
                       value={form.studyPlan}
                       disabled={!fieldsEditable}
+                      rows={4}
                       onChange={(e) => setField("studyPlan", e.target.value)}
                     />
                   </Field>
-                  <Field label="Immediate next step">
+                  <Field label="Immediate next step" optional>
                     <Input
                       value={form.immediateNextStep}
                       disabled={!fieldsEditable}
@@ -901,7 +988,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
               </Panel>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
               {workspace.canEdit && editingAssessment ? (
                 <Button
                   variant="navy"
@@ -938,6 +1025,24 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                   {saveM.isPending ? "Saving…" : "Save Assessment"}
                 </Button>
               ) : null}
+              {workspace.canEdit && editingAssessment ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={saveM.isPending || !assessmentDirty}
+                  onClick={() => {
+                    setForm(toForm(workspace.assessment));
+                    const parsed = parseIntakeSeasonYear(workspace.assessment.targetIntake);
+                    setIntakeSeason(parsed.season);
+                    setIntakeYear(parsed.year);
+                    setEditingAssessment(Boolean(workspace.canEdit && !workspace.assessment.assessedAt));
+                    setSaveMsg(null);
+                    setFieldErrors({});
+                  }}
+                >
+                  Cancel
+                </Button>
+              ) : null}
               {workspace.canEdit && !editingAssessment ? (
                 <Button
                   variant="outline"
@@ -953,28 +1058,17 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
               <Button
                 variant="outline"
                 size="sm"
-                disabled={!hasSavedAssessment}
+                disabled={!hasSavedAssessment || assessmentDirty}
                 onClick={printAssessment}
                 title={
-                  hasSavedAssessment
-                    ? "Save as PDF (enable Background graphics for full colour)"
-                    : "Save the assessment first"
+                  assessmentDirty
+                    ? "Save assessment changes before printing"
+                    : hasSavedAssessment
+                      ? "Print or save as PDF (enable Background graphics for full colour)"
+                      : "Save the assessment first"
                 }
               >
-                Download Assessment (PDF)
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!hasSavedAssessment}
-                onClick={printAssessment}
-                title={
-                  hasSavedAssessment
-                    ? "Print (enable Background graphics for full colour)"
-                    : "Save the assessment first"
-                }
-              >
-                Print Assessment
+                Print / Download PDF
               </Button>
               {assessmentDirty ? (
                 <InlineFeedback kind="warn">You have unsaved assessment changes.</InlineFeedback>
@@ -1080,11 +1174,23 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
           </TabsContent>
 
           <TabsContent value="documents">
-            <Panel title="Documents">
+            <Panel
+              title="Documents"
+              action={
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/staff/documents">Open documents queue</Link>
+                </Button>
+              }
+            >
               {!workspace.documents.length ? (
                 <EmptyState
                   title="No documents uploaded yet"
-                  body="Documents appear here after upload."
+                  body="Documents appear here after upload. Use the documents queue to approve or reject pending files."
+                  action={
+                    <Button asChild size="sm" variant="outline">
+                      <Link to="/staff/documents">Open documents queue</Link>
+                    </Button>
+                  }
                 />
               ) : (
                 <TableWrap>

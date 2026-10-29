@@ -9,6 +9,7 @@ import {
 import { StudentProfileWorkspaceView } from "@/components/portal/StudentProfileWorkspace";
 import { useData } from "@/lib/useData";
 import { getStudentProfile } from "@/services";
+import { useCounsellorWorkbenchRealtime } from "@/lib/use-counsellor-workbench-realtime";
 import { STUDENT_PROFILE_TABS, type ProfileTabId } from "@/types/student-profile";
 
 const TAB_IDS = new Set(STUDENT_PROFILE_TABS.map((t) => t.id));
@@ -30,6 +31,7 @@ function StaffStudentProfile() {
   const { studentId } = Route.useParams();
   const { tab } = Route.useSearch();
   const navigate = useNavigate({ from: "/staff/students/$studentId" });
+  useCounsellorWorkbenchRealtime(true);
   const profileQ = useData(["officer", "student-profile", studentId], () =>
     getStudentProfile(studentId),
   );

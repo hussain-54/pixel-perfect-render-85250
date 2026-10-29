@@ -4,9 +4,11 @@ import {
   buildFrontDeskRecordTimeline,
   computeFrontDeskDashboardMetrics,
   deriveFrontDeskNextAction,
+  frontDeskIntakeFocusSearch,
   frontDeskNextActionCta,
   isJourneyApplicationInProgress,
   resolveFrontDeskNotificationHref,
+  selectActionableFeeRequest,
 } from "./front-desk-workspace";
 
 const intakeBase = {
@@ -101,6 +103,86 @@ describe("front-desk-workspace", () => {
     expect(metrics.unpaidVouchers).toBe(0);
     expect(metrics.proofsAwaitingFinance).toBe(1);
     expect(metrics.verifiedFees).toBe(0);
+  });
+
+  it("attaches requestId and deep-link focus for Fix / Sync attention actions", () => {
+    const items = buildFrontDeskAttentionItems({
+      intakeRows: [
+        {
+          ...intakeBase,
+          id: "corr",
+          assignmentStatus: "assigned",
+          counsellorName: "C",
+          signupFeeStatus: null,
+        },
+        {
+          ...intakeBase,
+          id: "pend",
+          caseId: "GR-3",
+          fullName: "Pending",
+          assignmentStatus: "pending",
+          counsellorName: null,
+          signupFeeStatus: "unpaid",
+        },
+      ],
+      feeRequests: [
+        {
+          id: "req-corr-1",
+          studentId: "corr",
+          caseId: "GR-1",
+          fullName: "Ada",
+          status: "cancelled",
+          signupFeeStatus: null,
+          summary: "Fix docs",
+          coordinatorNote: "Missing receipt",
+          forwardedAt: null,
+          resolvedAt: "2026-10-05T00:00:00.000Z",
+          createdAt: "2026-10-04T00:00:00.000Z",
+          updatedAt: "2026-10-05T00:00:00.000Z",
+          feeVerifiedAt: null,
+        },
+        {
+          id: "req-open-1",
+          studentId: "pend",
+          caseId: "GR-3",
+          fullName: "Pending",
+          status: "open",
+          signupFeeStatus: "unpaid",
+          summary: "Verify fee",
+          coordinatorNote: null,
+          forwardedAt: null,
+          resolvedAt: null,
+          createdAt: "2026-10-06T00:00:00.000Z",
+          updatedAt: "2026-10-06T00:00:00.000Z",
+          feeVerifiedAt: null,
+        },
+      ],
+    });
+    const corr = items.find((i) => i.kind === "fee_correction");
+    const open = items.find((i) => i.kind === "fee_open");
+    expect(corr?.requestId).toBe("req-corr-1");
+    expect(open?.requestId).toBe("req-open-1");
+    expect(
+      frontDeskIntakeFocusSearch({
+        kind: "fee_correction",
+        requestId: corr?.requestId ?? null,
+      }),
+    ).toEqual({ focus: "fee", requestId: "req-corr-1" });
+    expect(frontDeskIntakeFocusSearch({ kind: "unassigned" })).toEqual({ focus: "assign" });
+    expect(frontDeskIntakeFocusSearch({ kind: "fee_open", requestId: "req-open-1" })).toEqual({
+      focus: "fee",
+      requestId: "req-open-1",
+    });
+    expect(frontDeskIntakeFocusSearch({ kind: "fee_stuck", requestId: "req-stuck" })).toEqual({
+      focus: "fee",
+      requestId: "req-stuck",
+    });
+    expect(
+      selectActionableFeeRequest([
+        { status: "cancelled", signupFeeStatus: null },
+        { status: "resolved", signupFeeStatus: "verified" },
+      ])?.status,
+    ).toBe("cancelled");
   });
 
   it("keeps needs-correction cancelled in attention but not historical cancelled", () => {

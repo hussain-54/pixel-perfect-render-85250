@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute, Link, Outlet, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Link, Outlet, useNavigate, useRouterState } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   PageHeader,
@@ -24,13 +24,40 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getStudentsDirectory, intakeRegisterStudent } from "@/services";
-import type { StudentDirectoryFilters } from "@/types/portal-officer";
+import type { StudentDirectoryFilters, StudentDirectoryFocus } from "@/types/portal-officer";
 import type { InquiryChannelDb } from "@/types/database";
 import { enforceSpecialtyStaffModuleBeforeLoad } from "@/lib/staff-specialty-before-load";
 import { useCounsellorWorkbenchRealtime } from "@/lib/use-counsellor-workbench-realtime";
 
+const DIRECTORY_FOCUS_VALUES = new Set<StudentDirectoryFocus>([
+  "awaiting_assessment",
+  "consent_recorded",
+  "awaiting_response",
+  "action_required",
+  "follow_ups",
+]);
+
+const FOCUS_LABELS: Record<StudentDirectoryFocus, string> = {
+  awaiting_assessment: "Awaiting assessment",
+  consent_recorded: "Consent recorded",
+  awaiting_response: "Awaiting response",
+  action_required: "Action required",
+  follow_ups: "Follow-ups due",
+};
+
+type StudentsSearch = {
+  focus?: StudentDirectoryFocus;
+};
+
 export const Route = createFileRoute("/staff/students")({
   beforeLoad: ({ context }) => enforceSpecialtyStaffModuleBeforeLoad(context, "students"),
+  validateSearch: (raw: Record<string, unknown>): StudentsSearch => {
+    const focus = typeof raw["focus"] === "string" ? raw["focus"] : "";
+    if (DIRECTORY_FOCUS_VALUES.has(focus as StudentDirectoryFocus)) {
+      return { focus: focus as StudentDirectoryFocus };
+    }
+    return {};
+  },
   component: StaffStudents,
 });
 
@@ -42,8 +69,10 @@ function StaffStudents() {
 
 function StudentsDirectory() {
   const queryClient = useQueryClient();
+  const search = Route.useSearch();
+  const navigate = useNavigate({ from: "/staff/students" });
   useCounsellorWorkbenchRealtime(true);
-  const [filters, setFilters] = useState<StudentDirectoryFilters>({
+  const [filters, setFilters] = useState<StudentDirectoryFilters>(() => ({
     page: 1,
     pageSize: 20,
     archived: false,
@@ -54,8 +83,20 @@ function StudentsDirectory() {
     consultantId: "",
     dateFrom: "",
     dateTo: "",
-  });
+    ...(search.focus ? { focus: search.focus } : {}),
+  }));
   const [searchInput, setSearchInput] = useState("");
+
+  useEffect(() => {
+    setFilters((prev) => {
+      const nextFocus = search.focus;
+      if ((prev.focus ?? undefined) === nextFocus) return prev;
+      const next: StudentDirectoryFilters = { ...prev, page: 1 };
+      if (nextFocus) next.focus = nextFocus;
+      else delete next.focus;
+      return next;
+    });
+  }, [search.focus]);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [form, setForm] = useState({
     fullName: "",
@@ -97,6 +138,7 @@ function StudentsDirectory() {
     if (filters.consultantId) out.consultantId = filters.consultantId;
     if (filters.dateFrom) out.dateFrom = filters.dateFrom;
     if (filters.dateTo) out.dateTo = filters.dateTo;
+    if (filters.focus) out.focus = filters.focus;
     return out;
   }, [filters]);
 
@@ -207,13 +249,13 @@ function StudentsDirectory() {
     URL.revokeObjectURL(url);
   };
 
-  const subtitle = useMemo(
-    () =>
-      filters.archived
-        ? "Archived student records in your authorized scope."
-        : "My assigned students — search, filter, and open the counselling workbench.",
-    [filters.archived],
-  );
+  const subtitle = useMemo(() => {
+    if (filters.archived) return "Archived student records in your authorized scope.";
+    if (filters.focus) {
+      return `Filtered by KPI: ${FOCUS_LABELS[filters.focus]} · ${total || 0} matching assigned student${(total || 0) === 1 ? "" : "s"}.`;
+    }
+    return "My assigned students — search, filter, and open the counselling workbench.";
+  }, [filters.archived, filters.focus, total]);
 
   function clearDirectoryFilters() {
     setSearchInput("");
@@ -229,6 +271,7 @@ function StudentsDirectory() {
       dateFrom: "",
       dateTo: "",
     });
+    void navigate({ search: {} });
   }
 
   if (dirQ.isLoading && !dirQ.data) {
@@ -282,9 +325,21 @@ function StudentsDirectory() {
         }
       />
 
+      {filters.focus ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-md border border-royal/30 bg-navy/[0.03] px-3 py-2 text-xs text-navy">
+          <span>
+            Showing KPI filter: <strong>{FOCUS_LABELS[filters.focus]}</strong> ({total} match
+            {total === 1 ? "" : "es"})
+          </span>
+          <Button type="button" size="sm" variant="outline" onClick={clearDirectoryFilters}>
+            Clear focus
+          </Button>
+        </div>
+      ) : null}
+
       <div className="mb-1 grid gap-2 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6">
         <Input
-          placeholder="Search name or case ID…"
+          placeholder="Search name, case ID, email, or phone…"
           aria-label="Search students"
           className="h-10 sm:col-span-2"
           value={searchInput}
@@ -380,7 +435,18 @@ function StudentsDirectory() {
                     <StatusBadge status={r.stageLabel} />
                   </td>
                   <td className="hidden text-xs xl:table-cell">
-                    {r.hasConsent ? "Consent recorded" : "Consent pending"}
+                    <div className="space-y-0.5">
+                      <span
+                        className={
+                          r.hasAssessment ? "font-medium text-navy" : "text-muted-foreground"
+                        }
+                      >
+                        {r.hasAssessment ? "Assessment saved" : "Assessment pending"}
+                      </span>
+                      <div className={r.hasConsent ? "text-emerald-800" : "text-amber-800"}>
+                        {r.hasConsent ? "Consent recorded" : "Consent pending"}
+                      </div>
+                    </div>
                   </td>
                   <td className="max-w-[14rem] text-xs text-muted-foreground">
                     {r.nextActionLabel ?? "—"}

@@ -367,12 +367,14 @@ export const portalGetFrontDeskIntakeRecord = createServerFn({ method: "GET" })
         signupFee = null;
       }
 
-      // Actionable coordination only — cancelled/historical entries stay in feeRequests + timeline.
-      const openFeeRequest =
-        feeRequests.find((r) => r.status === "open" || r.status === "in_progress") ?? null;
+      // Prefer open/in_progress; else cancelled needs_correction (no fee ledger) for next-action.
+      const {
+        buildFrontDeskRecordTimeline,
+        deriveFrontDeskNextAction,
+        selectActionableFeeRequest,
+      } = await import("@/lib/front-desk-workspace");
+      const openFeeRequest = selectActionableFeeRequest(feeRequests);
 
-      const { buildFrontDeskRecordTimeline, deriveFrontDeskNextAction } =
-        await import("@/lib/front-desk-workspace");
       const nextAction = deriveFrontDeskNextAction({
         assignmentStatus: student.assignmentStatus,
         signupFeeStatus: student.signupFeeStatus ?? signupFee?.status ?? null,
@@ -1414,7 +1416,7 @@ export const portalReturnFeeVerificationRequest = createServerFn({ method: "POST
             user_id: counsellorId,
             title: "Fee verification returned",
             body: `Front Desk returned a fee-verification request: ${reason.slice(0, 180)}`,
-            link_path: "/staff/students",
+            link_path: `/staff/students/${updated.student_id}?tab=assessment`,
             student_id: updated.student_id,
           });
         }

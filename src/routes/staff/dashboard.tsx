@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { createFileRoute, Link, redirect, useRouter } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -48,8 +48,15 @@ import {
   COUNSELLOR_METRIC_DEFINITIONS,
   COUNSELLOR_METRIC_HINTS,
   attentionKindLabel,
+  attentionMatchesKpiFilter,
+  attentionMatchesListFilter,
   attentionUrgencyLabel,
+  buildCounsellorPrioritySummary,
+  resolveAttentionOpenTarget,
   resolveCounsellorNotificationHref,
+  studentMatchesKpiFilter,
+  type AttentionListFilter,
+  type CounsellorKpiFilter,
 } from "@/lib/counsellor-workspace";
 import {
   ADMISSION_METRIC_DEFINITIONS,
@@ -91,6 +98,8 @@ function StaffDashboard() {
   const liveStatus = useCounsellorWorkbenchRealtime(true);
   const [notifOpen, setNotifOpen] = useState(false);
   const [reviewError, setReviewError] = useState<string | null>(null);
+  const [kpiFilter, setKpiFilter] = useState<CounsellorKpiFilter | null>(null);
+  const [attentionFilter, setAttentionFilter] = useState<AttentionListFilter>("all");
 
   const notifQ = useQuery({
     queryKey: ["notifications", "staff"],
@@ -128,6 +137,77 @@ function StaffDashboard() {
   });
 
   const wbLoadTitle = "Workbench";
+  const data = dashQ.data;
+
+  const caseByStudentId = useMemo(() => {
+    const map = new Map<
+      string,
+      {
+        hasAssessment: boolean;
+        hasConsent: boolean;
+        signupFeeStatus: string | null;
+        openFeeRequestStatus: string | null;
+        handoverStatus: string | null;
+        hasOverdueTask: boolean;
+        hasDueTodayTask: boolean;
+        docsPendingReview: number;
+      }
+    >();
+    const seedRows = [
+      ...(data?.needsAttention ?? []).map((item) => ({
+        id: item.studentId,
+        hasAssessment: item.hasAssessment,
+        hasConsent: item.hasConsent,
+        signupFeeStatus: item.signupFeeStatus,
+        openFeeRequestStatus: item.openFeeRequestStatus,
+        handoverStatus: item.handoverStatus,
+        hasOverdueTask: item.hasOverdueTask,
+        hasDueTodayTask: item.hasDueTodayTask,
+        docsPendingReview: item.docsPendingReview,
+      })),
+      ...(data?.recentActivity ?? data?.assignedOverview ?? []),
+    ];
+    for (const s of seedRows) {
+      map.set(s.id, {
+        hasAssessment: Boolean(s.hasAssessment),
+        hasConsent: Boolean(s.hasConsent),
+        signupFeeStatus: s.signupFeeStatus ?? null,
+        openFeeRequestStatus: s.openFeeRequestStatus ?? null,
+        handoverStatus: s.handoverStatus ?? null,
+        hasOverdueTask: Boolean(s.hasOverdueTask),
+        hasDueTodayTask: Boolean(s.hasDueTodayTask),
+        docsPendingReview: s.docsPendingReview ?? 0,
+      });
+    }
+    return map;
+  }, [data?.needsAttention, data?.recentActivity, data?.assignedOverview]);
+
+  const filteredAttention = useMemo(() => {
+    return (data?.needsAttention ?? []).filter((item) => {
+      if (!attentionMatchesListFilter(item, attentionFilter)) return false;
+      return attentionMatchesKpiFilter(item, caseByStudentId.get(item.studentId), kpiFilter);
+    });
+  }, [data?.needsAttention, attentionFilter, kpiFilter, caseByStudentId]);
+
+  const filteredRecentCases = useMemo(() => {
+    const rows = data?.recentActivity ?? data?.assignedOverview ?? [];
+    if (!kpiFilter || kpiFilter === "apps_in_progress") return rows;
+    return rows.filter((s) =>
+      studentMatchesKpiFilter(
+        {
+          hasAssessment: Boolean(s.hasAssessment),
+          hasConsent: Boolean(s.hasConsent),
+          signupFeeStatus: s.signupFeeStatus ?? null,
+          openFeeRequestStatus: s.openFeeRequestStatus ?? null,
+          handoverStatus: s.handoverStatus ?? null,
+          hasOverdueTask: Boolean(s.hasOverdueTask),
+          hasDueTodayTask: Boolean(s.hasDueTodayTask),
+          docsPendingReview: s.docsPendingReview ?? 0,
+        },
+        kpiFilter,
+      ),
+    );
+  }, [data?.recentActivity, data?.assignedOverview, kpiFilter]);
 
   if (dashQ.isLoading) {
     return (
@@ -153,7 +233,6 @@ function StaffDashboard() {
     );
   }
 
-  const data = dashQ.data;
   if (!data) {
     return (
       <PageLoadState title={wbLoadTitle}>
@@ -166,6 +245,18 @@ function StaffDashboard() {
   const lastSync = data.fetchedAt ? new Date(data.fetchedAt).toLocaleTimeString() : null;
   const m = data.metrics;
   const am = data.admissionMetrics;
+  const todayLabel = new Date().toLocaleDateString(undefined, {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+  const prioritySummary = buildCounsellorPrioritySummary({
+    actionRequired: m.actionRequired ?? 0,
+    followUpsDue: m.followUpsDue ?? 0,
+    awaitingInitialAssessment: m.awaitingInitialAssessment ?? 0,
+    awaitingResponse: m.awaitingResponse ?? 0,
+  });
 
   async function openNotification(n: {
     id: string;
@@ -232,8 +323,16 @@ function StaffDashboard() {
     <div className="space-y-4 md:space-y-5">
       <PageHeader
         compact
-        title={isAdmission ? "Admission Team Workspace" : "Counsellor workbench"}
-        subtitle={`${data.greetingName} · ${workspaceTitle}`}
+        title={
+          isAdmission
+            ? "Admission Team Workspace"
+            : `Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, ${data.greetingName}`
+        }
+        subtitle={
+          isAdmission
+            ? `${data.greetingName} · ${workspaceTitle}`
+            : `${todayLabel} · ${prioritySummary}`
+        }
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <LiveBadge status={liveStatus} lastSync={lastSync} />
@@ -267,10 +366,10 @@ function StaffDashboard() {
             ) : (
               <>
                 <Button asChild size="sm" variant="outline">
-                  <Link to="/staff/students">My Students</Link>
+                  <Link to="/staff/students">Open Students</Link>
                 </Button>
-                <Button asChild size="sm" variant="outline">
-                  <Link to="/staff/tasks">Tasks</Link>
+                <Button asChild size="sm" variant="navy">
+                  <Link to="/staff/tasks">Add Follow-up</Link>
                 </Button>
               </>
             )}
@@ -372,340 +471,609 @@ function StaffDashboard() {
           />
         </div>
       ) : (
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          <StatCard
-            label="My assigned students"
-            value={String(m.assignedStudents)}
-            hint={COUNSELLOR_METRIC_HINTS.assignedStudents}
-            title={COUNSELLOR_METRIC_DEFINITIONS.assignedStudents}
-            icon={<Users />}
-            onClick={() => void router.navigate({ to: "/staff/students" })}
-          />
-          <StatCard
-            label="Awaiting assessment"
-            value={String(m.awaitingInitialAssessment ?? 0)}
-            hint={COUNSELLOR_METRIC_HINTS.awaitingInitialAssessment}
-            title={COUNSELLOR_METRIC_DEFINITIONS.awaitingInitialAssessment}
-            icon={<ClipboardCheck />}
-            onClick={scrollToAttention}
-          />
-          <StatCard
-            label="Counselling completed"
-            value={String(m.counsellingCompleted ?? 0)}
-            hint={COUNSELLOR_METRIC_HINTS.counsellingCompleted}
-            title={COUNSELLOR_METRIC_DEFINITIONS.counsellingCompleted}
-            icon={<ClipboardCheck />}
-            onClick={() => void router.navigate({ to: "/staff/students" })}
-          />
-          <StatCard
-            label="Follow-ups due"
-            value={String(m.followUpsDue ?? 0)}
-            hint={COUNSELLOR_METRIC_HINTS.followUpsDue}
-            title={COUNSELLOR_METRIC_DEFINITIONS.followUpsDue}
-            icon={<Clock3 />}
-            onClick={() => void router.navigate({ to: "/staff/tasks" })}
-          />
-          <StatCard
-            label="Applications in progress"
-            value={String(m.appsInProgress)}
-            hint={COUNSELLOR_METRIC_HINTS.applicationsInProgress}
-            title={COUNSELLOR_METRIC_DEFINITIONS.applicationsInProgress}
-            icon={<FolderKanban />}
-            onClick={() => void router.navigate({ to: "/staff/applications" })}
-          />
-          <StatCard
-            label="Awaiting response"
-            value={String(m.awaitingResponse ?? 0)}
-            hint={COUNSELLOR_METRIC_HINTS.awaitingResponse}
-            title={COUNSELLOR_METRIC_DEFINITIONS.awaitingResponse}
-            icon={<Hourglass />}
-            onClick={scrollToAttention}
-          />
-          <StatCard
-            label="Action required"
-            value={String(m.actionRequired ?? 0)}
-            hint={COUNSELLOR_METRIC_HINTS.actionRequired}
-            title={COUNSELLOR_METRIC_DEFINITIONS.actionRequired}
-            icon={<AlertCircle />}
-            onClick={scrollToAttention}
-          />
+        <div className="space-y-2">
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+            <StatCard
+              label="My assigned students"
+              value={String(m.assignedStudents)}
+              hint={COUNSELLOR_METRIC_HINTS.assignedStudents}
+              title={COUNSELLOR_METRIC_DEFINITIONS.assignedStudents}
+              icon={<Users />}
+              onClick={() => {
+                setKpiFilter(null);
+                void router.navigate({ to: "/staff/students" });
+              }}
+            />
+            <StatCard
+              label="Action required"
+              value={String(m.actionRequired ?? 0)}
+              hint={COUNSELLOR_METRIC_HINTS.actionRequired}
+              title={COUNSELLOR_METRIC_DEFINITIONS.actionRequired}
+              icon={<AlertCircle />}
+              selected={kpiFilter === "action_required"}
+              onClick={() => {
+                setKpiFilter("action_required");
+                scrollToAttention();
+                void router.navigate({
+                  to: "/staff/students",
+                  search: { focus: "action_required" },
+                });
+              }}
+            />
+            <StatCard
+              label="Awaiting assessment"
+              value={String(m.awaitingInitialAssessment ?? 0)}
+              hint={COUNSELLOR_METRIC_HINTS.awaitingInitialAssessment}
+              title={COUNSELLOR_METRIC_DEFINITIONS.awaitingInitialAssessment}
+              icon={<ClipboardCheck />}
+              selected={kpiFilter === "awaiting_assessment"}
+              onClick={() => {
+                setKpiFilter("awaiting_assessment");
+                scrollToAttention();
+                void router.navigate({
+                  to: "/staff/students",
+                  search: { focus: "awaiting_assessment" },
+                });
+              }}
+            />
+            <StatCard
+              label="Consent recorded"
+              value={String(m.counsellingCompleted ?? 0)}
+              hint={COUNSELLOR_METRIC_HINTS.counsellingCompleted}
+              title={COUNSELLOR_METRIC_DEFINITIONS.counsellingCompleted}
+              icon={<ClipboardCheck />}
+              selected={kpiFilter === "consent_recorded"}
+              onClick={() => {
+                setKpiFilter(null);
+                void router.navigate({
+                  to: "/staff/students",
+                  search: { focus: "consent_recorded" },
+                });
+              }}
+            />
+            <StatCard
+              label="Follow-ups due"
+              value={String(m.followUpsDue ?? 0)}
+              hint={COUNSELLOR_METRIC_HINTS.followUpsDue}
+              title={COUNSELLOR_METRIC_DEFINITIONS.followUpsDue}
+              icon={<Clock3 />}
+              selected={kpiFilter === "follow_ups"}
+              onClick={() => {
+                setKpiFilter("follow_ups");
+                void router.navigate({ to: "/staff/tasks" });
+              }}
+            />
+            <StatCard
+              label="Awaiting response"
+              value={String(m.awaitingResponse ?? 0)}
+              hint={COUNSELLOR_METRIC_HINTS.awaitingResponse}
+              title={COUNSELLOR_METRIC_DEFINITIONS.awaitingResponse}
+              icon={<Hourglass />}
+              selected={kpiFilter === "awaiting_response"}
+              onClick={() => {
+                setKpiFilter("awaiting_response");
+                scrollToAttention();
+                void router.navigate({
+                  to: "/staff/students",
+                  search: { focus: "awaiting_response" },
+                });
+              }}
+            />
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <StatCard
+              label="Applications in progress"
+              value={String(m.appsInProgress)}
+              hint={COUNSELLOR_METRIC_HINTS.applicationsInProgress}
+              title={COUNSELLOR_METRIC_DEFINITIONS.applicationsInProgress}
+              icon={<FolderKanban />}
+              onClick={() => {
+                setKpiFilter(null);
+                void router.navigate({ to: "/staff/applications" });
+              }}
+            />
+            {kpiFilter ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                className="text-xs text-navy/70"
+                onClick={() => setKpiFilter(null)}
+              >
+                Clear KPI filter
+              </Button>
+            ) : null}
+          </div>
         </div>
       )}
 
-      <div id="wb-attention-panel">
-        <Panel
-          compact
-          title="Needs my attention"
-          action={
-            <div className="flex flex-wrap items-center gap-2">
-              {!isAdmission && (m.actionRequired ?? 0) > (data.needsAttention ?? []).length ? (
-                <span className="text-xs text-navy/65">
-                  Showing {(data.needsAttention ?? []).length} of {m.actionRequired}
-                </span>
-              ) : null}
-              {isAdmission && (am?.actionRequired ?? 0) > (data.needsAttention ?? []).length ? (
-                <span className="text-xs text-navy/65">
-                  Showing {(data.needsAttention ?? []).length} of {am?.actionRequired}
-                </span>
-              ) : null}
-              <Button asChild size="sm" variant="outline">
-                <Link to={isAdmission ? "/staff/applications" : "/staff/students"}>
-                  {isAdmission ? "Open applications" : "Open directory"}
-                </Link>
-              </Button>
-            </div>
-          }
-        >
-          {(data.needsAttention ?? []).length === 0 ? (
-            <EmptyState
-              title="Nothing needs attention"
-              body={
-                isAdmission
-                  ? "Handovers awaiting review, document gaps, and approaching deadlines will appear here."
-                  : "Lifecycle steps, returned cases, due tasks, and pending documents will appear here."
+      {isAdmission ? (
+        <>
+          <div id="wb-attention-panel">
+            <Panel
+              compact
+              title="Needs my attention"
+              action={
+                <div className="flex flex-wrap items-center gap-2">
+                  {(am?.actionRequired ?? 0) > (data.needsAttention ?? []).length ? (
+                    <span className="text-xs text-navy/65">
+                      Showing {(data.needsAttention ?? []).length} of {am?.actionRequired}
+                    </span>
+                  ) : null}
+                  <Button asChild size="sm" variant="outline">
+                    <Link to="/staff/applications">Open applications</Link>
+                  </Button>
+                </div>
               }
-            />
-          ) : (
-            <ul className="divide-y divide-border">
-              {(data.needsAttention ?? []).map((item) => {
-                const tab = (item.profileTab ?? "assessment") as ProfileTabId;
-                const actionLabel = item.primaryActionLabel ?? "Open record";
-                return (
-                  <li
-                    key={item.id}
-                    className="flex flex-col gap-2.5 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between"
-                  >
-                    <div className="min-w-0 space-y-1">
-                      <p className="text-sm font-semibold text-navy">
-                        {item.fullName}{" "}
-                        <span className="font-normal text-navy/60">· {item.caseId}</span>
-                      </p>
-                      <p className="text-sm font-medium text-navy/90">{item.title}</p>
-                      <p className="text-sm leading-snug text-navy/65 line-clamp-2">
-                        {item.detail}
-                      </p>
-                      <div className="flex flex-wrap gap-x-3 gap-y-1 pt-0.5 text-xs text-navy/55">
-                        <span>{attentionKindLabel(item.kind)}</span>
-                        {item.urgencyGroup ? (
-                          <span>{attentionUrgencyLabel(item.urgencyGroup)}</span>
-                        ) : null}
-                        {item.workflowStatus ? <span>Status: {item.workflowStatus}</span> : null}
-                        {item.nextResponsibleRole ? (
-                          <span>Next: {item.nextResponsibleRole}</span>
-                        ) : null}
-                        {item.at ? <span>Updated {fmtDate(item.at.slice(0, 10))}</span> : null}
-                      </div>
-                    </div>
-                    <Button
-                      asChild
-                      size="sm"
-                      variant="navy"
-                      className="shrink-0 self-start sm:mt-0.5"
-                    >
-                      {isAdmission ? (
-                        <Link
-                          to="/staff/applications"
-                          search={(() => {
-                            const focus = admissionFocusForAttentionKind(item.kind);
-                            return admissionAppsSearch({
-                              ...(focus ? { focus } : {}),
-                              applicationId: item.applicationId ?? null,
-                              studentId: item.studentId,
-                            });
-                          })()}
-                        >
-                          {actionLabel}
-                        </Link>
-                      ) : (
-                        <Link
-                          to="/staff/students/$studentId"
-                          params={{ studentId: item.studentId }}
-                          search={{ tab }}
-                        >
-                          {actionLabel}
-                        </Link>
-                      )}
-                    </Button>
-                  </li>
-                );
-              })}
-            </ul>
-          )}
-        </Panel>
-      </div>
-
-      <div className="grid gap-4 lg:grid-cols-2">
-        <Panel
-          compact
-          title={isAdmission ? "Recent application activity" : "Recent student activity"}
-          action={
-            <Link
-              to={isAdmission ? "/staff/applications" : "/staff/students"}
-              className="text-xs font-semibold text-royal hover:underline"
             >
-              {isAdmission ? "All applications »" : "All students »"}
-            </Link>
-          }
-        >
-          {(data.recentActivity ?? data.assignedOverview).length === 0 ? (
-            <EmptyState
-              title={isAdmission ? "No applications yet" : "No assigned students"}
-              body={
-                isAdmission
-                  ? "Applications appear after counsellor handover acceptance or when you create a pipeline row."
-                  : "Students appear here once Front Desk assigns them to your desk."
-              }
-            />
-          ) : (
-            <TableWrap compact>
-              <thead>
-                <tr>
-                  <th>{isAdmission ? "Student / destination" : "Student"}</th>
-                  <th className="hidden md:table-cell">{isAdmission ? "App stage" : "Stage"}</th>
-                  <th>Next</th>
-                  <th> </th>
-                </tr>
-              </thead>
-              <tbody>
-                {(data.recentActivity ?? data.assignedOverview).map((s) => (
-                  <tr key={`${s.id}-${s.destination}-${s.applicationId ?? ""}`}>
-                    <td>
-                      <div className="font-medium text-navy">{s.name}</div>
-                      <div className="text-xs text-muted-foreground">
-                        {s.caseId ?? s.destination}
-                        {s.lastActivity ? ` · ${fmtDate(s.lastActivity.slice(0, 10))}` : ""}
-                      </div>
-                    </td>
-                    <td className="hidden text-xs md:table-cell">{s.stageLabel}</td>
-                    <td className="max-w-[12rem] text-xs text-muted-foreground">
-                      {s.nextActionLabel ?? "—"}
-                    </td>
-                    <td>
-                      <Button asChild size="sm" variant="outline">
-                        {isAdmission ? (
+              {(data.needsAttention ?? []).length === 0 ? (
+                <EmptyState
+                  title="Nothing needs attention"
+                  body="Handovers awaiting review, document gaps, and approaching deadlines will appear here."
+                />
+              ) : (
+                <ul className="divide-y divide-border">
+                  {(data.needsAttention ?? []).map((item) => {
+                    const actionLabel = item.primaryActionLabel ?? "Open record";
+                    return (
+                      <li
+                        key={item.id}
+                        className="flex flex-col gap-2.5 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between"
+                      >
+                        <div className="min-w-0 space-y-1">
+                          <p className="text-sm font-semibold text-navy">
+                            {item.fullName}{" "}
+                            <span className="font-normal text-navy/60">· {item.caseId}</span>
+                          </p>
+                          <p className="text-sm font-medium text-navy/90">{item.title}</p>
+                          <p className="text-sm leading-snug text-navy/65 line-clamp-2">
+                            {item.detail}
+                          </p>
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 pt-0.5 text-xs text-navy/55">
+                            <span>{attentionKindLabel(item.kind)}</span>
+                            {item.urgencyGroup ? (
+                              <span>{attentionUrgencyLabel(item.urgencyGroup)}</span>
+                            ) : null}
+                            {item.workflowStatus ? (
+                              <span>Status: {item.workflowStatus}</span>
+                            ) : null}
+                            {item.at ? <span>Updated {fmtDate(item.at.slice(0, 10))}</span> : null}
+                          </div>
+                        </div>
+                        <Button
+                          asChild
+                          size="sm"
+                          variant="navy"
+                          className="shrink-0 self-start sm:mt-0.5"
+                        >
                           <Link
                             to="/staff/applications"
-                            search={admissionAppsSearch({
-                              applicationId: s.applicationId ?? null,
-                              studentId: s.id,
-                            })}
+                            search={(() => {
+                              const focus = admissionFocusForAttentionKind(item.kind);
+                              return admissionAppsSearch({
+                                ...(focus ? { focus } : {}),
+                                applicationId: item.applicationId ?? null,
+                                studentId: item.studentId,
+                              });
+                            })()}
+                          >
+                            {actionLabel}
+                          </Link>
+                        </Button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Panel>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Panel
+              compact
+              title="Recent application activity"
+              action={
+                <Link
+                  to="/staff/applications"
+                  className="text-xs font-semibold text-royal hover:underline"
+                >
+                  All applications »
+                </Link>
+              }
+            >
+              {(data.recentActivity ?? data.assignedOverview).length === 0 ? (
+                <EmptyState
+                  title="No applications yet"
+                  body="Applications appear after counsellor handover acceptance or when you create a pipeline row."
+                />
+              ) : (
+                <TableWrap compact>
+                  <thead>
+                    <tr>
+                      <th>Student / destination</th>
+                      <th className="hidden md:table-cell">App stage</th>
+                      <th>Next</th>
+                      <th> </th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(data.recentActivity ?? data.assignedOverview).map((s) => (
+                      <tr key={`${s.id}-${s.destination}-${s.applicationId ?? ""}`}>
+                        <td>
+                          <div className="font-medium text-navy">{s.name}</div>
+                          <div className="text-xs text-muted-foreground">
+                            {s.caseId ?? s.destination}
+                            {s.lastActivity ? ` · ${fmtDate(s.lastActivity.slice(0, 10))}` : ""}
+                          </div>
+                        </td>
+                        <td className="hidden text-xs md:table-cell">{s.stageLabel}</td>
+                        <td className="max-w-[12rem] text-xs text-muted-foreground">
+                          {s.nextActionLabel ?? "—"}
+                        </td>
+                        <td>
+                          <Button asChild size="sm" variant="outline">
+                            <Link
+                              to="/staff/applications"
+                              search={admissionAppsSearch({
+                                applicationId: s.applicationId ?? null,
+                                studentId: s.id,
+                              })}
+                            >
+                              Open
+                            </Link>
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </TableWrap>
+              )}
+            </Panel>
+
+            <Panel
+              compact
+              title="Upcoming Deadlines"
+              action={
+                <Link
+                  to="/staff/applications"
+                  className="text-xs font-semibold text-royal hover:underline"
+                >
+                  Applications »
+                </Link>
+              }
+            >
+              {!data.upcomingDeadlines.length ? (
+                <EmptyState
+                  title="No upcoming deadlines"
+                  body="Application deadlines within two weeks appear here."
+                />
+              ) : (
+                <ul className="space-y-3">
+                  {data.upcomingDeadlines.slice(0, 8).map((d) => (
+                    <li
+                      key={d.id}
+                      className="flex items-center justify-between gap-3 border-t border-border/70 pt-3 first:border-0 first:pt-0"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-navy">{d.label}</p>
+                        <p className="text-xs text-muted-foreground">{d.studentName}</p>
+                      </div>
+                      <div className="shrink-0 text-right text-xs">
+                        <p className="font-semibold text-navy">{fmtDate(d.deadline)}</p>
+                        <p
+                          className={cn(
+                            d.daysLeft <= 3 ? "font-bold text-danger" : "text-muted-foreground",
+                          )}
+                        >
+                          {d.daysLeft === 0 ? "Today" : `${d.daysLeft} days left`}
+                        </p>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+          </div>
+        </>
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-5">
+          <div id="wb-attention-panel" className="lg:col-span-3">
+            <Panel
+              compact
+              title="Needs my attention"
+              action={
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex rounded-md border border-border p-0.5">
+                    {(
+                      [
+                        ["all", "All"],
+                        ["urgent", "Urgent"],
+                        ["today", "Today"],
+                      ] as const
+                    ).map(([key, label]) => (
+                      <button
+                        key={key}
+                        type="button"
+                        className={cn(
+                          "rounded px-2 py-1 text-[11px] font-semibold",
+                          attentionFilter === key
+                            ? "bg-navy text-white"
+                            : "text-navy/65 hover:bg-navy/[0.04]",
+                        )}
+                        onClick={() => setAttentionFilter(key)}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  {(m.actionRequired ?? 0) > (data.needsAttention ?? []).length ? (
+                    <span className="text-xs text-navy/65">
+                      Showing {filteredAttention.length} of {m.actionRequired}
+                    </span>
+                  ) : null}
+                  <Button asChild size="sm" variant="outline">
+                    <Link
+                      to="/staff/students"
+                      search={
+                        kpiFilter === "awaiting_assessment" ||
+                        kpiFilter === "awaiting_response" ||
+                        kpiFilter === "action_required" ||
+                        kpiFilter === "follow_ups"
+                          ? { focus: kpiFilter }
+                          : kpiFilter === "consent_recorded"
+                            ? { focus: "consent_recorded" }
+                            : {}
+                      }
+                    >
+                      Open directory
+                    </Link>
+                  </Button>
+                </div>
+              }
+            >
+              {filteredAttention.length === 0 ? (
+                <EmptyState
+                  title={
+                    kpiFilter || attentionFilter !== "all"
+                      ? "No matching items"
+                      : "Nothing needs attention"
+                  }
+                  body={
+                    kpiFilter || attentionFilter !== "all"
+                      ? "Clear filters to see the full attention queue."
+                      : "Lifecycle steps, returned cases, due tasks, and pending documents will appear here."
+                  }
+                  action={
+                    kpiFilter || attentionFilter !== "all" ? (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setKpiFilter(null);
+                          setAttentionFilter("all");
+                        }}
+                      >
+                        Clear filters
+                      </Button>
+                    ) : undefined
+                  }
+                />
+              ) : (
+                <ul className="divide-y divide-border">
+                  {filteredAttention.map((item) => {
+                    const actionLabel = item.primaryActionLabel ?? "Open";
+                    const target = resolveAttentionOpenTarget({
+                      kind: item.kind,
+                      studentId: item.studentId,
+                      profileTab: item.profileTab ?? null,
+                    });
+                    const urgencyTone =
+                      item.urgencyGroup === "critical"
+                        ? "bg-danger/15 text-danger"
+                        : item.urgencyGroup === "high"
+                          ? "bg-amber-100 text-amber-900"
+                          : "bg-navy/[0.06] text-navy/70";
+                    const studentTab = (item.profileTab ?? "assessment") as ProfileTabId;
+                    return (
+                      <li
+                        key={item.id}
+                        className="flex flex-col gap-2 py-2.5 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
+                      >
+                        <div className="min-w-0 flex-1 space-y-0.5">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className={cn(
+                                "inline-flex rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide",
+                                urgencyTone,
+                              )}
+                            >
+                              {attentionUrgencyLabel(item.urgencyGroup ?? "normal")}
+                            </span>
+                            <span className="text-[11px] text-navy/50">
+                              {attentionKindLabel(item.kind)}
+                            </span>
+                          </div>
+                          <p className="text-sm font-semibold text-navy">{item.title}</p>
+                          <p className="text-xs text-navy/70">
+                            {item.fullName}
+                            <span className="text-navy/45"> · {item.caseId}</span>
+                          </p>
+                          <p className="text-xs leading-snug text-navy/55 line-clamp-2">
+                            {item.detail}
+                          </p>
+                          <div className="flex flex-wrap gap-x-3 gap-y-0.5 text-[11px] text-navy/45">
+                            {item.workflowStatus ? <span>{item.workflowStatus}</span> : null}
+                            {item.at ? <span>Updated {fmtDate(item.at.slice(0, 10))}</span> : null}
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 flex-wrap gap-1.5 self-start sm:self-center">
+                          <Button asChild size="sm" variant="outline">
+                            <Link
+                              to="/staff/students/$studentId"
+                              params={{ studentId: item.studentId }}
+                              search={{ tab: studentTab }}
+                            >
+                              Open
+                            </Link>
+                          </Button>
+                          <Button asChild size="sm" variant="navy">
+                            {target.to === "/staff/tasks" ? (
+                              <Link to="/staff/tasks">{actionLabel}</Link>
+                            ) : (
+                              <Link
+                                to="/staff/students/$studentId"
+                                params={{ studentId: item.studentId }}
+                                search={{ tab: (target.search?.tab ?? studentTab) as ProfileTabId }}
+                              >
+                                {actionLabel}
+                              </Link>
+                            )}
+                          </Button>
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </Panel>
+          </div>
+
+          <div className="space-y-4 lg:col-span-2">
+            <Panel
+              compact
+              title="Follow-ups due"
+              action={
+                <div className="flex items-center gap-2">
+                  <Button asChild size="sm" variant="outline">
+                    <Link to="/staff/tasks">Add</Link>
+                  </Button>
+                  <Link
+                    to="/staff/tasks"
+                    className="text-xs font-semibold text-royal hover:underline"
+                  >
+                    All tasks »
+                  </Link>
+                </div>
+              }
+            >
+              {!data.todaysTasks.length ? (
+                <EmptyState
+                  title="No follow-ups due"
+                  body="Overdue and due-today tasks for your desk appear here."
+                  action={
+                    <Button asChild size="sm" variant="outline">
+                      <Link to="/staff/tasks">Open tasks</Link>
+                    </Button>
+                  }
+                />
+              ) : (
+                <ul className="divide-y divide-border">
+                  {data.todaysTasks.map((t) => (
+                    <li
+                      key={t.id}
+                      className="flex items-start justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+                    >
+                      <div className="min-w-0">
+                        <p
+                          className={cn(
+                            "text-sm font-semibold text-navy",
+                            t.priority === "overdue" && "text-danger",
+                          )}
+                        >
+                          {t.title}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {t.studentName ?? "General"}
+                          {" · "}
+                          {t.priority === "overdue"
+                            ? "Overdue"
+                            : t.priority === "due_today"
+                              ? "Due today"
+                              : fmtDate(t.dueAt.slice(0, 10))}
+                        </p>
+                      </div>
+                      <Button asChild size="sm" variant="ghost">
+                        {t.studentId ? (
+                          <Link
+                            to="/staff/students/$studentId"
+                            params={{ studentId: t.studentId }}
+                            search={{ tab: "overview" }}
                           >
                             Open
                           </Link>
                         ) : (
-                          <Link
-                            to="/staff/students/$studentId"
-                            params={{ studentId: s.id }}
-                            search={{ tab: "assessment" }}
-                          >
-                            View record
-                          </Link>
+                          <Link to="/staff/tasks">Open</Link>
                         )}
                       </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </TableWrap>
-          )}
-        </Panel>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
 
-        <Panel
-          title={isAdmission ? "Upcoming Deadlines" : "Follow-ups Due"}
-          action={
-            isAdmission ? (
-              <Link
-                to="/staff/applications"
-                className="text-xs font-semibold text-royal hover:underline"
-              >
-                Applications »
-              </Link>
-            ) : (
-              <Link to="/staff/tasks" className="text-xs font-semibold text-royal hover:underline">
-                All tasks »
-              </Link>
-            )
-          }
-        >
-          {isAdmission ? (
-            !data.upcomingDeadlines.length ? (
-              <EmptyState
-                title="No upcoming deadlines"
-                body="Application deadlines within two weeks appear here."
-              />
-            ) : (
-              <ul className="space-y-3">
-                {data.upcomingDeadlines.slice(0, 8).map((d) => (
-                  <li
-                    key={d.id}
-                    className="flex items-center justify-between gap-3 border-t border-border/70 pt-3 first:border-0 first:pt-0"
+            <Panel
+              compact
+              title="Recent cases"
+              action={
+                <div className="flex items-center gap-2">
+                  <Link
+                    to="/staff/activity"
+                    className="text-xs font-semibold text-royal hover:underline"
                   >
-                    <div className="min-w-0">
-                      <p className="text-sm font-semibold text-navy">{d.label}</p>
-                      <p className="text-xs text-muted-foreground">{d.studentName}</p>
-                    </div>
-                    <div className="shrink-0 text-right text-xs">
-                      <p className="font-semibold text-navy">{fmtDate(d.deadline)}</p>
-                      <p
-                        className={cn(
-                          d.daysLeft <= 3 ? "font-bold text-danger" : "text-muted-foreground",
-                        )}
-                      >
-                        {d.daysLeft === 0 ? "Today" : `${d.daysLeft} days left`}
-                      </p>
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            )
-          ) : !data.todaysTasks.length ? (
-            <EmptyState
-              title="No open tasks"
-              body="Overdue and due tasks for your desk appear here."
-            />
-          ) : (
-            <ul className="space-y-3">
-              {data.todaysTasks.map((t) => (
-                <li
-                  key={t.id}
-                  className="flex items-start justify-between gap-3 border-t border-border/70 pt-3 first:border-0 first:pt-0"
-                >
-                  <div className="min-w-0">
-                    <p
-                      className={cn(
-                        "text-sm font-semibold text-navy",
-                        t.priority === "overdue" && "font-bold text-danger",
-                      )}
+                    Audit log »
+                  </Link>
+                  <Link
+                    to="/staff/students"
+                    className="text-xs font-semibold text-royal hover:underline"
+                  >
+                    All students »
+                  </Link>
+                </div>
+              }
+            >
+              {filteredRecentCases.length === 0 ? (
+                <EmptyState
+                  title={kpiFilter ? "No matching cases" : "No assigned students"}
+                  body={
+                    kpiFilter
+                      ? "Clear the KPI filter to see recent assigned cases."
+                      : "Students appear here once Front Desk assigns them to your desk."
+                  }
+                />
+              ) : (
+                <ul className="divide-y divide-border">
+                  {filteredRecentCases.map((s) => (
+                    <li
+                      key={s.id}
+                      className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
                     >
-                      {t.title}
-                    </p>
-                    <p className="mt-0.5 text-xs text-muted-foreground">
-                      {t.studentName ?? "General"}
-                      {" · "}
-                      {t.priority === "overdue"
-                        ? "Overdue"
-                        : t.priority === "due_today"
-                          ? "Due today"
-                          : fmtDate(t.dueAt.slice(0, 10))}
-                    </p>
-                  </div>
-                  {t.studentId ? (
-                    <Button asChild size="sm" variant="ghost">
-                      <Link
-                        to="/staff/students/$studentId"
-                        params={{ studentId: t.studentId }}
-                        search={{ tab: "overview" }}
-                      >
-                        Open
-                      </Link>
-                    </Button>
-                  ) : null}
-                </li>
-              ))}
-            </ul>
-          )}
-        </Panel>
-      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-navy">{s.name}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {s.caseId ?? s.destination}
+                          {s.lastActivity ? ` · ${fmtDate(s.lastActivity.slice(0, 10))}` : ""}
+                        </p>
+                        <p className="mt-0.5 text-xs text-navy/60">
+                          {s.nextActionLabel ?? s.stageLabel}
+                        </p>
+                      </div>
+                      <Button asChild size="sm" variant="outline">
+                        <Link
+                          to="/staff/students/$studentId"
+                          params={{ studentId: s.id }}
+                          search={{ tab: "assessment" }}
+                        >
+                          Open
+                        </Link>
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+          </div>
+        </div>
+      )}
 
       {(data.docsWaiting.length > 0 || (!isAdmission && data.upcomingDeadlines.length > 0)) && (
         <div className="grid gap-5 lg:grid-cols-2">

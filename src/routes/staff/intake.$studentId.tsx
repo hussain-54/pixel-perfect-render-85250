@@ -18,10 +18,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { StatusBadge } from "@/components/StatusBadge";
+import { FrontDeskEditRegistrationPanel } from "@/components/portal/FrontDeskEditRegistrationPanel";
 import { FrontDeskRegistrationFormA4 } from "@/components/portal/FrontDeskRegistrationFormA4";
 import { SignupFeeVoucherA4 } from "@/components/portal/SignupFeeVoucherA4";
 import { isFrontDeskBusinessRole } from "@/lib/staff-business-access";
-import { describeJourneyStageLabel, deriveFrontDeskNextAction } from "@/lib/front-desk-workspace";
+import {
+  cancelledCoordinationNeedsCorrection,
+  describeJourneyStageLabel,
+  deriveFrontDeskNextAction,
+  isHistoricalCancelledCoordination,
+  selectActionableFeeRequest,
+} from "@/lib/front-desk-workspace";
 import {
   describeFeeClaimDisplay,
   feeStatusAllowsAdmissionHandover,
@@ -54,11 +61,14 @@ import {
   reconcileFeeVerificationFromFee,
   recordSignupFee,
   returnFeeVerificationRequest,
+  updateFrontDeskIntake,
 } from "@/services";
 
 export type IntakeRecordSearch = {
-  /** Scroll/highlight assign counsellor control when pending. */
-  focus?: "assign";
+  /** Scroll/highlight assign counsellor or fee-correction workflow. */
+  focus?: "assign" | "fee";
+  /** Specific counselling fee-verification request id when opening Fix. */
+  requestId?: string;
 };
 
 export const Route = createFileRoute("/staff/intake/$studentId")({
@@ -69,8 +79,14 @@ export const Route = createFileRoute("/staff/intake/$studentId")({
     }
   },
   validateSearch: (raw: Record<string, unknown>): IntakeRecordSearch => {
-    if (raw["focus"] === "assign") return { focus: "assign" };
-    return {};
+    const out: IntakeRecordSearch = {};
+    if (raw["focus"] === "assign" || raw["focus"] === "fee") {
+      out.focus = raw["focus"];
+    }
+    if (typeof raw["requestId"] === "string" && raw["requestId"].trim()) {
+      out.requestId = raw["requestId"].trim();
+    }
+    return out;
   },
   component: FrontDeskIntakeRecordPage,
 });
@@ -91,6 +107,7 @@ function FrontDeskIntakeRecordPage() {
   const [feeNotes, setFeeNotes] = useState("");
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [voucherDlMsg, setVoucherDlMsg] = useState<string | null>(null);
+  const [editingRegistration, setEditingRegistration] = useState(false);
 
   const recordQ = useQuery({
     queryKey: ["front-desk", "record", studentId],
@@ -113,6 +130,17 @@ function FrontDeskIntakeRecordPage() {
     el.scrollIntoView({ behavior: "smooth", block: "center" });
     window.setTimeout(() => el.focus(), 200);
   }, [search.focus, recordQ.data?.student?.assignmentStatus, studentId]);
+
+  useEffect(() => {
+    if (search.focus !== "fee") return;
+    if (!recordQ.data) return;
+    const targetId = search.requestId
+      ? `fd-fee-request-${search.requestId}`
+      : "fd-fee-correction-panel";
+    const el = document.getElementById(targetId) ?? document.getElementById("fd-signup-fee-panel");
+    if (!el) return;
+    el.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [search.focus, search.requestId, recordQ.data, studentId]);
 
   const invalidate = async () => {
     await queryClient.invalidateQueries({ queryKey: ["front-desk"] });
@@ -156,6 +184,16 @@ function FrontDeskIntakeRecordPage() {
       await invalidate();
     },
     onError: (e) => setActionMsg(portalErrorMessage(e, "Could not sync request.")),
+  });
+
+  const updateIntakeM = useMutation({
+    mutationFn: updateFrontDeskIntake,
+    onSuccess: async (res) => {
+      setActionMsg(res?.message ?? "Registration updated.");
+      setEditingRegistration(false);
+      await invalidate();
+    },
+    onError: (e) => setActionMsg(portalErrorMessage(e, "Could not update registration.")),
   });
 
   useEffect(() => {
@@ -311,8 +349,7 @@ function FrontDeskIntakeRecordPage() {
 
   const student = data.student;
   const feeRequests = data.feeRequests ?? [];
-  const openFeeRequest =
-    feeRequests.find((r) => r.status === "open" || r.status === "in_progress") ?? null;
+  const openFeeRequest = selectActionableFeeRequest(feeRequests);
   const nextAction =
     data.nextAction ??
     deriveFrontDeskNextAction({
@@ -334,6 +371,22 @@ function FrontDeskIntakeRecordPage() {
   const canSubmitProof =
     !feeFinalized &&
     (feeStatus === "unpaid" || feeStatus === "claimed" || feeStatus === "rejected" || !feeStatus);
+  const focusRequest =
+    (search.requestId ? feeRequests.find((r) => r.id === search.requestId) : null) ??
+    feeRequests.find((r) =>
+      cancelledCoordinationNeedsCorrection({
+        status: r.status,
+        signupFeeStatus: r.signupFeeStatus ?? feeStatus,
+      }),
+    ) ??
+    null;
+  const needsFeeCorrection = Boolean(
+    focusRequest &&
+    cancelledCoordinationNeedsCorrection({
+      status: focusRequest.status,
+      signupFeeStatus: focusRequest.signupFeeStatus ?? feeStatus,
+    }),
+  );
 
   return (
     <div className="space-y-4 md:space-y-5">
@@ -349,6 +402,17 @@ function FrontDeskIntakeRecordPage() {
             <Button asChild size="sm" variant="outline">
               <Link to="/staff/front-desk">Dashboard</Link>
             </Button>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={() => {
+                setEditingRegistration((v) => !v);
+                setActionMsg(null);
+              }}
+            >
+              {editingRegistration ? "Close edit" : "Edit student"}
+            </Button>
             <Button type="button" size="sm" variant="navy" onClick={() => setShowForm((v) => !v)}>
               {showForm ? "Hide form" : "View / PDF"}
             </Button>
@@ -360,6 +424,74 @@ function FrontDeskIntakeRecordPage() {
         <p className="rounded-md border border-border bg-muted/40 px-3 py-2 text-xs text-navy">
           {actionMsg}
         </p>
+      ) : null}
+
+      {editingRegistration ? (
+        <FrontDeskEditRegistrationPanel
+          row={student}
+          pending={updateIntakeM.isPending}
+          onCancel={() => setEditingRegistration(false)}
+          onSave={(payload) => updateIntakeM.mutate(payload)}
+        />
+      ) : null}
+
+      {needsFeeCorrection && focusRequest ? (
+        <Panel
+          title="Fee correction workflow"
+          className={cn(search.focus === "fee" && "ring-2 ring-royal/30")}
+        >
+          <div id="fd-fee-correction-panel" className="space-y-3 text-sm">
+            <div className="rounded-md border border-amber-200 bg-amber-50/70 px-3 py-2.5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-900">
+                Needs correction — request {focusRequest.id.slice(0, 8)}…
+              </p>
+              <p className="mt-1 font-medium text-navy">
+                Counsellor coordination was cancelled and there is no signup-fee ledger row yet.
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Front Desk can issue/update the unpaid voucher and submit payment proof below.
+                Finance verifies or rejects the fee. Counsellors re-request verification after the
+                ledger exists. You cannot mark a fee verified from Front Desk.
+              </p>
+            </div>
+            <dl className="grid gap-2 sm:grid-cols-2 text-xs">
+              <div>
+                <dt className="font-semibold text-muted-foreground">Counsellor summary</dt>
+                <dd className="mt-0.5 text-navy">{focusRequest.summary || "—"}</dd>
+              </div>
+              <div>
+                <dt className="font-semibold text-muted-foreground">Return / coordinator note</dt>
+                <dd className="mt-0.5 text-navy">
+                  {focusRequest.coordinatorNote || "No coordinator note recorded."}
+                </dd>
+              </div>
+              <div>
+                <dt className="font-semibold text-muted-foreground">Request status</dt>
+                <dd className="mt-0.5">
+                  <StatusBadge status={focusRequest.status} />
+                </dd>
+              </div>
+              <div>
+                <dt className="font-semibold text-muted-foreground">Fee ledger</dt>
+                <dd className="mt-0.5 text-navy">{feeDisplay.label}</dd>
+              </div>
+            </dl>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant="navy"
+                onClick={() => {
+                  document
+                    .getElementById("fd-signup-fee-panel")
+                    ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                }}
+              >
+                Open fee voucher / proof form
+              </Button>
+            </div>
+          </div>
+        </Panel>
       ) : null}
 
       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
@@ -489,6 +621,7 @@ function FrontDeskIntakeRecordPage() {
       </div>
 
       <Panel title="Signup fee voucher & payment proof">
+        <div id="fd-signup-fee-panel" />
         <p className="mb-3 text-sm text-navy/70">
           Authoritative ledger: signup/intake fee only. Issuing a voucher or uploading proof never
           verifies payment — Finance decides via the trusted Accounts workflow.
@@ -670,7 +803,14 @@ function FrontDeskIntakeRecordPage() {
               </thead>
               <tbody>
                 {feeRequests.map((row) => {
-                  const isHistoricalCancelled = row.status === "cancelled";
+                  const needsCorrection = cancelledCoordinationNeedsCorrection({
+                    status: row.status,
+                    signupFeeStatus: row.signupFeeStatus,
+                  });
+                  const isHistoricalCancelled = isHistoricalCancelledCoordination({
+                    status: row.status,
+                    signupFeeStatus: row.signupFeeStatus,
+                  });
                   const stuck = requestStuckAfterFeeDecision({
                     requestStatus: row.status,
                     signupFeeStatus: row.signupFeeStatus,
@@ -684,27 +824,44 @@ function FrontDeskIntakeRecordPage() {
                     feeReferenceReceipt: row.feeReferenceReceipt,
                   });
                   const forwarded = Boolean(row.forwardedAt) || row.status === "in_progress";
+                  const isFocused =
+                    search.requestId === row.id ||
+                    (search.focus === "fee" && needsCorrection && focusRequest?.id === row.id);
                   return (
                     <tr
                       key={row.id}
+                      id={`fd-fee-request-${row.id}`}
                       className={cn(
                         "border-b border-border/60 align-top",
                         isHistoricalCancelled && "opacity-75",
+                        isFocused && "bg-amber-50/80",
+                        needsCorrection && "bg-amber-50/40",
                       )}
                     >
                       <td className="px-3 py-2">
                         <div className="text-xs text-muted-foreground">
                           Submitted {fmtDate(row.createdAt.slice(0, 10))}
                           {isHistoricalCancelled ? " · Historical" : ""}
+                          {needsCorrection ? " · Needs correction" : ""}
                         </div>
                         <p className="mt-1 text-xs">{row.summary || "—"}</p>
+                        {row.coordinatorNote ? (
+                          <p className="mt-1 text-[11px] text-amber-900">
+                            Note: {row.coordinatorNote}
+                          </p>
+                        ) : null}
                       </td>
                       <td className="px-3 py-2 text-xs">
                         <div className="font-medium text-navy">{claim.feeStatusLabel}</div>
                         <div className="text-muted-foreground">{claim.claimLabel}</div>
+                        {needsCorrection ? (
+                          <div className="mt-1 text-[11px] font-medium text-amber-900">
+                            No fee ledger — issue voucher / submit proof above
+                          </div>
+                        ) : null}
                         {isHistoricalCancelled ? (
                           <div className="mt-1 text-[11px] text-muted-foreground">
-                            Cancelled coordination — not a fee ledger row
+                            Historical cancelled coordination
                           </div>
                         ) : null}
                         {feeOk ? (
@@ -715,6 +872,11 @@ function FrontDeskIntakeRecordPage() {
                       </td>
                       <td className="px-3 py-2">
                         <StatusBadge status={row.status} />
+                        {needsCorrection ? (
+                          <div className="mt-1 text-[11px] font-medium text-amber-900">
+                            Actionable correction
+                          </div>
+                        ) : null}
                         {isHistoricalCancelled ? (
                           <div className="mt-1 text-[11px] font-medium text-muted-foreground">
                             Historical / cancelled
@@ -734,6 +896,19 @@ function FrontDeskIntakeRecordPage() {
                       </td>
                       <td className="px-3 py-2">
                         <div className="flex flex-wrap gap-1.5">
+                          {needsCorrection ? (
+                            <Button
+                              size="sm"
+                              variant="navy"
+                              onClick={() => {
+                                document
+                                  .getElementById("fd-signup-fee-panel")
+                                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                              }}
+                            >
+                              Fix — open fee form
+                            </Button>
+                          ) : null}
                           {stuck ? (
                             <Button
                               size="sm"
@@ -746,6 +921,7 @@ function FrontDeskIntakeRecordPage() {
                           ) : null}
                           {!stuck &&
                           !isHistoricalCancelled &&
+                          !needsCorrection &&
                           (row.status === "open" ||
                             (row.status === "in_progress" && !row.forwardedAt)) ? (
                             <Button
@@ -759,6 +935,7 @@ function FrontDeskIntakeRecordPage() {
                           ) : null}
                           {!stuck &&
                           !isHistoricalCancelled &&
+                          !needsCorrection &&
                           (row.status === "open" || row.status === "in_progress") ? (
                             <Button
                               size="sm"
