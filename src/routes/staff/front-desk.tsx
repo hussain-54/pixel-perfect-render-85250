@@ -145,12 +145,16 @@ function FrontDeskDashboardPage() {
     },
   });
 
+  const invalidateFrontDesk = async () => {
+    await queryClient.invalidateQueries({ queryKey: [...FEE_QUEUE_KEY] });
+    await queryClient.invalidateQueries({ queryKey: ["front-desk"] });
+  };
+
   const forwardM = useMutation({
     mutationFn: (requestId: string) => forwardFeeVerificationRequest({ requestId }),
     onSuccess: async (res) => {
       setActionMsg(res?.message ?? "Forwarded to Accounts / Finance.");
-      await queryClient.invalidateQueries({ queryKey: [...FEE_QUEUE_KEY] });
-      await queryClient.invalidateQueries({ queryKey: ["front-desk", "dashboard"] });
+      await invalidateFrontDesk();
     },
     onError: (err) => setActionMsg(portalErrorMessage(err, "Could not forward request.")),
   });
@@ -165,8 +169,7 @@ function FrontDeskDashboardPage() {
       setActionMsg(res?.message ?? "Returned to counsellor.");
       setReturnForId(null);
       setReturnReason("");
-      await queryClient.invalidateQueries({ queryKey: [...FEE_QUEUE_KEY] });
-      await queryClient.invalidateQueries({ queryKey: ["front-desk", "dashboard"] });
+      await invalidateFrontDesk();
     },
     onError: (err) => setActionMsg(portalErrorMessage(err, "Could not return request.")),
   });
@@ -175,8 +178,7 @@ function FrontDeskDashboardPage() {
     mutationFn: (studentId: string) => reconcileFeeVerificationFromFee({ studentId }),
     onSuccess: async (res) => {
       setActionMsg(res?.message ?? "Request synced from fee status.");
-      await queryClient.invalidateQueries({ queryKey: [...FEE_QUEUE_KEY] });
-      await queryClient.invalidateQueries({ queryKey: ["front-desk", "dashboard"] });
+      await invalidateFrontDesk();
     },
     onError: (err) =>
       setActionMsg(portalErrorMessage(err, "Could not sync request from fee status.")),

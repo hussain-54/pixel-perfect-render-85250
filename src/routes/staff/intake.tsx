@@ -361,6 +361,7 @@ function FrontDeskIntakeListContent() {
 
         {editRow ? (
           <FrontDeskEditRegistrationPanel
+            key={`${editRow.id}:${editRow.updatedAt}`}
             row={editRow}
             pending={updateM.isPending}
             onCancel={() => setEditingId(null)}

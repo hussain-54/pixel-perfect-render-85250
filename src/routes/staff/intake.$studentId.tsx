@@ -108,6 +108,7 @@ function FrontDeskIntakeRecordPage() {
   const [proofFile, setProofFile] = useState<File | null>(null);
   const [voucherDlMsg, setVoucherDlMsg] = useState<string | null>(null);
   const [editingRegistration, setEditingRegistration] = useState(false);
+  const [assignSelectKey, setAssignSelectKey] = useState(0);
 
   const recordQ = useQuery({
     queryKey: ["front-desk", "record", studentId],
@@ -124,12 +125,18 @@ function FrontDeskIntakeRecordPage() {
 
   useEffect(() => {
     if (search.focus !== "assign") return;
+    if (!recordQ.data?.canAssignCounsellor) return;
     if (recordQ.data?.student?.assignmentStatus !== "pending") return;
     const el = document.getElementById("fd-record-assign");
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "center" });
     window.setTimeout(() => el.focus(), 200);
-  }, [search.focus, recordQ.data?.student?.assignmentStatus, studentId]);
+  }, [
+    search.focus,
+    recordQ.data?.canAssignCounsellor,
+    recordQ.data?.student?.assignmentStatus,
+    studentId,
+  ]);
 
   useEffect(() => {
     if (search.focus !== "fee") return;
@@ -151,9 +158,14 @@ function FrontDeskIntakeRecordPage() {
     mutationFn: (consultantId: string) => assignCounsellor({ studentId, consultantId }),
     onSuccess: async () => {
       setActionMsg("Counsellor assigned.");
+      setAssignSelectKey((k) => k + 1);
       await invalidate();
+      await recordQ.refetch();
     },
-    onError: (e) => setActionMsg(portalErrorMessage(e, "Could not assign counsellor.")),
+    onError: (e) => {
+      setActionMsg(portalErrorMessage(e, "Could not assign counsellor."));
+      setAssignSelectKey((k) => k + 1);
+    },
   });
 
   const forwardM = useMutation({
@@ -192,8 +204,15 @@ function FrontDeskIntakeRecordPage() {
       setActionMsg(res?.message ?? "Registration updated.");
       setEditingRegistration(false);
       await invalidate();
+      await recordQ.refetch();
     },
-    onError: (e) => setActionMsg(portalErrorMessage(e, "Could not update registration.")),
+    onError: async (e) => {
+      const msg = portalErrorMessage(e, "Could not update registration.");
+      setActionMsg(msg);
+      if (/reload|someone else|409|conflict/i.test(msg)) {
+        await recordQ.refetch();
+      }
+    },
   });
 
   useEffect(() => {
@@ -367,16 +386,24 @@ function FrontDeskIntakeRecordPage() {
   });
   const timeline = data.timeline ?? [];
   const feeFinalized = feeStatus === "verified" || feeStatus === "waived";
-  const canIssueVoucher = !feeFinalized;
+  const viewerIsRegistrar = data.viewerIsRegistrar ?? true;
+  const canEditRegistration = data.canEditRegistration ?? viewerIsRegistrar;
+  const canAssignCounsellor =
+    data.canAssignCounsellor ??
+    (viewerIsRegistrar && student.assignmentStatus === "pending");
+  const canRecordSignupFee = data.canRecordSignupFee ?? true;
+  const canIssueVoucher = canRecordSignupFee && !feeFinalized;
   const canSubmitProof =
+    canRecordSignupFee &&
     !feeFinalized &&
     (feeStatus === "unpaid" || feeStatus === "claimed" || feeStatus === "rejected" || !feeStatus);
+  // Drive correction UI from the request ledger field only (same as fee tabs).
   const focusRequest =
     (search.requestId ? feeRequests.find((r) => r.id === search.requestId) : null) ??
     feeRequests.find((r) =>
       cancelledCoordinationNeedsCorrection({
         status: r.status,
-        signupFeeStatus: r.signupFeeStatus ?? feeStatus,
+        signupFeeStatus: r.signupFeeStatus,
       }),
     ) ??
     null;
@@ -384,7 +411,7 @@ function FrontDeskIntakeRecordPage() {
     focusRequest &&
     cancelledCoordinationNeedsCorrection({
       status: focusRequest.status,
-      signupFeeStatus: focusRequest.signupFeeStatus ?? feeStatus,
+      signupFeeStatus: focusRequest.signupFeeStatus,
     }),
   );
 
@@ -402,17 +429,19 @@ function FrontDeskIntakeRecordPage() {
             <Button asChild size="sm" variant="outline">
               <Link to="/staff/front-desk">Dashboard</Link>
             </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              onClick={() => {
-                setEditingRegistration((v) => !v);
-                setActionMsg(null);
-              }}
-            >
-              {editingRegistration ? "Close edit" : "Edit student"}
-            </Button>
+            {canEditRegistration ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={() => {
+                  setEditingRegistration((v) => !v);
+                  setActionMsg(null);
+                }}
+              >
+                {editingRegistration ? "Close edit" : "Edit student"}
+              </Button>
+            ) : null}
             <Button type="button" size="sm" variant="navy" onClick={() => setShowForm((v) => !v)}>
               {showForm ? "Hide form" : "View / PDF"}
             </Button>
@@ -426,8 +455,17 @@ function FrontDeskIntakeRecordPage() {
         </p>
       ) : null}
 
-      {editingRegistration ? (
+      {!viewerIsRegistrar ? (
+        <p className="rounded-md border border-amber-200 bg-amber-50/80 px-3 py-2 text-xs text-amber-950">
+          Coordinating a registration owned by {student.registrarName || "another Front Desk desk"}.
+          You can run fee voucher / proof actions here. Registration edit and counsellor assignment
+          stay with the intake registrar.
+        </p>
+      ) : null}
+
+      {editingRegistration && canEditRegistration ? (
         <FrontDeskEditRegistrationPanel
+          key={`${student.id}:${student.updatedAt}`}
           row={student}
           pending={updateIntakeM.isPending}
           onCancel={() => setEditingRegistration(false)}
@@ -581,7 +619,7 @@ function FrontDeskIntakeRecordPage() {
                 {describeJourneyStageLabel(student.journeyStage)}
               </p>
             </div>
-            {student.assignmentStatus === "pending" ? (
+            {student.assignmentStatus === "pending" && canAssignCounsellor ? (
               <div
                 id="fd-assign-panel"
                 className={cn(
@@ -595,10 +633,11 @@ function FrontDeskIntakeRecordPage() {
                   Assign counsellor
                 </label>
                 <select
+                  key={assignSelectKey}
                   id="fd-record-assign"
                   className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                  disabled={assignM.isPending}
-                  defaultValue=""
+                  disabled={assignM.isPending || desksQ.isLoading}
+                  value=""
                   onChange={(e) => {
                     const consultantId = e.target.value;
                     if (!consultantId) return;
@@ -606,7 +645,11 @@ function FrontDeskIntakeRecordPage() {
                   }}
                 >
                   <option value="">
-                    {assignM.isPending ? "Assigning…" : "Select counsellor…"}
+                    {assignM.isPending
+                      ? "Assigning…"
+                      : desksQ.isError
+                        ? "Could not load counsellors"
+                        : "Select counsellor…"}
                   </option>
                   {(desksQ.data?.options ?? []).map((d) => (
                     <option key={d.id} value={d.id}>
@@ -614,7 +657,16 @@ function FrontDeskIntakeRecordPage() {
                     </option>
                   ))}
                 </select>
+                {desksQ.isError ? (
+                  <p className="mt-1 text-[11px] text-destructive">
+                    {portalErrorMessage(desksQ.error, "Could not load counsellor desks.")}
+                  </p>
+                ) : null}
               </div>
+            ) : student.assignmentStatus === "pending" && !canAssignCounsellor ? (
+              <p className="text-xs text-muted-foreground">
+                Counsellor assignment is limited to the intake registrar for this record.
+              </p>
             ) : null}
           </div>
         </Panel>

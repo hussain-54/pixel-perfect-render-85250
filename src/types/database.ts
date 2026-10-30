@@ -1507,6 +1507,46 @@ export type Database = {
         Args: { p_student_id: string };
         Returns: boolean;
       };
+      front_desk_can_coordinate_student: {
+        Args: { p_student_id: string };
+        Returns: boolean;
+      };
+      get_front_desk_intake_record: {
+        Args: { p_student_id: string };
+        Returns: {
+          id: string;
+          case_id: string;
+          full_name: string;
+          email: string;
+          phone: string | null;
+          whatsapp: string | null;
+          city: string | null;
+          destination: string | null;
+          program: string | null;
+          study_level: string | null;
+          inquiry_source: string | null;
+          inquiry_channel: InquiryChannelDb | null;
+          intake_date: string | null;
+          registration_notes: string | null;
+          next_follow_up_at: string | null;
+          assigned_consultant_id: string | null;
+          registered_by: string | null;
+          journey_stage: JourneyStage;
+          portal_activated_at: string | null;
+          profile_id: string | null;
+          archived_at: string | null;
+          created_at: string;
+          updated_at: string;
+          signup_fee_status: SignupFeeStatusDb | null;
+          signup_fee_amount: number | null;
+          signup_fee_currency: string | null;
+          signup_fee_method: string | null;
+          signup_fee_reference: string | null;
+          counsellor_name: string | null;
+          registrar_name: string | null;
+          viewer_is_registrar: boolean;
+        }[];
+      };
       intake_register_student: {
         Args: {
           p_case_id: string;

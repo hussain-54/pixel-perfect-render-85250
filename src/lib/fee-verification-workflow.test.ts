@@ -4,6 +4,7 @@ import {
   canRequestFeeVerification,
   describeFeeClaimDisplay,
   feeStatusAllowsAdmissionHandover,
+  feeVerificationRowMatchesTab,
   feeVerificationStatusesForTab,
   feeVerificationTabForStatus,
   frontDeskCanSeeFeeVerificationRequest,
@@ -90,6 +91,24 @@ describe("fee verification workflow", () => {
     expect(feeVerificationStatusesForTab("open")).toEqual(["open"]);
     expect(feeVerificationStatusesForTab("cancelled")).toEqual(["cancelled"]);
     expect(feeVerificationStatusesForTab("needs_correction")).toEqual(["cancelled"]);
+    expect(
+      feeVerificationRowMatchesTab(
+        { status: "cancelled", signupFeeStatus: null },
+        "needs_correction",
+      ),
+    ).toBe(true);
+    expect(
+      feeVerificationRowMatchesTab(
+        { status: "cancelled", signupFeeStatus: "rejected" },
+        "needs_correction",
+      ),
+    ).toBe(false);
+    expect(
+      feeVerificationRowMatchesTab(
+        { status: "cancelled", signupFeeStatus: "rejected" },
+        "cancelled",
+      ),
+    ).toBe(true);
     expect(normalizeRpcRowList(null)).toEqual([]);
     expect(normalizeRpcRowList({ id: "1" })).toEqual([{ id: "1" }]);
     expect(normalizeRpcRowList([{ id: "1" }, { id: "2" }])).toHaveLength(2);

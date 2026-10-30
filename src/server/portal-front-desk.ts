@@ -293,9 +293,58 @@ export type FrontDeskIntakeRecordPayload = {
     detail?: string;
     at: string;
   }[];
+  /** True when viewer is admin or the intake registrar (may edit PII / assign). */
+  viewerIsRegistrar: boolean;
+  canEditRegistration: boolean;
+  canAssignCounsellor: boolean;
+  /** True when viewer may issue voucher / submit proof (registrar or fee coordinator). */
+  canRecordSignupFee: boolean;
 };
 
-/** Single owned intake record + related fee-verification requests (FD-safe detail). */
+async function loadFrontDeskIntakeStudentForCoordination(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  client: any,
+  studentId: string,
+  sessionUserId: string | null | undefined,
+): Promise<{ student: FrontDeskIntakeRow; viewerIsRegistrar: boolean }> {
+  // Prefer coordination RPC (org fee-queue students + own registrations).
+  const { data, error } = await client.rpc("get_front_desk_intake_record", {
+    p_student_id: studentId,
+  });
+  if (!error) {
+    const row = (Array.isArray(data) ? data[0] : data) as Record<string, unknown> | null;
+    if (row?.["id"]) {
+      const student = mapIntakeRow(row);
+      const viewerIsRegistrar =
+        row["viewer_is_registrar"] === true ||
+        row["viewer_is_registrar"] === "true" ||
+        (Boolean(sessionUserId) && student.registeredBy === sessionUserId);
+      return { student, viewerIsRegistrar };
+    }
+    throw new AuthError("Registration not found or not authorized for Front Desk.", 404);
+  }
+  if (/does not exist|function|PGRST202|Could not find/i.test(String(error.message))) {
+    // Pre-migration fallback: owned list only (breaks org-queue Fix until migration applied).
+    const rows = await listFrontDeskIntakeRows(client, false);
+    const student = rows.find((r) => r.id === studentId);
+    if (!student) {
+      throw new AuthError(
+        "Registration not found or not authorized for Front Desk. Apply migration 20261030120000_front_desk_fee_coordination_access.sql so Fix can open org fee-queue records.",
+        404,
+      );
+    }
+    const viewerIsRegistrar =
+      Boolean(sessionUserId) &&
+      (student.registeredBy === sessionUserId || !student.registeredBy);
+    return { student, viewerIsRegistrar: viewerIsRegistrar || !sessionUserId };
+  }
+  if (/Not authorized|not authorized/i.test(String(error.message))) {
+    throw new AuthError("Registration not found or not authorized for Front Desk.", 404);
+  }
+  throw new Error(error.message);
+}
+
+/** Single intake record for registrar ownership OR fee-coordination visibility. */
 export const portalGetFrontDeskIntakeRecord = createServerFn({ method: "GET" })
   .validator((data: { studentId: string }) => data)
   .handler(async ({ data }) => {
@@ -312,11 +361,10 @@ export const portalGetFrontDeskIntakeRecord = createServerFn({ method: "GET" })
         throw new AuthError("Intake record requires the live data plane.", 400);
       }
       const client = requireAoSupabaseClient();
-      const rows = await listFrontDeskIntakeRows(client, false);
-      const student = rows.find((r) => r.id === studentId);
-      if (!student) {
-        throw new AuthError("Registration not found or not authorized for Front Desk.", 404);
-      }
+      const { rolesAtLeastAdmin } = await import("@/lib/roles");
+      const { student, viewerIsRegistrar: registrarFromRpc } =
+        await loadFrontDeskIntakeStudentForCoordination(client, studentId, session.userId);
+      const viewerIsRegistrar = rolesAtLeastAdmin(session.role) || registrarFromRpc;
 
       let feeRequests: FeeVerificationRequestRow[] = [];
       try {
@@ -388,6 +436,10 @@ export const portalGetFrontDeskIntakeRecord = createServerFn({ method: "GET" })
         feeRequests,
         nextAction,
         timeline,
+        viewerIsRegistrar,
+        canEditRegistration: viewerIsRegistrar,
+        canAssignCounsellor: viewerIsRegistrar && student.assignmentStatus === "pending",
+        canRecordSignupFee: true,
       } satisfies FrontDeskIntakeRecordPayload;
     } catch (error) {
       toError(error);
@@ -1077,7 +1129,7 @@ function mapFeeVerificationRow(r: Record<string, unknown>): FeeVerificationReque
     counsellorName: strOrNull(r["counsellor_name"]),
     summary: str(r["summary"]),
     status: str(r["status"]),
-    signupFeeStatus: strOrNull(r["signup_fee_status"]),
+    signupFeeStatus: strOrNull(r["signup_fee_status"] ?? r["signupFeeStatus"]),
     feeAmount: feeAmount != null && !Number.isNaN(feeAmount) ? feeAmount : null,
     feeCurrency: strOrNull(r["fee_currency"]),
     feePaymentMethod: strOrNull(r["fee_payment_method"]),
@@ -1165,10 +1217,13 @@ export const portalListFeeVerificationRequests = createServerFn({ method: "GET" 
       }
 
       const { normalizeRpcRowList } = await import("@/lib/fee-verification-workflow");
+      const {
+        countFeeVerificationNeedsCorrection,
+      } = await import("@/lib/front-desk-coordination");
       const rows = normalizeRpcRowList(rpcData).map(mapFeeVerificationRow);
       const openCount = rows.filter((r) => r.status === "open").length;
       const awaitingFinanceCount = rows.filter((r) => r.status === "in_progress").length;
-      const needsCorrectionCount = rows.filter((r) => r.status === "cancelled").length;
+      const needsCorrectionCount = countFeeVerificationNeedsCorrection(rows);
       const completedCount = rows.filter((r) => r.status === "resolved").length;
 
       logFeeQueueDiag("list_ok", {

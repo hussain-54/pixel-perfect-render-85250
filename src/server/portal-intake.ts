@@ -392,22 +392,38 @@ export const portalRecordSignupFee = createServerFn({ method: "POST" })
         throw new AuthError("Signup fee recording requires the live data plane.", 400);
       }
       const client = requireAoSupabaseClient();
-      // Front Desk ownership via is_intake_registrar RPC (boolean only — not full-row SELECT).
+      // Front Desk: registrar OR org fee-coordination scope (never fee VERIFY).
       if (isFrontDeskBusinessRole(session.businessRole)) {
-        const { data: owned, error: ownedErr } = await client.rpc("is_intake_registrar", {
-          p_student_id: data.studentId,
-        });
-        if (ownedErr) {
-          if (/does not exist|function/i.test(ownedErr.message)) {
-            throw new AuthError(
-              "Intake registrar RPC unavailable. Apply migration 20261014030000_front_desk_fee_and_business_role_guard.sql.",
-              503,
-            );
+        const { data: canCoord, error: coordErr } = await client.rpc(
+          "front_desk_can_coordinate_student",
+          { p_student_id: data.studentId },
+        );
+        if (coordErr) {
+          if (/does not exist|function|PGRST202/i.test(coordErr.message)) {
+            // Pre-migration fallback: registrar-only.
+            const { data: owned, error: ownedErr } = await client.rpc("is_intake_registrar", {
+              p_student_id: data.studentId,
+            });
+            if (ownedErr) {
+              throw new AuthError(
+                "Fee coordination RPC unavailable. Apply migration 20261030120000_front_desk_fee_coordination_access.sql.",
+                503,
+              );
+            }
+            if (!owned) {
+              throw new AuthError(
+                "You can only record fees for students you registered (or apply fee-coordination migration for org-queue Fix).",
+                403,
+              );
+            }
+          } else {
+            throw new Error(coordErr.message);
           }
-          throw new Error(ownedErr.message);
-        }
-        if (!owned) {
-          throw new AuthError("You can only record fees for students you registered.", 403);
+        } else if (!canCoord) {
+          throw new AuthError(
+            "You can only record fees for students you registered or that appear in the Front Desk fee-coordination queue.",
+            403,
+          );
         }
       } else {
         await assertStudentVisibleDb(client, session, data.studentId);
@@ -671,20 +687,29 @@ export const portalDownloadSignupFeeVoucher = createServerFn({ method: "POST" })
       if (!studentId) throw new AuthError("Student id is required.", 400);
 
       if (isFrontDeskBusinessRole(session.businessRole)) {
-        const { data: owned, error: ownedErr } = await client.rpc("is_intake_registrar", {
-          p_student_id: studentId,
-        });
-        if (ownedErr) {
-          if (/does not exist|function/i.test(ownedErr.message)) {
-            throw new AuthError(
-              "Intake registrar RPC unavailable. Apply migration 20261014030000_front_desk_fee_and_business_role_guard.sql.",
-              503,
-            );
+        const { data: canCoord, error: coordErr } = await client.rpc(
+          "front_desk_can_coordinate_student",
+          { p_student_id: studentId },
+        );
+        if (coordErr) {
+          if (/does not exist|function|PGRST202/i.test(coordErr.message)) {
+            const { data: owned, error: ownedErr } = await client.rpc("is_intake_registrar", {
+              p_student_id: studentId,
+            });
+            if (ownedErr || !owned) {
+              throw new AuthError(
+                "You can only download vouchers for students you registered. Apply migration 20261030120000_front_desk_fee_coordination_access.sql for org-queue Fix.",
+                403,
+              );
+            }
+          } else {
+            throw new Error(coordErr.message);
           }
-          throw new Error(ownedErr.message);
-        }
-        if (!owned) {
-          throw new AuthError("You can only download vouchers for students you registered.", 403);
+        } else if (!canCoord) {
+          throw new AuthError(
+            "You can only download vouchers for students you registered or that appear in the fee-coordination queue.",
+            403,
+          );
         }
       } else {
         await assertStudentVisibleDb(client, session, studentId);
