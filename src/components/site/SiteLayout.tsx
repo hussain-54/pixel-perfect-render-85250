@@ -1,13 +1,17 @@
 import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
-import { Mail, Phone, MapPin } from "lucide-react";
+import { Mail, Phone, MapPin, MessageCircle, Navigation } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { Header } from "@/components/site/Header";
 import { SocialLinks } from "@/components/site/SocialLinks";
-import { siteContact } from "@/data/contact";
+import { WhatsAppFloat } from "@/components/site/WhatsAppFloat";
+import { getFollowUsSocialLinks, siteContact } from "@/data/contact";
 import { stats, topDestinations } from "@/data/site";
 
 function Footer() {
+  const followLinks = getFollowUsSocialLinks();
+  const showWhatsApp = !siteContact.whatsapp.placeholder;
+
   return (
     <footer className="border-t border-navy-soft/20 bg-navy text-navy-foreground">
       <div className="container-page grid gap-10 py-12 md:grid-cols-2 md:py-14 lg:grid-cols-12 lg:gap-8">
@@ -25,6 +29,21 @@ function Footer() {
               </li>
             ))}
           </ul>
+          <div className="mt-6">
+            <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
+              Follow Us
+            </p>
+            {followLinks.length > 0 || showWhatsApp ? (
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                <SocialLinks size="utility" surface="navy" />
+              </div>
+            ) : (
+              <p className="mt-2 max-w-xs text-xs leading-relaxed text-navy-foreground/55">
+                Official Facebook, Instagram, LinkedIn, YouTube, and TikTok links will appear here
+                once verified profile URLs are provided.
+              </p>
+            )}
+          </div>
         </div>
         <div className="lg:col-span-2">
           <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
@@ -105,13 +124,51 @@ function Footer() {
           <ul className="mt-4 space-y-3 text-sm text-navy-foreground/75">
             <li className="flex gap-2">
               <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-bright" aria-hidden />
-              {siteContact.location.fullDisplay}
+              {siteContact.location.href ? (
+                <a
+                  href={siteContact.location.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="transition-colors hover:text-bright"
+                  aria-label="Open office location in Google Maps"
+                >
+                  {siteContact.location.fullDisplay}
+                </a>
+              ) : (
+                siteContact.location.fullDisplay
+              )}
+            </li>
+            <li className="flex gap-2">
+              <Navigation className="mt-0.5 h-4 w-4 shrink-0 text-bright" aria-hidden />
+              <a
+                href={siteContact.location.directionsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="transition-colors hover:text-bright"
+                aria-label="Get directions to our office on Google Maps"
+              >
+                Get Directions
+              </a>
             </li>
             {!siteContact.phone.placeholder ? (
               <li className="flex gap-2">
                 <Phone className="mt-0.5 h-4 w-4 shrink-0 text-bright" aria-hidden />
                 <a href={siteContact.phone.href} className="transition-colors hover:text-bright">
                   {siteContact.phone.display}
+                </a>
+              </li>
+            ) : null}
+            {showWhatsApp ? (
+              <li className="flex gap-2">
+                <MessageCircle className="mt-0.5 h-4 w-4 shrink-0 text-[#25D366]" aria-hidden />
+                <a
+                  href={siteContact.whatsapp.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="transition-colors hover:text-bright"
+                  aria-label="Chat on WhatsApp"
+                >
+                  WhatsApp {siteContact.whatsapp.display}
                 </a>
               </li>
             ) : null}
@@ -159,6 +216,7 @@ export function SiteLayout({ children }: { children: ReactNode }) {
         {children}
       </main>
       <Footer />
+      <WhatsAppFloat />
     </div>
   );
 }

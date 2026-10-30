@@ -3,16 +3,16 @@ import {
   Ghost,
   Instagram,
   Linkedin,
-  MessageCircle,
   Music2,
   Twitter,
   Youtube,
   type LucideIcon,
 } from "lucide-react";
+import { WhatsAppGlyph } from "@/components/site/WhatsAppFloat";
 import { getConfiguredSocialLinks, type SocialChannelId } from "@/data/contact";
 import { cn } from "@/lib/utils";
 
-const socialIcons: Record<SocialChannelId, LucideIcon> = {
+const socialIcons: Partial<Record<SocialChannelId, LucideIcon>> = {
   facebook: Facebook,
   instagram: Instagram,
   youtube: Youtube,
@@ -20,7 +20,6 @@ const socialIcons: Record<SocialChannelId, LucideIcon> = {
   x: Twitter,
   snapchat: Ghost,
   tiktok: Music2,
-  whatsapp: MessageCircle,
 };
 
 /** Platform brand fills — restrained enough for the navy utility bar. */
@@ -81,7 +80,11 @@ export function SocialLinks({ className, size = "default", surface = "light" }: 
             aria-label={item.label}
             className={iconShellClass(item.id, size, surface, true)}
           >
-            <Icon className={glyph} aria-hidden strokeWidth={2.1} />
+            {item.id === "whatsapp" ? (
+              <WhatsAppGlyph className={glyph} />
+            ) : Icon ? (
+              <Icon className={glyph} aria-hidden strokeWidth={2.1} />
+            ) : null}
           </a>
         );
       })}

@@ -7,6 +7,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { StatusBadge } from "@/components/StatusBadge";
 import { fmtDate } from "@/components/common";
+import { siteContact } from "@/data/contact";
 import { submitConsultationRequest } from "@/services";
 import { destinations } from "@/data/site";
 import type { University, Scholarship } from "@/types";
@@ -312,6 +313,7 @@ export function ConsultationForm() {
 }
 
 export function CtaBand() {
+  const showWhatsApp = !siteContact.whatsapp.placeholder;
   return (
     <section className="bg-navy text-navy-foreground">
       <div className="container-page flex flex-col items-start justify-between gap-6 py-14 md:flex-row md:items-center md:py-16">
@@ -320,16 +322,34 @@ export function CtaBand() {
             Ready to start your journey?
           </h2>
           <p className="mt-2 text-sm text-navy-foreground/70 md:text-base">
-            Speak with a senior consultant — your first session is free.
+            Speak with a senior consultant — your first session is free. Message us on WhatsApp for
+            a quick reply.
           </p>
         </div>
         <div className="flex flex-wrap gap-3">
           <Button asChild variant="bright" size="lg">
             <Link to="/contact">Book Free Consultation</Link>
           </Button>
-          <Button asChild variant="outline-light" size="lg">
-            <Link to="/destinations">Explore Destinations</Link>
-          </Button>
+          {showWhatsApp ? (
+            <Button
+              asChild
+              size="lg"
+              className="border-0 bg-[#25D366] text-white hover:bg-[#1EBE57] hover:text-white"
+            >
+              <a
+                href={siteContact.whatsapp.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Chat on WhatsApp with Global Roots Consultants"
+              >
+                WhatsApp us
+              </a>
+            </Button>
+          ) : (
+            <Button asChild variant="outline-light" size="lg">
+              <Link to="/destinations">Explore Destinations</Link>
+            </Button>
+          )}
         </div>
       </div>
     </section>

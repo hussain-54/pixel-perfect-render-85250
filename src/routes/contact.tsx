@@ -67,7 +67,13 @@ function Page() {
                   {i.label}
                 </p>
                 {i.href ? (
-                  <a href={i.href} className="mt-0.5 block font-semibold text-navy hover:text-royal">
+                  <a
+                    href={i.href}
+                    className="mt-0.5 block font-semibold text-navy hover:text-royal"
+                    {...(i.href.startsWith("http")
+                      ? { target: "_blank", rel: "noopener noreferrer" }
+                      : {})}
+                  >
                     {i.value}
                   </a>
                 ) : (

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ChevronDown, Mail, MapPin, Phone, Search, X } from "lucide-react";
+import { ChevronDown, Mail, MapPin, MessageCircle, Phone, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SocialLinks } from "@/components/site/SocialLinks";
 import { siteContact } from "@/data/contact";
@@ -273,6 +273,19 @@ export function MobileNavDrawer({
                   >
                     <Phone className="h-4 w-4 shrink-0 text-royal" aria-hidden />
                     <span>{siteContact.phone.display}</span>
+                  </a>
+                </li>
+              ) : null}
+              {!siteContact.whatsapp.placeholder ? (
+                <li>
+                  <a
+                    href={siteContact.whatsapp.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-navy/90 transition-colors hover:bg-accent hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <MessageCircle className="h-4 w-4 shrink-0 text-[#25D366]" aria-hidden />
+                    <span>WhatsApp {siteContact.whatsapp.display}</span>
                   </a>
                 </li>
               ) : null}

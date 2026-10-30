@@ -4,8 +4,11 @@ import hero from "@/assets/hero.jpg";
 import consult from "@/assets/consult.jpg";
 import { SiteLayout, SectionHead } from "@/components/site/SiteLayout";
 import { DestinationCard, CtaBand } from "@/components/site/blocks";
+import { GoogleReviewsSection } from "@/components/site/GoogleReviewsSection";
+import { OfficeLocationMap } from "@/components/site/OfficeLocationMap";
 import { UniversityLogoCarousel } from "@/components/site/UniversityLogoCarousel";
 import { Button } from "@/components/ui/button";
+import { siteContact } from "@/data/contact";
 import {
   Accordion,
   AccordionContent,
@@ -72,6 +75,22 @@ function Home() {
             <Button asChild variant="bright" size="lg">
               <Link to="/contact">Book Free Consultation</Link>
             </Button>
+            {!siteContact.whatsapp.placeholder ? (
+              <Button
+                asChild
+                size="lg"
+                className="border-0 bg-[#25D366] text-white hover:bg-[#1EBE57] hover:text-white"
+              >
+                <a
+                  href={siteContact.whatsapp.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Chat on WhatsApp with Global Roots Consultants"
+                >
+                  WhatsApp us
+                </a>
+              </Button>
+            ) : null}
             <Button asChild variant="outline-light" size="lg">
               <Link to="/destinations">Explore Study Destinations</Link>
             </Button>
@@ -354,6 +373,8 @@ function Home() {
         </div>
       </section>
 
+      <GoogleReviewsSection />
+
       {/* Resources + FAQ */}
       <section className="section-y bg-surface">
         <div className="container-page grid gap-10 lg:grid-cols-2 lg:gap-14">
@@ -395,6 +416,8 @@ function Home() {
           </div>
         </div>
       </section>
+
+      <OfficeLocationMap />
 
       <CtaBand />
     </SiteLayout>
