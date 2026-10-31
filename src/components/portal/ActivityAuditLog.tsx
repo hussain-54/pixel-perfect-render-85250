@@ -12,8 +12,11 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { downloadBase64File } from "@/lib/export-formats";
+import type { BusinessRole } from "@/lib/business-permissions";
+import { isAdmissionBusinessRole } from "@/lib/staff-business-access";
 import { cn } from "@/lib/utils";
 import { exportActivityLog, getActivityLog } from "@/services";
+import { Route } from "@/routes/staff/route";
 import {
   ACTIVITY_ACTION_TYPES,
   type ActivityActionFilter,
@@ -35,6 +38,10 @@ const toneClass: Record<ActivityTone, string> = {
 const PAGE = 25;
 
 export function ActivityAuditLog() {
+  const { auth } = Route.useRouteContext() as {
+    auth?: { businessRole?: BusinessRole | null } | null;
+  };
+  const isAdmission = isAdmissionBusinessRole(auth?.businessRole);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [actionType, setActionType] = useState<ActivityActionFilter>("all");
@@ -71,13 +78,14 @@ export function ActivityAuditLog() {
   });
 
   const resetPaging = () => setLimit(PAGE);
+  const activityTitle = isAdmission ? "Admission Activity" : "Activity";
+  const activitySubtitle = isAdmission
+    ? "Append-only timeline for your Admission files — handovers, docs, offers, visa, and fees."
+    : "Append-only timeline of actions across assigned student files.";
 
   if (listQ.isLoading && limit === PAGE) {
     return (
-      <PageLoadState
-        title="Activity"
-        subtitle="Append-only timeline across assigned student files."
-      >
+      <PageLoadState title={activityTitle} subtitle={activitySubtitle}>
         <LoadingRows rows={8} />
       </PageLoadState>
     );
@@ -86,13 +94,13 @@ export function ActivityAuditLog() {
     const msg = portalErrorMessage(listQ.error);
     if (msg.toLowerCase().includes("permission") || String(listQ.error).includes("403")) {
       return (
-        <PageLoadState title="Activity">
+        <PageLoadState title={activityTitle}>
           <PermissionDenied body={msg} />
         </PageLoadState>
       );
     }
     return (
-      <PageLoadState title="Activity">
+      <PageLoadState title={activityTitle}>
         <ErrorState body={msg} />
       </PageLoadState>
     );
@@ -101,7 +109,7 @@ export function ActivityAuditLog() {
   const data = listQ.data;
   if (!data) {
     return (
-      <PageLoadState title="Activity">
+      <PageLoadState title={activityTitle}>
         <EmptyState title="No activity" />
       </PageLoadState>
     );
@@ -111,8 +119,8 @@ export function ActivityAuditLog() {
     <div className="space-y-4 md:space-y-5">
       <PageHeader
         compact
-        title="Activity"
-        subtitle="Append-only timeline of actions across assigned student files."
+        title={activityTitle}
+        subtitle={activitySubtitle}
         actions={
           <Button
             size="sm"

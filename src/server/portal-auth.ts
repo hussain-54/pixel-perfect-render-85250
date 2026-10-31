@@ -188,11 +188,13 @@ function sessionFromDemoCookie(cookie: PortalSessionPayload): TrustedSession {
   if (!account) throw new AuthError("Demo session is not recognized.");
   const role = normalizeAppRole(account.role);
   if (!role) throw new AuthError("Demo session role is invalid.");
+  const businessRole = normalizeTrustedBusinessRole(account.businessRole);
   return {
     role,
     email: account.email,
     source: "demo",
     ...(account.consultantId ? { consultantId: account.consultantId } : {}),
+    ...(businessRole ? { businessRole } : {}),
   };
 }
 
@@ -237,11 +239,13 @@ export function establishDemoSession(email: string, password: string): TrustedSe
   const role = normalizeAppRole(account.role);
   if (!role) throw new AuthError("Invalid demo role.");
 
+  const businessRole = normalizeTrustedBusinessRole(account.businessRole);
   writePortalSessionCookie({
     role,
     email: account.email,
     source: "demo",
     ...(account.consultantId ? { consultantId: account.consultantId } : {}),
+    ...(businessRole ? { businessRole } : {}),
   });
 
   return {
@@ -249,6 +253,7 @@ export function establishDemoSession(email: string, password: string): TrustedSe
     email: account.email,
     source: "demo",
     ...(account.consultantId ? { consultantId: account.consultantId } : {}),
+    ...(businessRole ? { businessRole } : {}),
   };
 }
 

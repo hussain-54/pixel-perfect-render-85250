@@ -64,11 +64,15 @@ export const getPortalSession = createServerFn({ method: "GET" }).handler(async 
       if (!account) return null;
       const role = normalizeAppRole(account.role);
       if (!role) return null;
+      const businessRole = account.businessRole
+        ? (normalizeTrustedBusinessRole(account.businessRole) ?? null)
+        : null;
       return {
         role,
         email: account.email,
         source: "demo" as const,
         ...(account.consultantId ? { consultantId: account.consultantId } : {}),
+        businessRole,
       } satisfies PublicSession;
     } catch {
       return null;
@@ -304,10 +308,8 @@ export const portalGetConsultants = createServerFn({ method: "GET" }).handler(as
       await requireModulePermission(session, "students", 1, "consultant roster");
       const { requireAoSupabaseClient } = await import("@/server/ao-data");
       const { listConsultants } = await import("@/services/db");
-      const {
-        countStudentsByConsultantId,
-        mapConsultantDeskRow,
-      } = await import("@/lib/consultant-mappers");
+      const { countStudentsByConsultantId, mapConsultantDeskRow } =
+        await import("@/lib/consultant-mappers");
       const client = requireAoSupabaseClient();
       const desks = await listConsultants(client);
       if (!desks.length) return [];
@@ -604,7 +606,15 @@ export const portalUpdateAppointmentStatus = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "appointment status");
-      await requireModulePermission(session, "students", 2, "appointment status updates");
+      const { requireAnyModulePermission } = await import("@/server/staff-access");
+      await requireAnyModulePermission(
+        session,
+        [
+          { module: "students", minimum: 2 },
+          { module: "admissions", minimum: 2 },
+        ],
+        "appointment status updates",
+      );
 
       const appointmentId = data.appointmentId?.trim();
       if (!appointmentId) throw new AuthError("Appointment id is required.", 400);
@@ -1141,10 +1151,8 @@ export const portalGetAuditLogs = createServerFn({ method: "GET" }).handler(asyn
     const { usesSupabaseDataPlane } = await import("@/server/ao-data");
     if (usesSupabaseDataPlane(session)) {
       const { requireAoSupabaseClient, listScopedAuditEvents } = await import("@/server/ao-data");
-      const {
-        ADMIN_AUDIT_LOG_LIMIT,
-        mapPortalAuditEventToAdminLog,
-      } = await import("@/lib/admin-audit-log");
+      const { ADMIN_AUDIT_LOG_LIMIT, mapPortalAuditEventToAdminLog } =
+        await import("@/lib/admin-audit-log");
       const client = requireAoSupabaseClient();
       // JWT + RLS on audit_events — same authorized source as portalGetActivityLog.
       const events = await listScopedAuditEvents(client, {});

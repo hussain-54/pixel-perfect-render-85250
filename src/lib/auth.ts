@@ -203,6 +203,7 @@ export async function getAuthSession(): Promise<PublicSession | null> {
             email: account.email,
             source: "demo" as const,
             ...(account.consultantId ? { consultantId: account.consultantId } : {}),
+            ...(account.businessRole ? { businessRole: account.businessRole } : {}),
           };
         }
       }

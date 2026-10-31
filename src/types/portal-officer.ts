@@ -108,8 +108,29 @@ export type AdmissionDashboardMetrics = {
   returnedForCorrection: number;
   submittedToUniversity: number;
   offersDecisionsReceived: number;
+  depositCasPending: number;
+  visaInProgress: number;
+  overdueTasks: number;
+  refusedRejected: number;
   actionRequired: number;
   upcomingDeadlines: number;
+  pipeline: {
+    assigned: number;
+    submitted: number;
+    offers: number;
+    visa: number;
+    refused: number;
+  };
+};
+
+export type OfficerDashboardAppointment = {
+  id: string;
+  studentId: string;
+  studentName: string;
+  purpose: string;
+  scheduledAt: string;
+  status: string;
+  typeLabel: string;
 };
 
 export type OfficerDashboardPayload = {
@@ -121,6 +142,8 @@ export type OfficerDashboardPayload = {
   /** Populated when workbenchKind === "admission". */
   admissionMetrics?: AdmissionDashboardMetrics;
   todaysTasks: OfficerDashboardTask[];
+  /** Today's appointments in Asia/Karachi (Admission desk). */
+  todaysAppointments?: OfficerDashboardAppointment[];
   assignedOverview: OfficerDashboardStudent[];
   docsWaiting: OfficerDashboardDoc[];
   upcomingDeadlines: OfficerDashboardDeadline[];
@@ -160,7 +183,13 @@ export type StudentDirectoryFocus =
   | "consent_recorded"
   | "awaiting_response"
   | "action_required"
-  | "follow_ups";
+  | "follow_ups"
+  /** Admission Team directory focuses (application / handover centric). */
+  | "admission_docs"
+  | "admission_handovers"
+  | "admission_in_progress"
+  | "admission_offers"
+  | "admission_action";
 
 export type StudentDirectoryFilters = {
   q?: string;

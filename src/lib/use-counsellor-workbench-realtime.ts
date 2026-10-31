@@ -57,6 +57,8 @@ export function useCounsellorWorkbenchRealtime(enabled: boolean): CounsellorLive
         void queryClient.invalidateQueries({ queryKey: ["officer", "application-detail"] });
         void queryClient.invalidateQueries({ queryKey: ["officer", "documents-queue"] });
         void queryClient.invalidateQueries({ queryKey: ["officer", "tasks"] });
+        void queryClient.invalidateQueries({ queryKey: ["officer", "offers-visa"] });
+        void queryClient.invalidateQueries({ queryKey: ["officer", "appointments"] });
         void queryClient.invalidateQueries({ queryKey: ["documents"] });
       }, 250);
     };
@@ -201,6 +203,66 @@ export function useCounsellorWorkbenchRealtime(enabled: boolean): CounsellorLive
               student_id?: string;
             } | null;
             reconcile(`doc:${payload.eventType}:${row?.id ?? ""}:${row?.updated_at ?? ""}`);
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "offers",
+          },
+          (payload) => {
+            const row = (payload.new ?? payload.old) as { id?: string } | null;
+            reconcile(`offer:${payload.eventType}:${row?.id ?? ""}`);
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "deposits",
+          },
+          (payload) => {
+            const row = (payload.new ?? payload.old) as { id?: string } | null;
+            reconcile(`deposit:${payload.eventType}:${row?.id ?? ""}`);
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "cas_i20_records",
+          },
+          (payload) => {
+            const row = (payload.new ?? payload.old) as { id?: string } | null;
+            reconcile(`cas:${payload.eventType}:${row?.id ?? ""}`);
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "visa_milestones",
+          },
+          (payload) => {
+            const row = (payload.new ?? payload.old) as { id?: string } | null;
+            reconcile(`visa:${payload.eventType}:${row?.id ?? ""}`);
+          },
+        )
+        .on(
+          "postgres_changes",
+          {
+            event: "*",
+            schema: "public",
+            table: "appointments",
+          },
+          (payload) => {
+            const row = (payload.new ?? payload.old) as { id?: string; updated_at?: string } | null;
+            reconcile(`appt:${payload.eventType}:${row?.id ?? ""}:${row?.updated_at ?? ""}`);
           },
         )
         .subscribe((next) => {

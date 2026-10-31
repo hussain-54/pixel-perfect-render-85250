@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveDemoAuthEnabled } from "./demo-auth";
+import { DEMO_ACCOUNTS, resolveDemoAuthEnabled } from "./demo-auth";
 
 describe("demo auth gating", () => {
   it("never enables demo auth in production builds", () => {
@@ -24,5 +24,10 @@ describe("demo auth gating", () => {
     expect(resolveDemoAuthEnabled({ PROD: false, DEV: false, VITE_ENABLE_DEMO_AUTH: "true" })).toBe(
       false,
     );
+  });
+
+  it("never ships an Admission Team demo account (AO is live Supabase only)", () => {
+    expect(DEMO_ACCOUNTS.some((a) => a.email === "admission@globalroots.pk")).toBe(false);
+    expect(DEMO_ACCOUNTS.some((a) => a.businessRole === "admission_team")).toBe(false);
   });
 });

@@ -14,7 +14,7 @@ import { useData } from "@/lib/useData";
 import { shouldOfferMarkAsRead } from "@/lib/notification-rules";
 import { resolveStudentNotificationHref } from "@/lib/student-portal-workspace";
 import { getNotifications, markNotificationRead } from "@/services";
-import { cn } from "@/lib/utils";
+import { cn, splitPortalHref } from "@/lib/utils";
 
 export const Route = createFileRoute("/student/notifications")({
   component: StudentNotifications,
@@ -54,7 +54,11 @@ function StudentNotifications() {
         setBusyId(null);
       }
     }
-    void router.navigate({ to: href });
+    const { to, search } = splitPortalHref(href);
+    void router.navigate({
+      to,
+      ...(Object.keys(search).length ? { search } : {}),
+    } as never);
   }
 
   if (notifQ.isLoading) {

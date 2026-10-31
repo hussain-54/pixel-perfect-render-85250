@@ -79,6 +79,10 @@ export type StudentProfileWorkspace = {
   canEdit: boolean;
   canAddNote: boolean;
   canCreateApplication: boolean;
+  /** Admission Team may Accept/Return counsellor handovers on this file. */
+  canManageAdmissionHandover?: boolean;
+  /** Counsellor vs Admission presentation for lifecycle chrome. */
+  workbenchKind?: "counsellor" | "admission";
 };
 
 export type AssessmentSaveInput = Omit<

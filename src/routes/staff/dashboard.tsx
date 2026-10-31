@@ -9,9 +9,12 @@ import {
   FileWarning,
   FolderKanban,
   Hourglass,
+  Landmark,
+  Plane,
   RotateCcw,
   Send,
   Users,
+  XCircle,
 } from "lucide-react";
 import {
   PageHeader,
@@ -36,7 +39,7 @@ import {
   markNotificationRead,
   reviewStudentDocument,
 } from "@/services";
-import { cn } from "@/lib/utils";
+import { cn, splitPortalHref } from "@/lib/utils";
 import {
   isAdmissionBusinessRole,
   isFrontDeskBusinessRole,
@@ -281,7 +284,11 @@ function StaffDashboard() {
       }
     }
     setNotifOpen(false);
-    void router.navigate({ to: href });
+    const { to, search } = splitPortalHref(href);
+    void router.navigate({
+      to,
+      ...(Object.keys(search).length ? { search } : {}),
+    } as never);
   }
 
   function scrollToAttention() {
@@ -323,14 +330,14 @@ function StaffDashboard() {
     <div className="space-y-4 md:space-y-5">
       <PageHeader
         compact
-        title={
-          isAdmission
-            ? "Admission Team Workspace"
-            : `Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, ${data.greetingName}`
-        }
+        title={`Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, ${data.greetingName}`}
         subtitle={
           isAdmission
-            ? `${data.greetingName} · ${workspaceTitle}`
+            ? `${todayLabel} · ${workspaceTitle} · ${
+                (am?.actionRequired ?? 0) > 0
+                  ? `${am?.actionRequired} case${am?.actionRequired === 1 ? "" : "s"} need attention`
+                  : "No urgent admission actions"
+              }`
             : `${todayLabel} · ${prioritySummary}`
         }
         actions={
@@ -356,11 +363,20 @@ function StaffDashboard() {
             </Button>
             {isAdmission ? (
               <>
-                <Button asChild size="sm" variant="outline">
-                  <Link to="/staff/applications">Applications</Link>
+                <Button asChild size="sm" variant="navy">
+                  <Link to="/staff/applications">New application</Link>
                 </Button>
                 <Button asChild size="sm" variant="outline">
                   <Link to="/staff/documents">Documents</Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/staff/tasks">Add task</Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/staff/appointments">Appointments</Link>
+                </Button>
+                <Button asChild size="sm" variant="outline">
+                  <Link to="/staff/offers">Offers & visa</Link>
                 </Button>
               </>
             ) : (
@@ -385,7 +401,7 @@ function StaffDashboard() {
             hint={ADMISSION_METRIC_HINTS.assignedToMe}
             title={ADMISSION_METRIC_DEFINITIONS.assignedToMe}
             icon={<Users />}
-            onClick={() => void router.navigate({ to: "/staff/applications" })}
+            onClick={() => void router.navigate({ to: "/staff/students" })}
           />
           <StatCard
             label="Awaiting initial review"
@@ -457,6 +473,55 @@ function StaffDashboard() {
             icon={<ClipboardCheck />}
             onClick={() =>
               void router.navigate({ to: "/staff/applications", search: { focus: "offers" } })
+            }
+          />
+          <StatCard
+            label="Deposit / CAS pending"
+            value={String(am.depositCasPending)}
+            hint={ADMISSION_METRIC_HINTS.depositCasPending}
+            title={ADMISSION_METRIC_DEFINITIONS.depositCasPending}
+            icon={<Landmark />}
+            onClick={() =>
+              void router.navigate({
+                to: "/staff/offers",
+                search: { metric: "cas_confirmation_pending" },
+              })
+            }
+          />
+          <StatCard
+            label="Visa in progress"
+            value={String(am.visaInProgress)}
+            hint={ADMISSION_METRIC_HINTS.visaInProgress}
+            title={ADMISSION_METRIC_DEFINITIONS.visaInProgress}
+            icon={<Plane />}
+            onClick={() =>
+              void router.navigate({
+                to: "/staff/offers",
+                search: { metric: "visa_in_progress", phase: "visa" },
+              })
+            }
+          />
+          <StatCard
+            label="Overdue tasks"
+            value={String(am.overdueTasks)}
+            hint={ADMISSION_METRIC_HINTS.overdueTasks}
+            title={ADMISSION_METRIC_DEFINITIONS.overdueTasks}
+            icon={<Clock3 />}
+            onClick={() =>
+              void router.navigate({ to: "/staff/tasks", search: { tab: "overdue" } })
+            }
+          />
+          <StatCard
+            label="Refused / rejected"
+            value={String(am.refusedRejected)}
+            hint={ADMISSION_METRIC_HINTS.refusedRejected}
+            title={ADMISSION_METRIC_DEFINITIONS.refusedRejected}
+            icon={<XCircle />}
+            onClick={() =>
+              void router.navigate({
+                to: "/staff/offers",
+                search: { metric: "decisions" },
+              })
             }
           />
           <StatCard
@@ -589,6 +654,89 @@ function StaffDashboard() {
 
       {isAdmission ? (
         <>
+          {am?.pipeline ? (
+            <Panel compact title="Application pipeline">
+              <div className="grid gap-2 sm:grid-cols-5">
+                <button
+                  type="button"
+                  className="rounded-lg border border-border bg-white px-3 py-2.5 text-left transition-colors hover:border-royal/40"
+                  onClick={() => void router.navigate({ to: "/staff/students" })}
+                >
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-navy/55">
+                    Assigned
+                  </span>
+                  <b className="mt-1 block text-xl font-semibold text-navy">
+                    {am.pipeline.assigned}
+                  </b>
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-border bg-white px-3 py-2.5 text-left transition-colors hover:border-royal/40"
+                  onClick={() =>
+                    void router.navigate({
+                      to: "/staff/applications",
+                      search: { focus: "submitted" },
+                    })
+                  }
+                >
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-navy/55">
+                    Submitted
+                  </span>
+                  <b className="mt-1 block text-xl font-semibold text-navy">
+                    {am.pipeline.submitted}
+                  </b>
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-border bg-white px-3 py-2.5 text-left transition-colors hover:border-royal/40"
+                  onClick={() =>
+                    void router.navigate({
+                      to: "/staff/applications",
+                      search: { focus: "offers" },
+                    })
+                  }
+                >
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-navy/55">
+                    Offers
+                  </span>
+                  <b className="mt-1 block text-xl font-semibold text-navy">{am.pipeline.offers}</b>
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-border bg-white px-3 py-2.5 text-left transition-colors hover:border-royal/40"
+                  onClick={() =>
+                    void router.navigate({
+                      to: "/staff/offers",
+                      search: { metric: "visa_in_progress", phase: "visa" },
+                    })
+                  }
+                >
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-navy/55">
+                    Visa
+                  </span>
+                  <b className="mt-1 block text-xl font-semibold text-navy">{am.pipeline.visa}</b>
+                </button>
+                <button
+                  type="button"
+                  className="rounded-lg border border-border bg-white px-3 py-2.5 text-left transition-colors hover:border-royal/40"
+                  onClick={() =>
+                    void router.navigate({
+                      to: "/staff/offers",
+                      search: { metric: "decisions" },
+                    })
+                  }
+                >
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-navy/55">
+                    Refused
+                  </span>
+                  <b className="mt-1 block text-xl font-semibold text-navy">
+                    {am.pipeline.refused}
+                  </b>
+                </button>
+              </div>
+            </Panel>
+          ) : null}
+
           <div id="wb-attention-panel">
             <Panel
               compact
@@ -671,68 +819,135 @@ function StaffDashboard() {
           <div className="grid gap-4 lg:grid-cols-2">
             <Panel
               compact
-              title="Recent application activity"
+              title="Today's tasks"
               action={
-                <Link
-                  to="/staff/applications"
-                  className="text-xs font-semibold text-royal hover:underline"
-                >
-                  All applications »
-                </Link>
+                <div className="flex items-center gap-2">
+                  <Button asChild size="sm" variant="outline">
+                    <Link to="/staff/tasks">Add</Link>
+                  </Button>
+                  <Link
+                    to="/staff/tasks"
+                    className="text-xs font-semibold text-royal hover:underline"
+                  >
+                    All tasks »
+                  </Link>
+                </div>
               }
             >
-              {(data.recentActivity ?? data.assignedOverview).length === 0 ? (
+              {!data.todaysTasks.length ? (
                 <EmptyState
-                  title="No applications yet"
-                  body="Applications appear after counsellor handover acceptance or when you create a pipeline row."
+                  title="No tasks due today"
+                  body="Overdue and due-today admission tasks appear here."
+                  action={
+                    <Button asChild size="sm" variant="outline">
+                      <Link to="/staff/tasks">Open tasks</Link>
+                    </Button>
+                  }
                 />
               ) : (
-                <TableWrap compact>
-                  <thead>
-                    <tr>
-                      <th>Student / destination</th>
-                      <th className="hidden md:table-cell">App stage</th>
-                      <th>Next</th>
-                      <th> </th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(data.recentActivity ?? data.assignedOverview).map((s) => (
-                      <tr key={`${s.id}-${s.destination}-${s.applicationId ?? ""}`}>
-                        <td>
-                          <div className="font-medium text-navy">{s.name}</div>
-                          <div className="text-xs text-muted-foreground">
-                            {s.caseId ?? s.destination}
-                            {s.lastActivity ? ` · ${fmtDate(s.lastActivity.slice(0, 10))}` : ""}
-                          </div>
-                        </td>
-                        <td className="hidden text-xs md:table-cell">{s.stageLabel}</td>
-                        <td className="max-w-[12rem] text-xs text-muted-foreground">
-                          {s.nextActionLabel ?? "—"}
-                        </td>
-                        <td>
-                          <Button asChild size="sm" variant="outline">
-                            <Link
-                              to="/staff/applications"
-                              search={admissionAppsSearch({
-                                applicationId: s.applicationId ?? null,
-                                studentId: s.id,
-                              })}
-                            >
-                              Open
-                            </Link>
-                          </Button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </TableWrap>
+                <ul className="divide-y divide-border">
+                  {data.todaysTasks.map((t) => (
+                    <li
+                      key={t.id}
+                      className="flex items-start justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+                    >
+                      <div className="min-w-0">
+                        <p
+                          className={cn(
+                            "text-sm font-semibold text-navy",
+                            t.priority === "overdue" && "text-danger",
+                          )}
+                        >
+                          {t.title}
+                        </p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {t.studentName ?? "General"}
+                          {" · "}
+                          {t.priority === "overdue"
+                            ? "Overdue"
+                            : t.priority === "due_today"
+                              ? "Due today"
+                              : fmtDate(t.dueAt.slice(0, 10))}
+                        </p>
+                      </div>
+                      <Button asChild size="sm" variant="ghost">
+                        {t.studentId ? (
+                          <Link
+                            to="/staff/students/$studentId"
+                            params={{ studentId: t.studentId }}
+                            search={{ tab: "overview" }}
+                          >
+                            Open
+                          </Link>
+                        ) : (
+                          <Link to="/staff/tasks">Open</Link>
+                        )}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
               )}
             </Panel>
 
             <Panel
               compact
-              title="Upcoming Deadlines"
+              title="Today's appointments"
+              action={
+                <Link
+                  to="/staff/appointments"
+                  className="text-xs font-semibold text-royal hover:underline"
+                >
+                  All appointments »
+                </Link>
+              }
+            >
+              {!(data.todaysAppointments ?? []).length ? (
+                <EmptyState
+                  title="No appointments today"
+                  body="Appointments scheduled for today (Pakistan time) appear here."
+                  action={
+                    <Button asChild size="sm" variant="outline">
+                      <Link to="/staff/appointments">Open appointments</Link>
+                    </Button>
+                  }
+                />
+              ) : (
+                <ul className="divide-y divide-border">
+                  {(data.todaysAppointments ?? []).map((a) => (
+                    <li
+                      key={a.id}
+                      className="flex items-start justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-navy">{a.studentName}</p>
+                        <p className="mt-0.5 text-xs text-muted-foreground">
+                          {a.purpose}
+                          {" · "}
+                          {a.scheduledAt
+                            ? new Date(a.scheduledAt).toLocaleTimeString("en-PK", {
+                                timeZone: "Asia/Karachi",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })
+                            : "—"}
+                          {" · "}
+                          {a.status}
+                        </p>
+                      </div>
+                      <Button asChild size="sm" variant="ghost">
+                        <Link to="/staff/appointments">Open</Link>
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
+          </div>
+
+          <div className="grid gap-4 lg:grid-cols-2">
+            <Panel
+              compact
+              title="Upcoming deadlines"
               action={
                 <Link
                   to="/staff/applications"
@@ -773,7 +988,110 @@ function StaffDashboard() {
                 </ul>
               )}
             </Panel>
+
+            <Panel
+              compact
+              title="Documents awaiting review"
+              action={
+                <Link
+                  to="/staff/documents"
+                  search={{ tab: "pending" }}
+                  className="text-xs font-semibold text-royal hover:underline"
+                >
+                  Documents »
+                </Link>
+              }
+            >
+              {!data.docsWaiting.length ? (
+                <EmptyState
+                  title="No documents waiting"
+                  body="Pending and correction-needed uploads appear here."
+                />
+              ) : (
+                <ul className="divide-y divide-border">
+                  {data.docsWaiting.slice(0, 8).map((d) => (
+                    <li
+                      key={d.id}
+                      className="flex items-center justify-between gap-3 py-2.5 first:pt-0 last:pb-0"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-navy">{d.studentName}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {d.category} · {d.status}
+                        </p>
+                      </div>
+                      <Button asChild size="sm" variant="outline">
+                        <Link to="/staff/documents" search={{ tab: "pending" }}>
+                          {d.status === "Needs Correction" ? "Follow up" : "Review"}
+                        </Link>
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Panel>
           </div>
+
+          <Panel
+            compact
+            title="Recent application activity"
+            action={
+              <Link
+                to="/staff/applications"
+                className="text-xs font-semibold text-royal hover:underline"
+              >
+                All applications »
+              </Link>
+            }
+          >
+            {(data.recentActivity ?? data.assignedOverview).length === 0 ? (
+              <EmptyState
+                title="No applications yet"
+                body="Applications appear after counsellor handover acceptance or when you create a pipeline row."
+              />
+            ) : (
+              <TableWrap compact>
+                <thead>
+                  <tr>
+                    <th>Student / destination</th>
+                    <th className="hidden md:table-cell">App stage</th>
+                    <th>Next</th>
+                    <th> </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(data.recentActivity ?? data.assignedOverview).map((s) => (
+                    <tr key={`${s.id}-${s.destination}-${s.applicationId ?? ""}`}>
+                      <td>
+                        <div className="font-medium text-navy">{s.name}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {s.caseId ?? s.destination}
+                          {s.lastActivity ? ` · ${fmtDate(s.lastActivity.slice(0, 10))}` : ""}
+                        </div>
+                      </td>
+                      <td className="hidden text-xs md:table-cell">{s.stageLabel}</td>
+                      <td className="max-w-[12rem] text-xs text-muted-foreground">
+                        {s.nextActionLabel ?? "—"}
+                      </td>
+                      <td>
+                        <Button asChild size="sm" variant="outline">
+                          <Link
+                            to="/staff/applications"
+                            search={admissionAppsSearch({
+                              applicationId: s.applicationId ?? null,
+                              studentId: s.id,
+                            })}
+                          >
+                            Open
+                          </Link>
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </TableWrap>
+            )}
+          </Panel>
         </>
       ) : (
         <div className="grid gap-4 lg:grid-cols-5">

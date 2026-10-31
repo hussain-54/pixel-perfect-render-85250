@@ -2,6 +2,8 @@
  * Demo authentication — development only.
  * Production builds always disable demo auth, even if VITE_ENABLE_DEMO_AUTH is set.
  */
+import type { BusinessRole } from "@/lib/business-permissions";
+
 export function resolveDemoAuthEnabled(env: {
   PROD?: boolean;
   DEV?: boolean;
@@ -31,6 +33,8 @@ export type DemoAccount = {
   role: "student" | "consultant" | "admin";
   /** Mock consultant id used for assignment scoping in demo data. */
   consultantId?: string;
+  /** Trusted specialty desk — re-derived from allow-list on every request. */
+  businessRole?: BusinessRole;
 };
 
 /** Credentials exist only in development bundles — never shipped in production. */
@@ -41,17 +45,21 @@ export const DEMO_ACCOUNTS: DemoAccount[] = import.meta.env.DEV
         email: "ayesha@globalroots.pk",
         password: "demo1234",
         role: "student",
+        businessRole: "student_portal",
       },
       {
         email: "consultant@globalroots.pk",
         password: "demo1234",
         role: "consultant",
         consultantId: "c1",
+        businessRole: "counsellor_consultant",
       },
+      // Admission Team is live-only (Supabase staff accounts). Never mint admission_team via demo auth.
       {
         email: "admin@globalroots.pk",
         password: "demo1234",
         role: "admin",
+        businessRole: "admin",
       },
     ]
   : [];

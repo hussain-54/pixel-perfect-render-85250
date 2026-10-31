@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import {
@@ -14,8 +15,11 @@ import {
 } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { downloadBase64File } from "@/lib/export-formats";
+import type { BusinessRole } from "@/lib/business-permissions";
+import { isAdmissionBusinessRole } from "@/lib/staff-business-access";
 import { cn } from "@/lib/utils";
-import { exportOfficerReports, getOfficerReports } from "@/services";
+import { exportOfficerReports, getOfficerDashboard, getOfficerReports } from "@/services";
+import { Route } from "@/routes/staff/route";
 import {
   REPORT_TIMEFRAMES,
   type ReportExportFormat,
@@ -27,6 +31,10 @@ const selectClass =
   "flex h-11 w-full rounded-md border border-input bg-white px-3 text-sm text-navy";
 
 export function ReportsAnalytics() {
+  const { auth } = Route.useRouteContext() as {
+    auth?: { businessRole?: BusinessRole | null } | null;
+  };
+  const isAdmission = isAdmissionBusinessRole(auth?.businessRole);
   const [timeframe, setTimeframe] = useState<ReportTimeframeKey>("30d");
   const [destination, setDestination] = useState("all");
   const [intake, setIntake] = useState("all");
@@ -46,6 +54,13 @@ export function ReportsAnalytics() {
     staleTime: 20_000,
   });
 
+  const dashQ = useQuery({
+    queryKey: ["officer", "dashboard"],
+    queryFn: () => getOfficerDashboard(),
+    enabled: isAdmission,
+    staleTime: 30_000,
+  });
+
   const exportM = useMutation({
     mutationFn: (format: ReportExportFormat) => exportOfficerReports({ ...filters, format }),
     onSuccess: (payload) => {
@@ -53,12 +68,14 @@ export function ReportsAnalytics() {
     },
   });
 
+  const reportTitle = isAdmission ? "Admission Reports" : "Reports";
+  const reportSubtitle = isAdmission
+    ? "Processing efficiency, conversion, and live queue load for your Admission caseload."
+    : "Application processing efficiency and conversion for assigned caseloads.";
+
   if (reportQ.isLoading) {
     return (
-      <PageLoadState
-        title="Reports"
-        subtitle="Application processing and conversion for assigned caseloads."
-      >
+      <PageLoadState title={reportTitle} subtitle={reportSubtitle}>
         <LoadingRows rows={10} />
       </PageLoadState>
     );
@@ -88,12 +105,14 @@ export function ReportsAnalytics() {
     );
   }
 
+  const am = dashQ.data?.admissionMetrics;
+
   return (
     <div className="space-y-4 md:space-y-5">
       <PageHeader
         compact
-        title="Reports"
-        subtitle="Application processing efficiency and conversion for assigned caseloads."
+        title={reportTitle}
+        subtitle={reportSubtitle}
         actions={
           <div className="flex flex-wrap gap-2">
             <Button
@@ -123,6 +142,55 @@ export function ReportsAnalytics() {
           </div>
         }
       />
+
+      {isAdmission && am ? (
+        <div className="mb-2 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <Link
+            to="/staff/applications"
+            search={{ focus: "handovers" }}
+            className="rounded-md border border-border bg-white p-4 transition-colors hover:border-royal/40"
+          >
+            <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+              Awaiting review
+            </p>
+            <p className="mt-2 text-3xl font-bold text-navy">{am.awaitingInitialReview}</p>
+            <p className="mt-1 text-xs text-royal">Open handovers →</p>
+          </Link>
+          <Link
+            to="/staff/documents"
+            search={{ tab: "missing" }}
+            className="rounded-md border border-border bg-white p-4 transition-colors hover:border-royal/40"
+          >
+            <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+              Docs missing
+            </p>
+            <p className="mt-2 text-3xl font-bold text-navy">{am.documentsMissing}</p>
+            <p className="mt-1 text-xs text-royal">Open documents →</p>
+          </Link>
+          <Link
+            to="/staff/offers"
+            search={{ metric: "cas_confirmation_pending" }}
+            className="rounded-md border border-border bg-white p-4 transition-colors hover:border-royal/40"
+          >
+            <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+              Deposit / CAS
+            </p>
+            <p className="mt-2 text-3xl font-bold text-navy">{am.depositCasPending}</p>
+            <p className="mt-1 text-xs text-royal">Open offers & visa →</p>
+          </Link>
+          <Link
+            to="/staff/offers"
+            search={{ metric: "visa_in_progress", phase: "visa" }}
+            className="rounded-md border border-border bg-white p-4 transition-colors hover:border-royal/40"
+          >
+            <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+              Visa in progress
+            </p>
+            <p className="mt-2 text-3xl font-bold text-navy">{am.visaInProgress}</p>
+            <p className="mt-1 text-xs text-royal">Open offers & visa →</p>
+          </Link>
+        </div>
+      ) : null}
 
       <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">

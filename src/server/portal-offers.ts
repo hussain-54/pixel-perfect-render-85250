@@ -618,7 +618,12 @@ export const portalGetOffersVisa = createServerFn({ method: "GET" })
           ).length,
           deposits_due: depositRows.filter((d) => d.status === "due" || d.status === "overdue")
             .length,
+          cas_confirmation_pending: casRows.filter(
+            (c) => c.status === "pending" || c.status === "requested",
+          ).length,
           visa_in_progress: visaRows.filter((v) => v.decision === "pending").length,
+          decisions: visaRows.filter((v) => v.decision === "approved" || v.decision === "refused")
+            .length,
         };
         const phaseCounts: OffersVisaPayload["phaseCounts"] = {
           offers: offers.length,
@@ -644,32 +649,61 @@ export const portalGetOffersVisa = createServerFn({ method: "GET" })
               metric,
             ),
           );
+        } else if (metric === "cas_confirmation_pending") {
+          const casStudentIds = new Set(
+            casRows
+              .filter((c) => c.status === "pending" || c.status === "requested")
+              .map((c) => c.studentId),
+          );
+          offerRows = offers.filter((o) => casStudentIds.has(o.studentId));
         } else if (metric === "visa_in_progress") {
           const visaStudentIds = new Set(
             visaRows.filter((v) => v.decision === "pending").map((v) => v.studentId),
           );
           offerRows = offers.filter((o) => visaStudentIds.has(o.studentId));
+        } else if (metric === "decisions") {
+          const decidedStudentIds = new Set(
+            visaRows
+              .filter((v) => v.decision === "approved" || v.decision === "refused")
+              .map((v) => v.studentId),
+          );
+          offerRows = offers.filter((o) => decidedStudentIds.has(o.studentId));
         }
 
         const matchQ = (parts: string[]) => !q || parts.some((p) => p.toLowerCase().includes(q));
         const filteredOffers = offerRows.filter((o) =>
           matchQ([o.studentName, o.university, o.program, o.studentCaseId, o.currentStatusLabel]),
         );
-        const filteredDeposits = depositRows.filter((d) =>
-          matchQ([d.studentName, d.university, d.studentCaseId, d.statusLabel, d.amountLabel]),
-        );
-        const filteredCas = casRows.filter((c) =>
-          matchQ([
-            c.studentName,
-            c.university,
-            c.recordType,
-            c.statusLabel,
-            c.referenceNumber ?? "",
-          ]),
-        );
-        const filteredVisas = visaRows.filter((v) =>
-          matchQ([v.studentName, v.university, v.stageLabel, v.decisionLabel]),
-        );
+        const filteredDeposits = depositRows
+          .filter((d) =>
+            metric === "deposits_due" ? d.status === "due" || d.status === "overdue" : true,
+          )
+          .filter((d) =>
+            matchQ([d.studentName, d.university, d.studentCaseId, d.statusLabel, d.amountLabel]),
+          );
+        const filteredCas = casRows
+          .filter((c) =>
+            metric === "cas_confirmation_pending"
+              ? c.status === "pending" || c.status === "requested"
+              : true,
+          )
+          .filter((c) =>
+            matchQ([
+              c.studentName,
+              c.university,
+              c.recordType,
+              c.statusLabel,
+              c.referenceNumber ?? "",
+            ]),
+          );
+        const filteredVisas = visaRows
+          .filter((v) => {
+            if (metric === "visa_in_progress") return v.decision === "pending";
+            if (metric === "decisions")
+              return v.decision === "approved" || v.decision === "refused";
+            return true;
+          })
+          .filter((v) => matchQ([v.studentName, v.university, v.stageLabel, v.decisionLabel]));
 
         const usedAppIds = new Set(offersRaw.map((o) => o.applicationId));
         const applicationsEligible = apps
@@ -719,7 +753,12 @@ export const portalGetOffersVisa = createServerFn({ method: "GET" })
         offers_received: offers.filter((o) => inMetric(o.id, "offers_received")).length,
         conditions_pending: offers.filter((o) => inMetric(o.id, "conditions_pending")).length,
         deposits_due: deposits.filter((d) => d.status === "due" || d.status === "overdue").length,
+        cas_confirmation_pending: casI20.filter(
+          (c) => c.status === "pending" || c.status === "requested",
+        ).length,
         visa_in_progress: visas.filter((v) => v.decision === "pending").length,
+        decisions: visas.filter((v) => v.decision === "approved" || v.decision === "refused")
+          .length,
       };
 
       const phaseCounts: OffersVisaPayload["phaseCounts"] = {
@@ -740,11 +779,25 @@ export const portalGetOffersVisa = createServerFn({ method: "GET" })
         offerRows = offerRows.filter((o) => inMetric(o.id, "conditions_pending"));
       } else if (metric === "deposits_due") {
         offerRows = offerRows.filter((o) => inMetric(o.id, "deposits_due"));
+      } else if (metric === "cas_confirmation_pending") {
+        const casStudentIds = new Set(
+          casI20
+            .filter((c) => c.status === "pending" || c.status === "requested")
+            .map((c) => c.studentId),
+        );
+        offerRows = offerRows.filter((o) => casStudentIds.has(o.studentId));
       } else if (metric === "visa_in_progress") {
         const visaStudentIds = new Set(
           visas.filter((v) => v.decision === "pending").map((v) => v.studentId),
         );
         offerRows = offerRows.filter((o) => visaStudentIds.has(o.studentId));
+      } else if (metric === "decisions") {
+        const decidedStudentIds = new Set(
+          visas
+            .filter((v) => v.decision === "approved" || v.decision === "refused")
+            .map((v) => v.studentId),
+        );
+        offerRows = offerRows.filter((o) => decidedStudentIds.has(o.studentId));
       }
 
       const matchQ = (parts: string[]) => !q || parts.some((p) => p.toLowerCase().includes(q));
@@ -752,15 +805,35 @@ export const portalGetOffersVisa = createServerFn({ method: "GET" })
       const filteredOffers = offerRows.filter((o) =>
         matchQ([o.studentName, o.university, o.program, o.studentCaseId, o.currentStatusLabel]),
       );
-      const filteredDeposits = deposits.filter((d) =>
-        matchQ([d.studentName, d.university, d.studentCaseId, d.statusLabel, d.amountLabel]),
-      );
-      const filteredCas = casI20.filter((c) =>
-        matchQ([c.studentName, c.university, c.recordType, c.statusLabel, c.referenceNumber ?? ""]),
-      );
-      const filteredVisas = visas.filter((v) =>
-        matchQ([v.studentName, v.university, v.stageLabel, v.decisionLabel]),
-      );
+      const filteredDeposits = deposits
+        .filter((d) =>
+          metric === "deposits_due" ? d.status === "due" || d.status === "overdue" : true,
+        )
+        .filter((d) =>
+          matchQ([d.studentName, d.university, d.studentCaseId, d.statusLabel, d.amountLabel]),
+        );
+      const filteredCas = casI20
+        .filter((c) =>
+          metric === "cas_confirmation_pending"
+            ? c.status === "pending" || c.status === "requested"
+            : true,
+        )
+        .filter((c) =>
+          matchQ([
+            c.studentName,
+            c.university,
+            c.recordType,
+            c.statusLabel,
+            c.referenceNumber ?? "",
+          ]),
+        );
+      const filteredVisas = visas
+        .filter((v) => {
+          if (metric === "visa_in_progress") return v.decision === "pending";
+          if (metric === "decisions") return v.decision === "approved" || v.decision === "refused";
+          return true;
+        })
+        .filter((v) => matchQ([v.studentName, v.university, v.stageLabel, v.decisionLabel]));
 
       const usedAppIds = new Set(offerRecords.map((o) => o.applicationId));
       const applicationsEligible = apps

@@ -402,15 +402,16 @@ describe("Phase 3 module permission gates (unit)", () => {
     ).toBe(false);
   });
 
-  it("requireModulePermission (async) uses defaults on demo sessions", async () => {
+  it("requireModulePermission rejects Admission Team demo plane; counsellor still uses demo defaults", async () => {
     await expect(
       requireModulePermission(
         session({ role: "consultant", businessRole: "admission_team", source: "demo" }),
         "admissions",
         2,
       ),
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow(/live staff sign-in|Demo or mock Admission/i);
 
+    // Counsellor demo may use default matrix (no Supabase load) — admissions Edit denied.
     await expect(
       requireModulePermission(
         session({ role: "consultant", businessRole: "counsellor_consultant", source: "demo" }),
@@ -418,6 +419,15 @@ describe("Phase 3 module permission gates (unit)", () => {
         2,
       ),
     ).rejects.toThrow(AuthError);
+
+    // Counsellor students Edit still allowed on demo defaults.
+    await expect(
+      requireModulePermission(
+        session({ role: "consultant", businessRole: "counsellor_consultant", source: "demo" }),
+        "students",
+        2,
+      ),
+    ).resolves.toBeUndefined();
   });
 
   it("HR / Digital Marketing / Orders gates honor lowered persisted matrix cells", () => {

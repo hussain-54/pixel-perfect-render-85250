@@ -26,6 +26,14 @@ describe("buildStaffNav", () => {
     expect(nav.some((i) => i.to === "/staff/leads")).toBe(false);
   });
 
+  it("labels Admission CRM as Workspace and includes Fees when matrix allows", () => {
+    const nav = buildStaffNav("admission_team", cloneDefaultPermissionMatrix());
+    expect(nav[0]?.section).toBe("Workspace");
+    expect(nav.some((i) => i.to === "/staff/finance")).toBe(true);
+    expect(nav.some((i) => i.to === "/staff/offers")).toBe(true);
+    expect(nav.some((i) => i.to === "/staff/activity")).toBe(true);
+  });
+
   it("hides Leads for Counsellor when digital_marketing matrix cell is No access", () => {
     const nav = buildStaffNav("counsellor_consultant", cloneDefaultPermissionMatrix());
     expect(nav.some((i) => i.to === "/staff/dashboard")).toBe(true);

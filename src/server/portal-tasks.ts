@@ -456,7 +456,15 @@ export const portalUpsertTask = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "tasks");
-      await requireModulePermission(session, "students", 2, "task mutations");
+      const { requireAnyModulePermission } = await import("@/server/staff-access");
+      await requireAnyModulePermission(
+        session,
+        [
+          { module: "students", minimum: 2 },
+          { module: "admissions", minimum: 2 },
+        ],
+        "task mutations",
+      );
 
       const title0 = data.title.trim();
       if (!title0) throw new AuthError("Title is required.", 400);
@@ -666,7 +674,15 @@ export const portalUpdateTaskStatus = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "tasks");
-      await requireModulePermission(session, "students", 2, "task mutations");
+      const { requireAnyModulePermission } = await import("@/server/staff-access");
+      await requireAnyModulePermission(
+        session,
+        [
+          { module: "students", minimum: 2 },
+          { module: "admissions", minimum: 2 },
+        ],
+        "task mutations",
+      );
       if (!TASK_STATUSES.includes(data.status)) throw new AuthError("Invalid status.", 400);
 
       const { usesSupabaseDataPlane } = await import("@/server/ao-data");
@@ -767,7 +783,15 @@ export const portalRunTaskAutomation = createServerFn({ method: "POST" })
       const session = await requireTrustedSession();
       requireRoles(session, ["consultant", "admin", "super_admin"]);
       denyFrontDeskConsultantWorkflows(session, "tasks");
-      await requireModulePermission(session, "students", 2, "task mutations");
+      const { requireAnyModulePermission } = await import("@/server/staff-access");
+      await requireAnyModulePermission(
+        session,
+        [
+          { module: "students", minimum: 2 },
+          { module: "admissions", minimum: 2 },
+        ],
+        "task mutations",
+      );
       const result = runTaskAutomationSweep();
       appendTaskAudit(actorMeta(session).name, "Ran task automation sweep", "automation");
       return {

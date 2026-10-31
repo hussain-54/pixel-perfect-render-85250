@@ -26,8 +26,10 @@ import {
 import { getStudentsDirectory, intakeRegisterStudent } from "@/services";
 import type { StudentDirectoryFilters, StudentDirectoryFocus } from "@/types/portal-officer";
 import type { InquiryChannelDb } from "@/types/database";
+import { isAdmissionBusinessRole } from "@/lib/staff-business-access";
 import { enforceSpecialtyStaffModuleBeforeLoad } from "@/lib/staff-specialty-before-load";
 import { useCounsellorWorkbenchRealtime } from "@/lib/use-counsellor-workbench-realtime";
+import type { BusinessRole } from "@/lib/business-permissions";
 
 const DIRECTORY_FOCUS_VALUES = new Set<StudentDirectoryFocus>([
   "awaiting_assessment",
@@ -35,6 +37,11 @@ const DIRECTORY_FOCUS_VALUES = new Set<StudentDirectoryFocus>([
   "awaiting_response",
   "action_required",
   "follow_ups",
+  "admission_docs",
+  "admission_handovers",
+  "admission_in_progress",
+  "admission_offers",
+  "admission_action",
 ]);
 
 const FOCUS_LABELS: Record<StudentDirectoryFocus, string> = {
@@ -43,6 +50,11 @@ const FOCUS_LABELS: Record<StudentDirectoryFocus, string> = {
   awaiting_response: "Awaiting response",
   action_required: "Action required",
   follow_ups: "Follow-ups due",
+  admission_docs: "Documents pending",
+  admission_handovers: "Incoming handovers",
+  admission_in_progress: "Applications in progress",
+  admission_offers: "Offers / decisions",
+  admission_action: "Admission action required",
 };
 
 type StudentsSearch = {
@@ -71,6 +83,10 @@ function StudentsDirectory() {
   const queryClient = useQueryClient();
   const search = Route.useSearch();
   const navigate = useNavigate({ from: "/staff/students" });
+  const { auth } = Route.useRouteContext() as {
+    auth?: { businessRole?: BusinessRole | null } | null;
+  };
+  const isAdmission = isAdmissionBusinessRole(auth?.businessRole);
   useCounsellorWorkbenchRealtime(true);
   const [filters, setFilters] = useState<StudentDirectoryFilters>(() => ({
     page: 1,
@@ -249,13 +265,16 @@ function StudentsDirectory() {
     URL.revokeObjectURL(url);
   };
 
+  const directoryTitle = isAdmission ? "Assigned files" : "My Students";
   const subtitle = useMemo(() => {
     if (filters.archived) return "Archived student records in your authorized scope.";
     if (filters.focus) {
       return `Filtered by KPI: ${FOCUS_LABELS[filters.focus]} · ${total || 0} matching assigned student${(total || 0) === 1 ? "" : "s"}.`;
     }
-    return "My assigned students — search, filter, and open the counselling workbench.";
-  }, [filters.archived, filters.focus, total]);
+    return isAdmission
+      ? "Students visible via assignment or counsellor handover — open a file to manage applications and documents."
+      : "My assigned students — search, filter, and open the counselling workbench.";
+  }, [filters.archived, filters.focus, total, isAdmission]);
 
   function clearDirectoryFilters() {
     setSearchInput("");
@@ -276,7 +295,7 @@ function StudentsDirectory() {
 
   if (dirQ.isLoading && !dirQ.data) {
     return (
-      <PageLoadState title="My Students" subtitle={subtitle}>
+      <PageLoadState title={directoryTitle} subtitle={subtitle}>
         <LoadingRows rows={8} />
       </PageLoadState>
     );
@@ -286,13 +305,13 @@ function StudentsDirectory() {
     const msg = portalErrorMessage(dirQ.error);
     if (String(dirQ.error).includes("403") || msg.toLowerCase().includes("permission")) {
       return (
-        <PageLoadState title="My Students" subtitle={subtitle}>
+        <PageLoadState title={directoryTitle} subtitle={subtitle}>
           <PermissionDenied body={msg} />
         </PageLoadState>
       );
     }
     return (
-      <PageLoadState title="My Students" subtitle={subtitle}>
+      <PageLoadState title={directoryTitle} subtitle={subtitle}>
         <ErrorState body={msg} onRetry={() => void dirQ.refetch()} />
       </PageLoadState>
     );
@@ -302,7 +321,7 @@ function StudentsDirectory() {
     <div className="space-y-4 md:space-y-5">
       <PageHeader
         compact
-        title="My Students"
+        title={directoryTitle}
         subtitle={subtitle}
         actions={
           <>
@@ -456,7 +475,7 @@ function StudentsDirectory() {
                       <Link
                         to="/staff/students/$studentId"
                         params={{ studentId: r.id }}
-                        search={{ tab: "assessment" }}
+                        search={{ tab: isAdmission ? "applications" : "assessment" }}
                       >
                         View record
                       </Link>

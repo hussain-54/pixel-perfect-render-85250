@@ -431,11 +431,54 @@ export function ApplicationsPipeline({
             setEmphasizeHandovers(true);
             setShowReturnedNotice(false);
             setFocusStudentId("");
+            setStageFilter("all");
+            setDocsFilter("all");
+            setActionFilter("all");
+            setProgressFilter("all");
           }}
         />
-        <WorkspaceKpi label="Docs under review" value={docsPendingCount} />
-        <WorkspaceKpi label="Applications in pipeline" value={data.counts.all} />
-        <WorkspaceKpi label="Submitted to university" value={submittedCount + inProgressCount} />
+        <WorkspaceKpi
+          label="Docs under review"
+          value={docsPendingCount}
+          active={docsFilter === "docs_pending"}
+          onClick={() => {
+            setDocsFilter("docs_pending");
+            setEmphasizeHandovers(false);
+            setShowReturnedNotice(false);
+            setFocusStudentId("");
+            setStageFilter("all");
+            setActionFilter("all");
+            setProgressFilter("all");
+          }}
+        />
+        <WorkspaceKpi
+          label="Applications in pipeline"
+          value={inProgressCount}
+          active={progressFilter === "active_processing"}
+          onClick={() => {
+            setProgressFilter("active_processing");
+            setEmphasizeHandovers(false);
+            setShowReturnedNotice(false);
+            setFocusStudentId("");
+            setStageFilter("all");
+            setDocsFilter("all");
+            setActionFilter("all");
+          }}
+        />
+        <WorkspaceKpi
+          label="Submitted to university"
+          value={submittedCount}
+          active={stageFilter === "Submitted"}
+          onClick={() => {
+            setStageFilter("Submitted");
+            setEmphasizeHandovers(false);
+            setShowReturnedNotice(false);
+            setFocusStudentId("");
+            setDocsFilter("all");
+            setActionFilter("all");
+            setProgressFilter("all");
+          }}
+        />
       </div>
 
       {showReturnedNotice ? (

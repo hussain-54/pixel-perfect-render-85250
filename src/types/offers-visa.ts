@@ -1,11 +1,21 @@
-import type { CasI20Status, CasI20Type, DepositStatus, OfferStatus, OfferType, VisaDecision, VisaStage } from "@/types/database";
+import type {
+  CasI20Status,
+  CasI20Type,
+  DepositStatus,
+  OfferStatus,
+  OfferType,
+  VisaDecision,
+  VisaStage,
+} from "@/types/database";
 
 /** Metric tabs (wireframe page 7). */
 export const OFFERS_METRIC_TABS = [
   { key: "offers_received", label: "Offers Received" },
   { key: "conditions_pending", label: "Conditions Pending" },
   { key: "deposits_due", label: "Deposits Due" },
+  { key: "cas_confirmation_pending", label: "CAS / Confirmation Pending" },
   { key: "visa_in_progress", label: "Visa In Progress" },
+  { key: "decisions", label: "Decisions" },
 ] as const;
 
 export type OffersMetricTab = (typeof OFFERS_METRIC_TABS)[number]["key"];
@@ -20,7 +30,12 @@ export const OFFERS_PHASE_TABS = [
 
 export type OffersPhaseTab = (typeof OFFERS_PHASE_TABS)[number]["key"];
 
-export const VISA_STAGE_ORDER: readonly VisaStage[] = ["doc_prep", "filed", "biometrics", "decision"] as const;
+export const VISA_STAGE_ORDER: readonly VisaStage[] = [
+  "doc_prep",
+  "filed",
+  "biometrics",
+  "decision",
+] as const;
 
 export const VISA_STAGE_LABELS: Record<VisaStage, string> = {
   doc_prep: "Document Preparation",
@@ -231,7 +246,13 @@ export type OffersVisaPayload = {
   deposits: DepositRowView[];
   casI20: CasI20RowView[];
   visas: VisaRowView[];
-  applicationsEligible: { id: string; studentId: string; studentName: string; university: string; country: string }[];
+  applicationsEligible: {
+    id: string;
+    studentId: string;
+    studentName: string;
+    university: string;
+    country: string;
+  }[];
 };
 
 export type OfferDetailPayload = {

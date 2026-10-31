@@ -715,6 +715,37 @@ export const applications: Application[] = [
   },
 ];
 
+/** Demo counsellor → Admission handovers (mock plane only). */
+export const admissionHandovers = [
+  {
+    id: "ah-1",
+    studentId: "s4",
+    status: "submitted",
+    summary: "Germany shortlist ready. Transcripts and IELTS attached; passport scan pending.",
+    missingInformation: "Passport bio page",
+    handedOverAt: "2026-10-28T09:30:00.000Z",
+    toOwnerId: null as string | null,
+  },
+  {
+    id: "ah-2",
+    studentId: "s7",
+    status: "submitted",
+    summary: "Malaysia diploma pathway. Counselling complete; student prefers Sept intake.",
+    missingInformation: null as string | null,
+    handedOverAt: "2026-10-29T14:00:00.000Z",
+    toOwnerId: null as string | null,
+  },
+  {
+    id: "ah-3",
+    studentId: "s8",
+    status: "returned",
+    summary: "Italy MA Design — returned pending updated portfolio brief.",
+    missingInformation: "Updated portfolio PDF",
+    handedOverAt: "2026-10-20T11:00:00.000Z",
+    toOwnerId: null as string | null,
+  },
+];
+
 export const leads: Lead[] = [
   {
     id: "L-501",

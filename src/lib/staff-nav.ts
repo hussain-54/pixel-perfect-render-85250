@@ -124,7 +124,16 @@ export function buildStaffNav(
   }
 
   if (shouldIncludeCounsellorCrmNav(businessRole)) {
-    const crm = filterCrmNavByMatrix(consultantNav, businessRole, matrix);
+    // Admission Team: CRM shell without counsellor-only Leads; Workspace label on first item.
+    const crmBase =
+      businessRole === "admission_team"
+        ? consultantNav.filter((i) => i.to !== "/staff/leads")
+        : consultantNav;
+    const crm = filterCrmNavByMatrix(crmBase, businessRole, matrix).map((item, index) =>
+      businessRole === "admission_team" && index === 0
+        ? { ...item, section: "Workspace" as const }
+        : item,
+    );
     const crmTos = new Set(crm.map((i) => i.to));
     for (const item of specialtyItems) {
       if (!crmTos.has(item.to)) crm.push(item);

@@ -27,6 +27,19 @@ export function businessRoleFromSession(session: TrustedSession): BusinessRole |
   return normalizeTrustedBusinessRole(session.businessRole);
 }
 
+/**
+ * Admission Team must never use the demo/mock CRM plane.
+ * Real AO work requires Supabase auth + profiles.business_role = admission_team.
+ */
+export function forbidAdmissionMockDataPlane(session: TrustedSession): void {
+  if (businessRoleFromSession(session) !== "admission_team") return;
+  if (session.source === "supabase") return;
+  throw new AuthError(
+    "Admission Team requires a live staff sign-in connected to Supabase. Demo or mock Admission data is disabled.",
+    403,
+  );
+}
+
 /** Deny Front Desk from consultant / admission / privileged staff modules. */
 export function denyFrontDeskConsultantWorkflows(
   session: TrustedSession,
@@ -153,6 +166,7 @@ export async function requireModulePermission(
   minimum: PermissionLevel,
   actionLabel?: string,
 ): Promise<void> {
+  forbidAdmissionMockDataPlane(session);
   if (rolesAtLeastAdmin(session.role)) return;
 
   const loaded = await loadAuthorizationMatrix(session);
@@ -164,4 +178,43 @@ export async function requireModulePermission(
   }
 
   assertModulePermission(session, module, minimum, actionLabel, loaded.matrix);
+}
+
+/**
+ * Pass when the caller meets any of the listed module minimums.
+ * Used for shared desk actions (e.g. tasks/appointments) that Admission Team
+ * operates via admissions Edit while Counsellors use students Edit.
+ */
+export async function requireAnyModulePermission(
+  session: TrustedSession,
+  options: Array<{ module: BusinessModule; minimum: PermissionLevel }>,
+  actionLabel: string,
+): Promise<void> {
+  forbidAdmissionMockDataPlane(session);
+  if (rolesAtLeastAdmin(session.role)) return;
+  if (!options.length) {
+    throw new AuthError(`You do not have permission for ${actionLabel}.`, 403);
+  }
+
+  const loaded = await loadAuthorizationMatrix(session);
+  if (loaded.source === "unavailable") {
+    throw new AuthError(
+      "Permission matrix is temporarily unavailable. Try again or contact an administrator.",
+      503,
+    );
+  }
+
+  const businessRole = businessRoleFromSession(session);
+  if (!businessRole) {
+    throw new AuthError(
+      "Your business role is not configured. Contact an administrator before continuing.",
+      403,
+    );
+  }
+
+  for (const opt of options) {
+    const level = getPermissionLevelFromMatrix(loaded.matrix, businessRole, opt.module);
+    if (level >= opt.minimum) return;
+  }
+  throw new AuthError(`You do not have permission for ${actionLabel}.`, 403);
 }

@@ -13,7 +13,11 @@ import {
   requireTrustedSession,
   type TrustedSession,
 } from "@/server/portal-auth";
-import { denyFrontDeskConsultantWorkflows, requireModulePermission } from "@/server/staff-access";
+import {
+  denyFrontDeskConsultantWorkflows,
+  forbidAdmissionMockDataPlane,
+  requireModulePermission,
+} from "@/server/staff-access";
 import type { PermissionLevel } from "@/lib/business-permissions";
 
 async function requireConsultantDesk(
@@ -22,6 +26,7 @@ async function requireConsultantDesk(
   studentsMinimum: PermissionLevel = 1,
 ) {
   requireRoles(session, ["consultant", "admin", "super_admin"]);
+  forbidAdmissionMockDataPlane(session);
   denyFrontDeskConsultantWorkflows(session, label);
   await requireModulePermission(session, "students", studentsMinimum, label);
 }
@@ -133,7 +138,7 @@ function buildDirectoryRow(s: Student): StudentDirectoryRow {
     consultantId: s.consultantId,
     consultantName: consultant?.name ?? "Unassigned",
     appsSubmitted: submitted,
-    appsTotal: Math.max(apps.length, 1),
+    appsTotal: apps.length,
     stage: s.stage,
     stageLabel: stageLabel(s.stage),
     archived: Boolean(s.archived),
@@ -224,32 +229,188 @@ export const portalGetOfficerDashboard = createServerFn({ method: "GET" }).handl
         ? "Admin overview"
         : "Admission Officer";
 
+    const { businessRoleFromSession } = await import("@/server/staff-access");
+    const businessRole = businessRoleFromSession(session);
+    const isAdmissionDesk = businessRole === "admission_team";
+
+    // Mock-plane Admission KPIs so AO UI never falls back to counsellor cards.
+    let admissionMetrics: OfficerDashboardPayload["admissionMetrics"];
+    let admissionAttention: OfficerDashboardPayload["needsAttention"] = [];
+    let admissionOverview: OfficerDashboardPayload["assignedOverview"] | undefined;
+    let admissionRecent: OfficerDashboardPayload["recentActivity"] | undefined;
+    if (isAdmissionDesk) {
+      const {
+        computeAdmissionWorkbenchMetrics,
+        buildAdmissionAttentionItems,
+        deriveAdmissionNextAction,
+      } = await import("@/lib/admission-workspace");
+      const handovers = (
+        (
+          db as {
+            admissionHandovers?: {
+              id: string;
+              studentId: string;
+              status: string;
+              summary?: string | null;
+              missingInformation?: string | null;
+              handedOverAt?: string;
+              toOwnerId?: string | null;
+            }[];
+          }
+        ).admissionHandovers ?? []
+      ).filter((h) => visibleIds.has(h.studentId));
+      const appSnaps = apps.map((a) => {
+        const st = students.find((s) => s.id === a.studentId);
+        const deadline = parseYmd(a.deadline);
+        const daysLeft = deadline ? daysBetween(today, deadline) : null;
+        return {
+          id: a.id,
+          studentId: a.studentId,
+          studentName: st?.name ?? "Student",
+          studentCaseId: st?.caseId ?? "",
+          university: a.university,
+          program: a.program,
+          stage: a.status,
+          officerId: a.officerId ?? "",
+          deadline: a.deadline,
+          daysLeft,
+          deadlineWarning: daysLeft != null && daysLeft >= 0 && daysLeft <= 7,
+        };
+      });
+      const handoverSnaps = handovers.map((h) => ({
+        id: h.id,
+        studentId: h.studentId,
+        studentName: students.find((s) => s.id === h.studentId)?.name ?? null,
+        studentCaseId: students.find((s) => s.id === h.studentId)?.caseId ?? null,
+        status: h.status,
+        summary: h.summary ?? null,
+        missingInformation: h.missingInformation ?? null,
+        handedOverAt: h.handedOverAt ?? new Date().toISOString(),
+        toOwnerId: h.toOwnerId ?? null,
+      }));
+      const overdueTaskCount = todaysTasks.filter((t) => t.priority === "overdue").length;
+      admissionMetrics = computeAdmissionWorkbenchMetrics({
+        viewerUserId: session.userId ?? null,
+        applications: appSnaps,
+        handovers: handoverSnaps,
+        documents: docs.map((d) => ({ studentId: d.studentId, status: d.status })),
+        overdueTaskCount,
+      });
+      const attention = buildAdmissionAttentionItems({
+        applications: appSnaps,
+        handovers: handoverSnaps,
+        limit: 12,
+      });
+      admissionAttention = attention.map((a) => ({
+        id: a.id,
+        studentId: a.studentId,
+        caseId: a.caseId,
+        fullName: a.fullName,
+        kind: a.kind,
+        title: a.title,
+        detail: a.detail,
+        at: a.at,
+        applicationId: a.applicationId,
+        priority: a.priority,
+        urgencyGroup:
+          a.priority <= 1
+            ? ("critical" as const)
+            : a.priority <= 2
+              ? ("high" as const)
+              : ("normal" as const),
+        workflowStatus: a.title,
+        nextResponsibleRole: "Admission",
+        primaryActionLabel:
+          a.kind === "handover"
+            ? "Review handover"
+            : a.kind === "docs"
+              ? "Review documents"
+              : a.kind === "deadline"
+                ? "Open application"
+                : "Open application",
+        profileTab: a.kind === "docs" ? "documents" : "applications",
+      }));
+      const latestHand = new Map(handoverSnaps.map((h) => [h.studentId, h]));
+      admissionOverview = appSnaps.slice(0, 8).map((a) => {
+        const hand = latestHand.get(a.studentId);
+        const next = deriveAdmissionNextAction({
+          stage: a.stage,
+          handoverStatus: hand?.status ?? null,
+          docsNeedingAttention: a.stage === "Docs Pending",
+          deadlineWarning: a.deadlineWarning,
+        });
+        const st = students.find((s) => s.id === a.studentId);
+        return {
+          id: a.studentId,
+          name: a.studentName,
+          destination: a.university,
+          stage: (st?.stage ?? "university_shortlisting") as Student["stage"],
+          stageLabel: a.stage,
+          caseId: a.studentCaseId,
+          applicationId: a.id,
+          ...(a.deadline ? { lastActivity: a.deadline } : {}),
+          nextActionLabel: next.label,
+        };
+      });
+      admissionRecent = admissionOverview;
+    }
+
     const payload: OfficerDashboardPayload = {
       greetingName,
       deskLabel,
+      ...(isAdmissionDesk && admissionMetrics
+        ? { workbenchKind: "admission" as const, admissionMetrics }
+        : {}),
       metrics: {
         assignedStudents: students.length,
-        appsInProgress,
+        appsInProgress: admissionMetrics?.inProgress ?? appsInProgress,
         docsToReview,
-        deadlinesThisWeek,
+        deadlinesThisWeek: admissionMetrics?.upcomingDeadlines ?? deadlinesThisWeek,
         awaitingInitialAssessment: 0,
         counsellingCompleted: 0,
         followUpsDue: todaysTasks.filter(
           (t) => t.priority === "overdue" || t.priority === "due_today",
         ).length,
-        awaitingResponse: 0,
-        actionRequired: 0,
+        awaitingResponse: admissionMetrics?.awaitingInitialReview ?? 0,
+        actionRequired: admissionMetrics?.actionRequired ?? 0,
       },
       todaysTasks,
-      assignedOverview: students.slice(0, 8).map((s) => ({
-        id: s.id,
-        name: s.name,
-        destination: s.destination,
-        stage: s.stage,
-        stageLabel: stageLabel(s.stage),
-        caseId: s.caseId,
-        lastActivity: s.lastActivity,
-      })),
+      ...(isAdmissionDesk
+        ? {
+            todaysAppointments: db.appointments
+              .filter((a) => visibleIds.has(a.studentId))
+              .filter((a) => {
+                const pktToday = new Date().toLocaleDateString("en-CA", {
+                  timeZone: "Asia/Karachi",
+                });
+                return a.date === pktToday;
+              })
+              .slice(0, 8)
+              .map((a) => {
+                const st = students.find((s) => s.id === a.studentId);
+                return {
+                  id: a.id,
+                  studentId: a.studentId,
+                  studentName: st?.name ?? "Student",
+                  purpose: a.type,
+                  scheduledAt: `${a.date}T${a.time}:00+05:00`,
+                  status: a.status,
+                  typeLabel: a.type,
+                };
+              }),
+          }
+        : {}),
+      assignedOverview:
+        admissionOverview ??
+        students.slice(0, 8).map((s) => ({
+          id: s.id,
+          name: s.name,
+          destination: s.destination,
+          stage: s.stage,
+          stageLabel: stageLabel(s.stage),
+          caseId: s.caseId,
+          lastActivity: s.lastActivity,
+        })),
       docsWaiting: docs
         .filter((d) => d.status === "Pending Review")
         .slice(0, 10)
@@ -265,16 +426,18 @@ export const portalGetOfficerDashboard = createServerFn({ method: "GET" }).handl
           };
         }),
       upcomingDeadlines: deadlineRows.slice(0, 8),
-      needsAttention: [],
-      recentActivity: students.slice(0, 8).map((s) => ({
-        id: s.id,
-        name: s.name,
-        destination: s.destination,
-        stage: s.stage,
-        stageLabel: stageLabel(s.stage),
-        caseId: s.caseId,
-        lastActivity: s.lastActivity,
-      })),
+      needsAttention: isAdmissionDesk ? admissionAttention : [],
+      recentActivity:
+        admissionRecent ??
+        students.slice(0, 8).map((s) => ({
+          id: s.id,
+          name: s.name,
+          destination: s.destination,
+          stage: s.stage,
+          stageLabel: stageLabel(s.stage),
+          caseId: s.caseId,
+          lastActivity: s.lastActivity,
+        })),
       fetchedAt: new Date().toISOString(),
     };
     return payload;
@@ -293,22 +456,7 @@ export const portalGetStudentsDirectory = createServerFn({ method: "GET" })
       const { usesSupabaseDataPlane, buildStudentsDirectoryFromDb } =
         await import("@/server/ao-data");
       if (usesSupabaseDataPlane(session)) {
-        const directoryFilters: {
-          q?: string;
-          country?: string;
-          intake?: string;
-          stage?: string;
-          consultantId?: string;
-          archived?: boolean;
-          page?: number;
-          pageSize?: number;
-          focus?:
-            | "awaiting_assessment"
-            | "consent_recorded"
-            | "awaiting_response"
-            | "action_required"
-            | "follow_ups";
-        } = {};
+        const directoryFilters: StudentDirectoryFilters = {};
         if (data.q !== undefined) directoryFilters.q = data.q;
         if (data.country !== undefined) directoryFilters.country = data.country;
         if (data.intake !== undefined) directoryFilters.intake = data.intake;
@@ -317,7 +465,7 @@ export const portalGetStudentsDirectory = createServerFn({ method: "GET" })
         if (data.archived !== undefined) directoryFilters.archived = data.archived;
         if (data.page !== undefined) directoryFilters.page = data.page;
         if (data.pageSize !== undefined) directoryFilters.pageSize = data.pageSize;
-        if (data.focus !== undefined) directoryFilters.focus = data.focus;
+        if (data.focus) directoryFilters.focus = data.focus;
         return (await buildStudentsDirectoryFromDb(
           session,
           directoryFilters,
@@ -397,7 +545,12 @@ export const portalGetStudentsDirectory = createServerFn({ method: "GET" })
           stages: db.STAGES.map((s) => ({ key: s.key, label: s.label })),
           consultants: consultantOpts,
           canFilterByConsultant,
-          canRegister: rolesAtLeastAdmin(session.role) || session.role === "consultant",
+          canRegister:
+            rolesAtLeastAdmin(session.role) ||
+            (await import("@/lib/business-permissions")).canEditModule(
+              (await import("@/server/staff-access")).businessRoleFromSession(session),
+              "students",
+            ),
           canExport: true,
         },
       };
@@ -529,6 +682,9 @@ function buildStudentWorkspace(
   const appsSubmittedCount = apps.filter((a) => SUBMITTED_APP_STATUSES.has(a.status)).length;
   const docsApprovedCount = docs.filter((d) => d.status === "Approved").length;
   const canEdit = session.role === "consultant" || rolesAtLeastAdmin(session.role);
+  const businessRole = (session as TrustedSession & { businessRole?: string | null }).businessRole;
+  const isAdmissionDesk = businessRole === "admission_team";
+  const canOperateAdmissions = rolesAtLeastAdmin(session.role) || isAdmissionDesk;
 
   return {
     student: {
@@ -551,8 +707,10 @@ function buildStudentWorkspace(
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
     offersVisa: workspace.offerVisaRecords.filter((o) => o.studentId === student.id),
     canEdit,
-    canAddNote: canEdit,
-    canCreateApplication: canEdit,
+    canAddNote: canEdit || canOperateAdmissions,
+    canCreateApplication: canEdit || canOperateAdmissions,
+    canManageAdmissionHandover: canOperateAdmissions,
+    workbenchKind: isAdmissionDesk ? ("admission" as const) : ("counsellor" as const),
   };
 }
 
@@ -996,7 +1154,7 @@ export const portalRegisterStudent = createServerFn({ method: "POST" })
             consultantId: student.consultantId,
             consultantName: consultantProfile?.full_name || "Unassigned",
             appsSubmitted: 0,
-            appsTotal: 1,
+            appsTotal: 0,
             stage: student.stage,
             stageLabel: stageLabel(student.stage),
             archived: false,

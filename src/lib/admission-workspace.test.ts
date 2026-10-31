@@ -94,7 +94,49 @@ describe("admission-workspace", () => {
     expect(metrics.offersDecisionsReceived).toBe(1);
     expect(metrics.returnedForCorrection).toBe(1);
     expect(metrics.documentsMissing).toBe(1);
+    expect(metrics.depositCasPending).toBe(0);
+    expect(metrics.visaInProgress).toBe(0);
+    expect(metrics.overdueTasks).toBe(0);
+    expect(metrics.refusedRejected).toBe(0);
+    expect(metrics.pipeline.submitted).toBe(1);
+    expect(metrics.pipeline.offers).toBe(1);
     expect(metrics.actionRequired).toBeGreaterThanOrEqual(2);
+  });
+
+  it("counts deposit/CAS, visa, overdue tasks, and rejected apps", () => {
+    const metrics = computeAdmissionWorkbenchMetrics({
+      viewerUserId: "me",
+      applications: [
+        {
+          id: "a1",
+          studentId: "s1",
+          studentName: "Ada",
+          studentCaseId: "GR-1",
+          university: "U1",
+          program: "Law",
+          stage: "Rejected",
+          officerId: "me",
+          deadline: "",
+          daysLeft: null,
+          deadlineWarning: false,
+        },
+      ],
+      handovers: [],
+      documents: [],
+      deposits: [{ studentId: "s2", status: "due" }],
+      casRecords: [{ studentId: "s3", status: "requested" }],
+      visas: [
+        { studentId: "s4", stage: "filed", decision: "pending" },
+        { studentId: "s5", stage: "decision", decision: "approved" },
+      ],
+      overdueTaskCount: 3,
+    });
+    expect(metrics.depositCasPending).toBe(2);
+    expect(metrics.visaInProgress).toBe(1);
+    expect(metrics.overdueTasks).toBe(3);
+    expect(metrics.refusedRejected).toBe(1);
+    expect(metrics.pipeline.visa).toBe(1);
+    expect(metrics.pipeline.refused).toBe(1);
   });
 
   it("prioritises submitted handovers in attention list", () => {
@@ -117,25 +159,67 @@ describe("admission-workspace", () => {
     expect(items[0]?.kind).toBe("handover");
   });
 
-  it("resolves notification deep links to applications when possible", () => {
+  it("splitPortalHref keeps path and query for router navigate", async () => {
+    const { splitPortalHref } = await import("./utils");
+    expect(splitPortalHref("/staff/documents?tab=missing&studentId=abc")).toEqual({
+      to: "/staff/documents",
+      search: { tab: "missing", studentId: "abc" },
+    });
+    expect(splitPortalHref("/staff/offers")).toEqual({
+      to: "/staff/offers",
+      search: {},
+    });
+  });
+
+  it("resolves notification deep links without collapsing every path to handovers", () => {
     expect(
       resolveAdmissionNotificationHref({
         linkPath: "/staff/applications",
         studentId: "abc",
       }),
     ).toBe("/staff/applications?focus=handovers&studentId=abc");
+    expect(
+      resolveAdmissionNotificationHref({
+        linkPath: "/staff/applications?focus=offers",
+        studentId: "abc",
+      }),
+    ).toBe("/staff/applications?focus=offers&studentId=abc");
+    expect(
+      resolveAdmissionNotificationHref({
+        linkPath: "/staff/documents",
+        studentId: "abc",
+      }),
+    ).toBe("/staff/documents?studentId=abc");
+    expect(
+      resolveAdmissionNotificationHref({
+        linkPath: "/staff/offers",
+        studentId: null,
+      }),
+    ).toBe("/staff/offers");
+    expect(
+      resolveAdmissionNotificationHref({
+        linkPath: "/staff/finance",
+        studentId: "abc",
+      }),
+    ).toBe("/staff/finance?studentId=abc");
+    expect(
+      resolveAdmissionNotificationHref({
+        linkPath: "/staff/finance?feeId=fee-1&ledger=university",
+        studentId: "abc",
+      }),
+    ).toBe("/staff/finance?feeId=fee-1&ledger=university&studentId=abc");
+    expect(
+      resolveAdmissionNotificationHref({
+        linkPath: "/staff/students/abc",
+        studentId: "abc",
+      }),
+    ).toBe("/staff/students/abc?tab=applications");
     expect(
       resolveAdmissionNotificationHref({
         linkPath: null,
         studentId: "abc",
       }),
     ).toBe("/staff/applications?focus=handovers&studentId=abc");
-    expect(
-      resolveAdmissionNotificationHref({
-        linkPath: "/staff/applications",
-        studentId: null,
-      }),
-    ).toBe("/staff/applications?focus=handovers");
   });
 
   it("formats handover status labels for staff UI", async () => {

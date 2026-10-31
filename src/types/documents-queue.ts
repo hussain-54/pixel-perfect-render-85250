@@ -7,6 +7,7 @@ export const DOCUMENT_QUEUE_TABS = [
   { key: "pending", label: "Pending Verification" },
   { key: "approved", label: "Approved" },
   { key: "rejected", label: "Rejected" },
+  { key: "missing", label: "Missing" },
   { key: "expiring", label: "Expiring Soon" },
 ] as const;
 
@@ -34,8 +35,21 @@ export const DOCUMENT_CHECKLISTS: Record<string, readonly string[]> = {
     "SOP",
     "CV",
   ],
-  Italy: ["Passport", "Academic Transcripts", "Portfolio", "IELTS / English Test", "SOP", "Photographs"],
-  Canada: ["Passport", "Academic Transcripts", "IELTS / English Test", "SOP", "Financial Documents"],
+  Italy: [
+    "Passport",
+    "Academic Transcripts",
+    "Portfolio",
+    "IELTS / English Test",
+    "SOP",
+    "Photographs",
+  ],
+  Canada: [
+    "Passport",
+    "Academic Transcripts",
+    "IELTS / English Test",
+    "SOP",
+    "Financial Documents",
+  ],
   USA: ["Passport", "Academic Transcripts", "IELTS / English Test", "SOP", "Financial Documents"],
   Australia: ["Passport", "Academic Transcripts", "IELTS / English Test", "SOP", "CV"],
 };

@@ -49,11 +49,26 @@ import { cn } from "@/lib/utils";
 const selectClass =
   "flex h-11 w-full rounded-md border border-input bg-white px-3 text-sm text-navy";
 
-export function OffersVisaWorkspace() {
+function phaseForMetric(metric: OffersMetricTab): OffersPhaseTab {
+  if (metric === "deposits_due") return "deposits";
+  if (metric === "cas_confirmation_pending") return "cas_i20";
+  if (metric === "visa_in_progress" || metric === "decisions") return "visa";
+  return "offers";
+}
+
+export function OffersVisaWorkspace(props?: {
+  initialMetric?: OffersMetricTab;
+  initialPhase?: OffersPhaseTab;
+  initialQ?: string;
+  initialStudentId?: string;
+}) {
   const queryClient = useQueryClient();
-  const [metric, setMetric] = useState<OffersMetricTab>("offers_received");
-  const [phase, setPhase] = useState<OffersPhaseTab>("offers");
-  const [q, setQ] = useState("");
+  const seedMetric = props?.initialMetric ?? "offers_received";
+  const [metric, setMetric] = useState<OffersMetricTab>(seedMetric);
+  const [phase, setPhase] = useState<OffersPhaseTab>(
+    props?.initialPhase ?? phaseForMetric(seedMetric),
+  );
+  const [q, setQ] = useState(props?.initialQ ?? props?.initialStudentId ?? "");
   const [selectedOfferId, setSelectedOfferId] = useState<string | null>(null);
   const [createOpen, setCreateOpen] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -253,7 +268,15 @@ export function OffersVisaWorkspace() {
           <button
             key={item.key}
             type="button"
-            onClick={() => setMetric(item.key)}
+            onClick={() => {
+              setMetric(item.key);
+              if (item.key === "deposits_due") setPhase("deposits");
+              else if (item.key === "cas_confirmation_pending") setPhase("cas_i20");
+              else if (item.key === "visa_in_progress" || item.key === "decisions")
+                setPhase("visa");
+              else if (item.key === "offers_received" || item.key === "conditions_pending")
+                setPhase("offers");
+            }}
             className={cn(
               "rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors",
               metric === item.key

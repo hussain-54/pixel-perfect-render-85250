@@ -129,11 +129,14 @@ function isExpiring(doc: StudentDocument): boolean {
 }
 
 function inTab(doc: StudentDocument, tab: DocumentQueueTab): boolean {
-  if (tab === "pending")
+  if (tab === "missing") return Boolean(doc.awaitingUpload);
+  if (tab === "pending") {
+    if (doc.awaitingUpload) return false;
     return doc.status === "Pending Review" || doc.status === "Needs Correction";
-  if (tab === "approved") return doc.status === "Approved";
-  if (tab === "rejected") return doc.status === "Rejected";
-  return isExpiring(doc);
+  }
+  if (tab === "approved") return doc.status === "Approved" && !doc.awaitingUpload;
+  if (tab === "rejected") return doc.status === "Rejected" && !doc.awaitingUpload;
+  return isExpiring(doc) && !doc.awaitingUpload;
 }
 
 function displayStatus(doc: StudentDocument): string {
@@ -261,6 +264,7 @@ export const portalGetDocumentQueue = createServerFn({ method: "GET" })
         pending: docs.filter((d) => inTab(d, "pending")).length,
         approved: docs.filter((d) => inTab(d, "approved")).length,
         rejected: docs.filter((d) => inTab(d, "rejected")).length,
+        missing: docs.filter((d) => inTab(d, "missing")).length,
         expiring: docs.filter((d) => inTab(d, "expiring")).length,
       };
 

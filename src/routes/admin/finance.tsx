@@ -34,9 +34,12 @@ import type {
   UniversityFeeStatusDb,
 } from "@/types/database";
 import { downloadBase64File } from "@/lib/export-formats";
+import { getAuthSession } from "@/lib/auth";
 import { isSignupFeeVerified } from "@/lib/signup-fee-gate";
 import type { SignupFeeLedgerStatusFilter } from "@/lib/signup-fee-ledger";
 import { describeSignupFeeOperationalStatus } from "@/lib/signup-fee-voucher";
+import { canVerifySignupFeeAction } from "@/lib/staff-business-access";
+import { canVerifyUniversityFeePayment } from "@/lib/university-fee-auth";
 import {
   FINANCE_SIGNUP_QUEUE_KEY,
   FINANCE_UNIVERSITY_QUEUE_KEY,
@@ -46,9 +49,36 @@ import { cn } from "@/lib/utils";
 
 type SignupFeeQueueStatusFilter = SignupFeeLedgerStatusFilter;
 
+export type FinanceModuleSearch = {
+  feeId?: string;
+  studentId?: string;
+  ledger?: "signup" | "university";
+};
+
 export const Route = createFileRoute("/admin/finance")({
-  component: FinanceModulePage,
+  validateSearch: (raw: Record<string, unknown>): FinanceModuleSearch => {
+    const out: FinanceModuleSearch = {};
+    const feeId = raw["feeId"];
+    if (typeof feeId === "string" && feeId.trim()) out.feeId = feeId.trim();
+    const studentId = raw["studentId"];
+    if (typeof studentId === "string" && studentId.trim()) out.studentId = studentId.trim();
+    const ledger = raw["ledger"];
+    if (ledger === "signup" || ledger === "university") out.ledger = ledger;
+    return out;
+  },
+  component: AdminFinance,
 });
+
+function AdminFinance() {
+  const search = Route.useSearch();
+  return (
+    <FinanceModulePage
+      {...(search.feeId ? { initialFeeId: search.feeId } : {})}
+      {...(search.studentId ? { initialStudentId: search.studentId } : {})}
+      {...(search.ledger ? { initialLedger: search.ledger } : {})}
+    />
+  );
+}
 
 type LedgerTab = "signup" | "university";
 type UniStatusFilter = UniversityFeeStatusDb | "queue";
@@ -72,25 +102,51 @@ const SIGNUP_STATUS_TABS: { id: SignupFeeQueueStatusFilter; label: string }[] = 
 ];
 
 /** Shared fees workspace — also mounted at `/staff/finance` for specialty desks. */
-export function FinanceModulePage() {
+export function FinanceModulePage(props?: {
+  initialFeeId?: string;
+  initialStudentId?: string;
+  initialLedger?: LedgerTab;
+}) {
   const queryClient = useQueryClient();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const onStaffDesk = pathname.startsWith("/staff/");
   const liveStatus = useFinanceWorkspaceRealtime(true);
-  const [ledgerTab, setLedgerTab] = useState<LedgerTab>("signup");
+  const sessionQ = useQuery({
+    queryKey: ["auth", "session", "finance-desk"],
+    queryFn: () => getAuthSession(),
+    staleTime: 60_000,
+  });
+  const canVerifySignup = canVerifySignupFeeAction({
+    appRole: sessionQ.data?.role ?? "consultant",
+    businessRole: sessionQ.data?.businessRole ?? null,
+  });
+  const canVerifyUniversity = canVerifyUniversityFeePayment({
+    appRole: sessionQ.data?.role ?? "consultant",
+    businessRole: sessionQ.data?.businessRole ?? null,
+  });
+  const [ledgerTab, setLedgerTab] = useState<LedgerTab>(() => {
+    if (props?.initialLedger) return props.initialLedger;
+    return onStaffDesk ? "university" : "signup";
+  });
+  const [admissionDefaultApplied, setAdmissionDefaultApplied] = useState(
+    Boolean(props?.initialLedger),
+  );
+
+  useEffect(() => {
+    if (admissionDefaultApplied || !sessionQ.data || !onStaffDesk) return;
+    if (!canVerifySignup) {
+      setLedgerTab("university");
+    }
+    setAdmissionDefaultApplied(true);
+  }, [admissionDefaultApplied, canVerifySignup, onStaffDesk, sessionQ.data]);
   const [signupStatus, setSignupStatus] = useState<SignupFeeQueueStatusFilter>("claimed");
-  const [signupSearch, setSignupSearch] = useState("");
-  const [signupSearchApplied, setSignupSearchApplied] = useState("");
+  const [signupSearch, setSignupSearch] = useState(props?.initialStudentId ?? "");
+  const [signupSearchApplied, setSignupSearchApplied] = useState(props?.initialStudentId ?? "");
   const [signupOffset, setSignupOffset] = useState(0);
   const signupPageSize = 50;
-  const [reviewFeeId, setReviewFeeId] = useState<string | null>(() => {
-    if (typeof window === "undefined") return null;
-    try {
-      return new URLSearchParams(window.location.search).get("feeId");
-    } catch {
-      return null;
-    }
-  });
+  const [reviewFeeId, setReviewFeeId] = useState<string | null>(props?.initialFeeId ?? null);
+  const [uniStudentFilter] = useState(props?.initialStudentId?.trim() || "");
+  const [highlightObligationId] = useState(props?.initialFeeId ?? null);
   const [proofPreviewUrl, setProofPreviewUrl] = useState<string | null>(null);
   const [proofPreviewMsg, setProofPreviewMsg] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<UniStatusFilter>("queue");
@@ -105,7 +161,7 @@ export function FinanceModulePage() {
     status: string;
   } | null>(null);
   const [createForm, setCreateForm] = useState({
-    studentId: "",
+    studentId: props?.initialStudentId ?? "",
     amount: "",
     kind: "application_fee" as UniversityFeeKindDb,
     label: "",
@@ -120,9 +176,11 @@ export function FinanceModulePage() {
   });
 
   const uniFilters = useMemo(() => {
-    if (statusFilter === "queue") return {};
-    return { status: statusFilter };
-  }, [statusFilter]);
+    const next: { status?: UniversityFeeStatusDb; studentId?: string } = {};
+    if (statusFilter !== "queue") next.status = statusFilter;
+    if (uniStudentFilter) next.studentId = uniStudentFilter;
+    return next;
+  }, [statusFilter, uniStudentFilter]);
 
   const feesQ = useQuery({
     queryKey: [...FINANCE_UNIVERSITY_QUEUE_KEY, uniFilters],
@@ -296,10 +354,20 @@ export function FinanceModulePage() {
     (/403|permission/i.test(portalErrorMessage(feesQ.error)) ||
       portalErrorMessage(feesQ.error).includes("403"));
 
-  const financeTitle = onStaffDesk ? "Accounts & Finance" : "Finance — fees & verification";
-  const financeSubtitle = onStaffDesk
-    ? "Signup fee proofs and university fee ledgers. Verify only through the trusted Accounts RPC — claimed is never verified."
-    : "Admin view of signup-fee payment proofs and university fee ledgers. Verify only through the trusted Accounts RPC — claimed is never verified.";
+  const financeTitle =
+    onStaffDesk && !canVerifySignup
+      ? "Fees & Payments"
+      : onStaffDesk
+        ? "Accounts & Finance"
+        : "Finance — fees & verification";
+  const financeSubtitle =
+    onStaffDesk && !canVerifySignup
+      ? "University / application fee obligations for Admission. Signup/intake verification stays with Accounts."
+      : onStaffDesk
+        ? "Signup fee proofs and university fee ledgers. Verify only through the trusted Accounts RPC — claimed is never verified."
+        : "Admin view of signup-fee payment proofs and university fee ledgers. Verify only through the trusted Accounts RPC — claimed is never verified.";
+  const signupAccountsOnly =
+    onStaffDesk && !canVerifySignup && ledgerTab === "signup" && signupQ.isError;
 
   if (ledgerTab === "signup" && signupQ.isLoading && !signupQ.data) {
     return (
@@ -355,6 +423,17 @@ export function FinanceModulePage() {
         actions={<LiveBadge status={liveStatus} lastSync={lastSync} />}
       />
 
+      {onStaffDesk && !canVerifySignup ? (
+        <p
+          className="rounded-md border border-royal/25 bg-navy/[0.03] px-3 py-2 text-sm text-navy"
+          role="note"
+        >
+          Signup / intake fee verification is Accounts-only. Use{" "}
+          <strong>University / application fees</strong> for admission obligations — verifying a
+          university fee does not close signup coordination requests.
+        </p>
+      ) : null}
+
       {msg ? (
         <p
           className={cn(
@@ -388,511 +467,537 @@ export function FinanceModulePage() {
 
       {ledgerTab === "signup" ? (
         <>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
-            <StatCard
-              label="Awaiting review"
-              value={signupQ.isLoading && !signupQ.data ? "…" : String(claimedCount)}
-              hint="Claimed proofs — actionable queue"
-              selected={signupStatus === "claimed"}
-              onClick={() => selectSignupStatus("claimed")}
-            />
-            <StatCard
-              label="Voucher unpaid"
-              value={signupQ.isLoading && !signupQ.data ? "…" : String(unpaidCount)}
-              hint="Issued obligation, no proof yet"
-              selected={signupStatus === "unpaid"}
-              onClick={() => selectSignupStatus("unpaid")}
-            />
-            <StatCard
-              label="Verified"
-              value={signupQ.isLoading && !signupQ.data ? "…" : String(verifiedCount)}
-              hint="Cash received — excludes waived"
-              selected={signupStatus === "verified"}
-              onClick={() => selectSignupStatus("verified")}
-            />
-            <StatCard
-              label="Rejected"
-              value={signupQ.isLoading && !signupQ.data ? "…" : String(rejectedCount)}
-              hint="Needs Front Desk correction"
-              selected={signupStatus === "rejected"}
-              onClick={() => selectSignupStatus("rejected")}
-            />
-            <StatCard
-              label="Waived"
-              value={signupQ.isLoading && !signupQ.data ? "…" : String(waivedCount)}
-              hint="Not counted as cash received"
-              selected={signupStatus === "waived"}
-              onClick={() => selectSignupStatus("waived")}
-            />
-          </div>
-
-          <div className="grid gap-2 sm:grid-cols-2">
-            <StatCard
-              label="Verified cash (all time)"
-              value={signupQ.isLoading && !signupQ.data ? "…" : formatCash(verifiedByCurrency)}
-              hint="Sum of verified amounts by currency — no FX conversion"
-            />
-            <StatCard
-              label="Verified cash (today)"
-              value={signupQ.isLoading && !signupQ.data ? "…" : formatCash(verifiedTodayByCurrency)}
-              hint="Based on verified_at date (local midnight)"
-            />
-          </div>
-
-          <Panel
-            compact
-            title="Signup fee verification queue"
-            action={
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                disabled={signupQ.isFetching}
-                onClick={() => void signupQ.refetch()}
-              >
-                {signupQ.isFetching ? "Refreshing…" : "Refresh"}
-              </Button>
-            }
-          >
-            <p className="mb-3 text-sm text-navy/70">
-              Source of truth: <span className="font-medium">signup_fee_payments</span>. Counsellor
-              coordination requests do not replace payment status. Claimed is never verified until
-              you confirm below.
-            </p>
-
-            <div className="mb-3 flex flex-wrap gap-2">
-              {SIGNUP_STATUS_TABS.map((t) => (
-                <Button
-                  key={t.id}
-                  size="sm"
-                  variant={signupStatus === t.id ? "navy" : "outline"}
-                  onClick={() => {
-                    setSignupStatus(t.id);
-                    setSignupOffset(0);
-                  }}
-                >
-                  {t.label}
+          {signupAccountsOnly ? (
+            <EmptyState
+              title="Signup queue is Accounts-only"
+              body="Your desk can track university / application fees. Signup/intake proof verification remains with Accounts & Finance."
+              action={
+                <Button size="sm" variant="navy" onClick={() => setLedgerTab("university")}>
+                  Open university fees
                 </Button>
-              ))}
-            </div>
-
-            <div className="mb-3 flex flex-wrap items-end gap-2">
-              <div className="min-w-[16rem] flex-1">
-                <Input
-                  placeholder="Search student name, case ID, or receipt/reference"
-                  value={signupSearch}
-                  onChange={(e) => setSignupSearch(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter") {
-                      setSignupSearchApplied(signupSearch.trim());
-                      setSignupOffset(0);
-                    }
-                  }}
+              }
+            />
+          ) : null}
+          {!signupAccountsOnly ? (
+            <>
+              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
+                <StatCard
+                  label="Awaiting review"
+                  value={signupQ.isLoading && !signupQ.data ? "…" : String(claimedCount)}
+                  hint="Claimed proofs — actionable queue"
+                  selected={signupStatus === "claimed"}
+                  onClick={() => selectSignupStatus("claimed")}
+                />
+                <StatCard
+                  label="Voucher unpaid"
+                  value={signupQ.isLoading && !signupQ.data ? "…" : String(unpaidCount)}
+                  hint="Issued obligation, no proof yet"
+                  selected={signupStatus === "unpaid"}
+                  onClick={() => selectSignupStatus("unpaid")}
+                />
+                <StatCard
+                  label="Verified"
+                  value={signupQ.isLoading && !signupQ.data ? "…" : String(verifiedCount)}
+                  hint="Cash received — excludes waived"
+                  selected={signupStatus === "verified"}
+                  onClick={() => selectSignupStatus("verified")}
+                />
+                <StatCard
+                  label="Rejected"
+                  value={signupQ.isLoading && !signupQ.data ? "…" : String(rejectedCount)}
+                  hint="Needs Front Desk correction"
+                  selected={signupStatus === "rejected"}
+                  onClick={() => selectSignupStatus("rejected")}
+                />
+                <StatCard
+                  label="Waived"
+                  value={signupQ.isLoading && !signupQ.data ? "…" : String(waivedCount)}
+                  hint="Not counted as cash received"
+                  selected={signupStatus === "waived"}
+                  onClick={() => selectSignupStatus("waived")}
                 />
               </div>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => {
-                  setSignupSearchApplied(signupSearch.trim());
-                  setSignupOffset(0);
-                }}
+
+              <div className="grid gap-2 sm:grid-cols-2">
+                <StatCard
+                  label="Verified cash (all time)"
+                  value={signupQ.isLoading && !signupQ.data ? "…" : formatCash(verifiedByCurrency)}
+                  hint="Sum of verified amounts by currency — no FX conversion"
+                />
+                <StatCard
+                  label="Verified cash (today)"
+                  value={
+                    signupQ.isLoading && !signupQ.data ? "…" : formatCash(verifiedTodayByCurrency)
+                  }
+                  hint="Based on verified_at date (local midnight)"
+                />
+              </div>
+
+              <Panel
+                compact
+                title="Signup fee verification queue"
+                action={
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={signupQ.isFetching}
+                    onClick={() => void signupQ.refetch()}
+                  >
+                    {signupQ.isFetching ? "Refreshing…" : "Refresh"}
+                  </Button>
+                }
               >
-                Search
-              </Button>
-              {signupSearchApplied ? (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => {
-                    setSignupSearch("");
-                    setSignupSearchApplied("");
-                    setSignupOffset(0);
-                  }}
-                >
-                  Clear
-                </Button>
-              ) : null}
-            </div>
-
-            <div className="mb-3">
-              <Textarea
-                placeholder="Notes required for reject / waive (optional for verify)"
-                value={signupNotes}
-                onChange={(e) => setSignupNotes(e.target.value)}
-              />
-            </div>
-
-            {confirmSignup ? (
-              <div className="mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-3 text-sm">
-                <p className="font-medium text-navy">
-                  Confirm {confirmSignup.action} for {confirmSignup.label}?
+                <p className="mb-3 text-sm text-navy/70">
+                  Source of truth: <span className="font-medium">signup_fee_payments</span>.
+                  Counsellor coordination requests do not replace payment status. Claimed is never
+                  verified until you confirm below.
                 </p>
-                <dl className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
-                  <div>
-                    <dt className="uppercase tracking-wide">Amount</dt>
-                    <dd className="font-medium text-navy">{confirmSignup.amountLabel}</dd>
+
+                <div className="mb-3 flex flex-wrap gap-2">
+                  {SIGNUP_STATUS_TABS.map((t) => (
+                    <Button
+                      key={t.id}
+                      size="sm"
+                      variant={signupStatus === t.id ? "navy" : "outline"}
+                      onClick={() => {
+                        setSignupStatus(t.id);
+                        setSignupOffset(0);
+                      }}
+                    >
+                      {t.label}
+                    </Button>
+                  ))}
+                </div>
+
+                <div className="mb-3 flex flex-wrap items-end gap-2">
+                  <div className="min-w-[16rem] flex-1">
+                    <Input
+                      placeholder="Search student name, case ID, or receipt/reference"
+                      value={signupSearch}
+                      onChange={(e) => setSignupSearch(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          setSignupSearchApplied(signupSearch.trim());
+                          setSignupOffset(0);
+                        }
+                      }}
+                    />
                   </div>
-                  <div>
-                    <dt className="uppercase tracking-wide">Current status</dt>
-                    <dd className="font-medium text-navy capitalize">
-                      {confirmSignup.status.replaceAll("_", " ")}
-                    </dd>
-                  </div>
-                </dl>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  Runs the trusted verify RPC (not a direct table edit). Closes open Front Desk
-                  coordination requests. Reject/waive require notes above.
-                </p>
-                <div className="mt-2 flex flex-wrap gap-2">
                   <Button
                     size="sm"
-                    variant="navy"
-                    disabled={signupVerifyM.isPending}
+                    variant="outline"
                     onClick={() => {
-                      setMsg(null);
-                      signupVerifyM.mutate({
-                        studentId: confirmSignup.studentId,
-                        action: confirmSignup.action,
-                      });
+                      setSignupSearchApplied(signupSearch.trim());
+                      setSignupOffset(0);
                     }}
                   >
-                    {signupVerifyM.isPending ? "Saving…" : `Confirm ${confirmSignup.action}`}
+                    Search
                   </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    disabled={signupVerifyM.isPending}
-                    onClick={() => setConfirmSignup(null)}
-                  >
-                    Cancel
-                  </Button>
+                  {signupSearchApplied ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setSignupSearch("");
+                        setSignupSearchApplied("");
+                        setSignupOffset(0);
+                      }}
+                    >
+                      Clear
+                    </Button>
+                  ) : null}
                 </div>
-              </div>
-            ) : null}
 
-            {signupQ.isLoading && !signupQ.data ? (
-              <p className="text-sm text-muted-foreground">Loading signup fee ledger…</p>
-            ) : signupQ.isError ? (
-              <div className="space-y-2">
-                <p className="text-sm text-danger">
-                  Unable to load signup fees. This is an error, not an empty ledger. Retry.
-                </p>
-                <p className="text-xs text-muted-foreground">{portalErrorMessage(signupQ.error)}</p>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => void signupQ.refetch()}
-                >
-                  Retry
-                </Button>
-              </div>
-            ) : !signupRows.length ? (
-              <EmptyState
-                title={
-                  signupStatus === "claimed"
-                    ? "No payment proofs awaiting review"
-                    : signupStatus === "unpaid"
-                      ? "No unpaid vouchers"
-                      : "No matching signup fee records"
-                }
-                body="Adjust filters or search. Verified, rejected, and waived history remains under those tabs."
-              />
-            ) : (
-              <>
-                <TableWrap>
-                  <table className="w-full text-left text-sm">
-                    <thead>
-                      <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
-                        <th className="px-3 py-2">Student / voucher</th>
-                        <th className="px-3 py-2">Amount</th>
-                        <th className="px-3 py-2">Proof / claim</th>
-                        <th className="px-3 py-2">Status</th>
-                        <th className="px-3 py-2">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {signupRows.map((row) => {
-                        const stillOpen = !isSignupFeeVerified(row.status as SignupFeeStatusDb);
-                        const actionable =
-                          stillOpen && (row.status === "unpaid" || row.status === "claimed");
-                        const ops = describeSignupFeeOperationalStatus(row.status);
-                        const selected = (reviewFeeId ?? reviewRow?.feeId) === row.feeId;
-                        return (
-                          <tr
-                            key={row.feeId}
-                            className={cn(
-                              "border-b border-border/60 align-top",
-                              selected && "bg-navy/[0.03]",
-                            )}
-                          >
-                            <td className="px-3 py-2">
-                              <div className="font-medium text-navy">
-                                {row.studentName ?? row.studentId.slice(0, 8)}
-                              </div>
-                              <div className="text-xs text-muted-foreground">
-                                Case {row.caseId || "—"}
-                              </div>
-                              <div className="mt-0.5 font-mono text-[11px] text-navy/70">
-                                {row.voucherNumber}
-                              </div>
-                            </td>
-                            <td className="px-3 py-2">
-                              {row.currency} {row.amount.toLocaleString()}
-                            </td>
-                            <td className="max-w-[14rem] px-3 py-2 text-xs text-muted-foreground">
-                              {[
-                                row.paymentMethod,
-                                row.referenceReceipt ? `Txn: ${row.referenceReceipt}` : null,
-                              ]
-                                .filter(Boolean)
-                                .join(" · ") || "No proof details yet"}
-                              <div className="mt-1 text-[11px]">
-                                Updated {fmtDate(row.updatedAt.slice(0, 10))}
-                              </div>
-                            </td>
-                            <td className="px-3 py-2">
-                              <StatusBadge status={row.status} />
-                              <div className="mt-1 text-[11px] text-muted-foreground">
-                                {ops.label}
-                              </div>
-                            </td>
-                            <td className="px-3 py-2">
-                              <div className="flex flex-wrap gap-1">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => setReviewFeeId(row.feeId)}
-                                >
-                                  Review payment
-                                </Button>
-                                {actionable ? (
-                                  <>
-                                    {row.status === "claimed" ? (
-                                      <Button
-                                        size="sm"
-                                        variant="navy"
-                                        disabled={signupVerifyM.isPending}
-                                        onClick={() => {
-                                          setMsg(null);
-                                          setReviewFeeId(row.feeId);
-                                          setConfirmSignup({
-                                            studentId: row.studentId,
-                                            feeId: row.feeId,
-                                            action: "verify",
-                                            label: row.caseId || row.studentName || "student",
-                                            amountLabel: `${row.currency} ${row.amount.toLocaleString()}`,
-                                            status: row.status,
-                                          });
-                                        }}
-                                      >
-                                        Verify
-                                      </Button>
-                                    ) : null}
+                <div className="mb-3">
+                  <Textarea
+                    placeholder="Notes required for reject / waive (optional for verify)"
+                    value={signupNotes}
+                    onChange={(e) => setSignupNotes(e.target.value)}
+                  />
+                </div>
+
+                {confirmSignup ? (
+                  <div className="mb-3 rounded border border-amber-300 bg-amber-50 px-3 py-3 text-sm">
+                    <p className="font-medium text-navy">
+                      Confirm {confirmSignup.action} for {confirmSignup.label}?
+                    </p>
+                    <dl className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-2">
+                      <div>
+                        <dt className="uppercase tracking-wide">Amount</dt>
+                        <dd className="font-medium text-navy">{confirmSignup.amountLabel}</dd>
+                      </div>
+                      <div>
+                        <dt className="uppercase tracking-wide">Current status</dt>
+                        <dd className="font-medium text-navy capitalize">
+                          {confirmSignup.status.replaceAll("_", " ")}
+                        </dd>
+                      </div>
+                    </dl>
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Runs the trusted verify RPC (not a direct table edit). Closes open Front Desk
+                      coordination requests. Reject/waive require notes above.
+                    </p>
+                    <div className="mt-2 flex flex-wrap gap-2">
+                      <Button
+                        size="sm"
+                        variant="navy"
+                        disabled={signupVerifyM.isPending}
+                        onClick={() => {
+                          setMsg(null);
+                          signupVerifyM.mutate({
+                            studentId: confirmSignup.studentId,
+                            action: confirmSignup.action,
+                          });
+                        }}
+                      >
+                        {signupVerifyM.isPending ? "Saving…" : `Confirm ${confirmSignup.action}`}
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        disabled={signupVerifyM.isPending}
+                        onClick={() => setConfirmSignup(null)}
+                      >
+                        Cancel
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+
+                {signupQ.isLoading && !signupQ.data ? (
+                  <p className="text-sm text-muted-foreground">Loading signup fee ledger…</p>
+                ) : signupQ.isError ? (
+                  <div className="space-y-2">
+                    <p className="text-sm text-danger">
+                      Unable to load signup fees. This is an error, not an empty ledger. Retry.
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {portalErrorMessage(signupQ.error)}
+                    </p>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => void signupQ.refetch()}
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                ) : !signupRows.length ? (
+                  <EmptyState
+                    title={
+                      signupStatus === "claimed"
+                        ? "No payment proofs awaiting review"
+                        : signupStatus === "unpaid"
+                          ? "No unpaid vouchers"
+                          : "No matching signup fee records"
+                    }
+                    body="Adjust filters or search. Verified, rejected, and waived history remains under those tabs."
+                  />
+                ) : (
+                  <>
+                    <TableWrap>
+                      <table className="w-full text-left text-sm">
+                        <thead>
+                          <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
+                            <th className="px-3 py-2">Student / voucher</th>
+                            <th className="px-3 py-2">Amount</th>
+                            <th className="px-3 py-2">Proof / claim</th>
+                            <th className="px-3 py-2">Status</th>
+                            <th className="px-3 py-2">Actions</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {signupRows.map((row) => {
+                            const stillOpen = !isSignupFeeVerified(row.status as SignupFeeStatusDb);
+                            const actionable =
+                              stillOpen && (row.status === "unpaid" || row.status === "claimed");
+                            const ops = describeSignupFeeOperationalStatus(row.status);
+                            const selected = (reviewFeeId ?? reviewRow?.feeId) === row.feeId;
+                            return (
+                              <tr
+                                key={row.feeId}
+                                className={cn(
+                                  "border-b border-border/60 align-top",
+                                  selected && "bg-navy/[0.03]",
+                                )}
+                              >
+                                <td className="px-3 py-2">
+                                  <div className="font-medium text-navy">
+                                    {row.studentName ?? row.studentId.slice(0, 8)}
+                                  </div>
+                                  <div className="text-xs text-muted-foreground">
+                                    Case {row.caseId || "—"}
+                                  </div>
+                                  <div className="mt-0.5 font-mono text-[11px] text-navy/70">
+                                    {row.voucherNumber}
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  {row.currency} {row.amount.toLocaleString()}
+                                </td>
+                                <td className="max-w-[14rem] px-3 py-2 text-xs text-muted-foreground">
+                                  {[
+                                    row.paymentMethod,
+                                    row.referenceReceipt ? `Txn: ${row.referenceReceipt}` : null,
+                                  ]
+                                    .filter(Boolean)
+                                    .join(" · ") || "No proof details yet"}
+                                  <div className="mt-1 text-[11px]">
+                                    Updated {fmtDate(row.updatedAt.slice(0, 10))}
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <StatusBadge status={row.status} />
+                                  <div className="mt-1 text-[11px] text-muted-foreground">
+                                    {ops.label}
+                                  </div>
+                                </td>
+                                <td className="px-3 py-2">
+                                  <div className="flex flex-wrap gap-1">
                                     <Button
                                       size="sm"
                                       variant="outline"
-                                      disabled={
-                                        signupVerifyM.isPending || signupNotes.trim().length < 3
-                                      }
-                                      onClick={() => {
-                                        setMsg(null);
-                                        setReviewFeeId(row.feeId);
-                                        setConfirmSignup({
-                                          studentId: row.studentId,
-                                          feeId: row.feeId,
-                                          action: "waive",
-                                          label: row.caseId || row.studentName || "student",
-                                          amountLabel: `${row.currency} ${row.amount.toLocaleString()}`,
-                                          status: row.status,
-                                        });
-                                      }}
+                                      onClick={() => setReviewFeeId(row.feeId)}
                                     >
-                                      Waive
+                                      Review payment
                                     </Button>
+                                    {actionable && canVerifySignup ? (
+                                      <>
+                                        {row.status === "claimed" ? (
+                                          <Button
+                                            size="sm"
+                                            variant="navy"
+                                            disabled={signupVerifyM.isPending}
+                                            onClick={() => {
+                                              setMsg(null);
+                                              setReviewFeeId(row.feeId);
+                                              setConfirmSignup({
+                                                studentId: row.studentId,
+                                                feeId: row.feeId,
+                                                action: "verify",
+                                                label: row.caseId || row.studentName || "student",
+                                                amountLabel: `${row.currency} ${row.amount.toLocaleString()}`,
+                                                status: row.status,
+                                              });
+                                            }}
+                                          >
+                                            Verify
+                                          </Button>
+                                        ) : null}
+                                        <Button
+                                          size="sm"
+                                          variant="outline"
+                                          disabled={
+                                            signupVerifyM.isPending || signupNotes.trim().length < 3
+                                          }
+                                          onClick={() => {
+                                            setMsg(null);
+                                            setReviewFeeId(row.feeId);
+                                            setConfirmSignup({
+                                              studentId: row.studentId,
+                                              feeId: row.feeId,
+                                              action: "waive",
+                                              label: row.caseId || row.studentName || "student",
+                                              amountLabel: `${row.currency} ${row.amount.toLocaleString()}`,
+                                              status: row.status,
+                                            });
+                                          }}
+                                        >
+                                          Waive
+                                        </Button>
+                                        <Button
+                                          size="sm"
+                                          variant="ghost"
+                                          disabled={
+                                            signupVerifyM.isPending || signupNotes.trim().length < 3
+                                          }
+                                          onClick={() => {
+                                            setMsg(null);
+                                            setReviewFeeId(row.feeId);
+                                            setConfirmSignup({
+                                              studentId: row.studentId,
+                                              feeId: row.feeId,
+                                              action: "reject",
+                                              label: row.caseId || row.studentName || "student",
+                                              amountLabel: `${row.currency} ${row.amount.toLocaleString()}`,
+                                              status: row.status,
+                                            });
+                                          }}
+                                        >
+                                          Reject
+                                        </Button>
+                                      </>
+                                    ) : null}
+                                    {actionable && !canVerifySignup ? (
+                                      <span className="text-xs text-muted-foreground">
+                                        Accounts verifies signup fees
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </TableWrap>
+
+                    {reviewRow ? (
+                      <div className="mt-4 rounded-md border border-border bg-muted/20 px-4 py-3 text-sm">
+                        <p className="font-semibold text-navy">Review details</p>
+                        <dl className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                          <div>
+                            <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                              Student
+                            </dt>
+                            <dd className="font-medium text-navy">
+                              {reviewRow.studentName || "—"} · {reviewRow.caseId || "—"}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                              Voucher
+                            </dt>
+                            <dd className="font-mono text-navy">{reviewRow.voucherNumber}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                              Amount
+                            </dt>
+                            <dd className="font-medium text-navy">
+                              {reviewRow.currency} {reviewRow.amount.toLocaleString()}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                              Payment method
+                            </dt>
+                            <dd>{reviewRow.paymentMethod || "—"}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                              Transaction / reference
+                            </dt>
+                            <dd className="break-all">{reviewRow.referenceReceipt || "—"}</dd>
+                          </div>
+                          <div>
+                            <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                              Proof submitted
+                            </dt>
+                            <dd>{fmtDate(reviewRow.updatedAt.slice(0, 10))}</dd>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                              Notes
+                            </dt>
+                            <dd>{reviewRow.notesDisplay || reviewRow.notes || "—"}</dd>
+                          </div>
+                          <div className="sm:col-span-2">
+                            <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                              Uploaded proof
+                            </dt>
+                            <dd>
+                              {reviewRow.hasProofFile ? (
+                                <div className="space-y-2">
+                                  <p className="text-sm text-navy">
+                                    {reviewRow.proofFileName || "Proof on file"}
+                                    {reviewRow.proofUploadedAt
+                                      ? ` · ${fmtDate(reviewRow.proofUploadedAt.slice(0, 10))}`
+                                      : ""}
+                                  </p>
+                                  <div className="flex flex-wrap gap-2">
                                     <Button
                                       size="sm"
-                                      variant="ghost"
-                                      disabled={
-                                        signupVerifyM.isPending || signupNotes.trim().length < 3
+                                      variant="outline"
+                                      disabled={proofPreviewM.isPending}
+                                      onClick={() =>
+                                        proofPreviewM.mutate({
+                                          feeId: reviewRow.feeId,
+                                          studentId: reviewRow.studentId,
+                                        })
                                       }
-                                      onClick={() => {
-                                        setMsg(null);
-                                        setReviewFeeId(row.feeId);
-                                        setConfirmSignup({
-                                          studentId: row.studentId,
-                                          feeId: row.feeId,
-                                          action: "reject",
-                                          label: row.caseId || row.studentName || "student",
-                                          amountLabel: `${row.currency} ${row.amount.toLocaleString()}`,
-                                          status: row.status,
-                                        });
-                                      }}
                                     >
-                                      Reject
+                                      {proofPreviewM.isPending ? "Opening…" : "Open proof"}
                                     </Button>
-                                  </>
-                                ) : null}
-                              </div>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </TableWrap>
-
-                {reviewRow ? (
-                  <div className="mt-4 rounded-md border border-border bg-muted/20 px-4 py-3 text-sm">
-                    <p className="font-semibold text-navy">Review details</p>
-                    <dl className="mt-2 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                      <div>
-                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          Student
-                        </dt>
-                        <dd className="font-medium text-navy">
-                          {reviewRow.studentName || "—"} · {reviewRow.caseId || "—"}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          Voucher
-                        </dt>
-                        <dd className="font-mono text-navy">{reviewRow.voucherNumber}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          Amount
-                        </dt>
-                        <dd className="font-medium text-navy">
-                          {reviewRow.currency} {reviewRow.amount.toLocaleString()}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          Payment method
-                        </dt>
-                        <dd>{reviewRow.paymentMethod || "—"}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          Transaction / reference
-                        </dt>
-                        <dd className="break-all">{reviewRow.referenceReceipt || "—"}</dd>
-                      </div>
-                      <div>
-                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          Proof submitted
-                        </dt>
-                        <dd>{fmtDate(reviewRow.updatedAt.slice(0, 10))}</dd>
-                      </div>
-                      <div className="sm:col-span-2">
-                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          Notes
-                        </dt>
-                        <dd>{reviewRow.notesDisplay || reviewRow.notes || "—"}</dd>
-                      </div>
-                      <div className="sm:col-span-2">
-                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                          Uploaded proof
-                        </dt>
-                        <dd>
-                          {reviewRow.hasProofFile ? (
-                            <div className="space-y-2">
-                              <p className="text-sm text-navy">
-                                {reviewRow.proofFileName || "Proof on file"}
-                                {reviewRow.proofUploadedAt
-                                  ? ` · ${fmtDate(reviewRow.proofUploadedAt.slice(0, 10))}`
-                                  : ""}
-                              </p>
-                              <div className="flex flex-wrap gap-2">
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  disabled={proofPreviewM.isPending}
-                                  onClick={() =>
-                                    proofPreviewM.mutate({
-                                      feeId: reviewRow.feeId,
-                                      studentId: reviewRow.studentId,
-                                    })
-                                  }
-                                >
-                                  {proofPreviewM.isPending ? "Opening…" : "Open proof"}
-                                </Button>
-                              </div>
-                              {proofPreviewMsg ? (
-                                <p className="text-xs text-muted-foreground">{proofPreviewMsg}</p>
-                              ) : null}
-                              {proofPreviewUrl ? (
-                                <div className="overflow-hidden rounded border border-border bg-white">
-                                  {reviewRow.proofMimeType?.startsWith("image/") ? (
-                                    <img
-                                      src={proofPreviewUrl}
-                                      alt="Payment proof"
-                                      className="max-h-80 w-full object-contain"
-                                    />
-                                  ) : (
-                                    <iframe
-                                      title="Payment proof"
-                                      src={proofPreviewUrl}
-                                      className="h-80 w-full"
-                                    />
-                                  )}
+                                  </div>
+                                  {proofPreviewMsg ? (
+                                    <p className="text-xs text-muted-foreground">
+                                      {proofPreviewMsg}
+                                    </p>
+                                  ) : null}
+                                  {proofPreviewUrl ? (
+                                    <div className="overflow-hidden rounded border border-border bg-white">
+                                      {reviewRow.proofMimeType?.startsWith("image/") ? (
+                                        <img
+                                          src={proofPreviewUrl}
+                                          alt="Payment proof"
+                                          className="max-h-80 w-full object-contain"
+                                        />
+                                      ) : (
+                                        <iframe
+                                          title="Payment proof"
+                                          src={proofPreviewUrl}
+                                          className="h-80 w-full"
+                                        />
+                                      )}
+                                    </div>
+                                  ) : null}
                                 </div>
-                              ) : null}
+                              ) : (
+                                <span className="text-muted-foreground">
+                                  No file uploaded — compare transaction reference with proof held
+                                  by Front Desk.
+                                </span>
+                              )}
+                            </dd>
+                          </div>
+                          {reviewRow.openRequestStatus ? (
+                            <div className="sm:col-span-2">
+                              <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
+                                Related counsellor coordination (not payment truth)
+                              </dt>
+                              <dd className="text-muted-foreground">
+                                {reviewRow.openRequestStatus}: {reviewRow.openRequestSummary || "—"}
+                              </dd>
                             </div>
-                          ) : (
-                            <span className="text-muted-foreground">
-                              No file uploaded — compare transaction reference with proof held by
-                              Front Desk.
-                            </span>
-                          )}
-                        </dd>
+                          ) : null}
+                        </dl>
+                        <p className="mt-3 text-xs text-muted-foreground">
+                          Decisions run only through verify_signup_fee_and_activate. Cancelled
+                          counsellor coordination requests never appear in this claimed queue.
+                        </p>
                       </div>
-                      {reviewRow.openRequestStatus ? (
-                        <div className="sm:col-span-2">
-                          <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">
-                            Related counsellor coordination (not payment truth)
-                          </dt>
-                          <dd className="text-muted-foreground">
-                            {reviewRow.openRequestStatus}: {reviewRow.openRequestSummary || "—"}
-                          </dd>
-                        </div>
-                      ) : null}
-                    </dl>
-                    <p className="mt-3 text-xs text-muted-foreground">
-                      Decisions run only through verify_signup_fee_and_activate. Cancelled
-                      counsellor coordination requests never appear in this claimed queue.
-                    </p>
-                  </div>
-                ) : null}
-                <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                  <span>
-                    Showing {signupRows.length} of {matchedCount} (offset {signupOffset})
-                  </span>
-                  <div className="flex gap-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={!canPagePrev || signupQ.isFetching}
-                      onClick={() => setSignupOffset((o) => Math.max(0, o - signupPageSize))}
-                    >
-                      Previous
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={!canPageNext || signupQ.isFetching}
-                      onClick={() => setSignupOffset((o) => o + signupPageSize)}
-                    >
-                      Next
-                    </Button>
-                  </div>
-                </div>
-              </>
-            )}
-          </Panel>
+                    ) : null}
+                    <div className="mt-3 flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                      <span>
+                        Showing {signupRows.length} of {matchedCount} (offset {signupOffset})
+                      </span>
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!canPagePrev || signupQ.isFetching}
+                          onClick={() => setSignupOffset((o) => Math.max(0, o - signupPageSize))}
+                        >
+                          Previous
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          disabled={!canPageNext || signupQ.isFetching}
+                          onClick={() => setSignupOffset((o) => o + signupPageSize)}
+                        >
+                          Next
+                        </Button>
+                      </div>
+                    </div>
+                  </>
+                )}
+              </Panel>
+            </>
+          ) : null}
         </>
       ) : (
         <div>
@@ -900,6 +1005,13 @@ export function FinanceModulePage() {
             title="University fees"
             subtitle="Application, tuition, offer deposit and visa fee obligations — separate from signup fees. Verifying a university fee does not close signup coordination requests."
           />
+
+          {uniStudentFilter ? (
+            <p className="mb-3 rounded-md border border-royal/30 bg-royal/[0.04] px-3 py-2 text-sm text-navy">
+              Filtered to student <span className="font-semibold">{uniStudentFilter}</span> from
+              notification / deep-link.
+            </p>
+          ) : null}
 
           <div className="mb-4 flex flex-wrap gap-2">
             {(
@@ -1056,7 +1168,14 @@ export function FinanceModulePage() {
               </thead>
               <tbody>
                 {fees.map((fee) => (
-                  <tr key={fee.id}>
+                  <tr
+                    key={fee.id}
+                    className={
+                      highlightObligationId && fee.id === highlightObligationId
+                        ? "bg-accent/50"
+                        : undefined
+                    }
+                  >
                     <td className="font-medium text-navy">
                       {fee.studentName ?? fee.studentId.slice(0, 8)}
                       {fee.studentCaseId ? (
@@ -1094,7 +1213,8 @@ export function FinanceModulePage() {
                             Claim…
                           </Button>
                         ) : null}
-                        {fee.status === "claimed" || fee.status === "due" ? (
+                        {canVerifyUniversity &&
+                        (fee.status === "claimed" || fee.status === "due") ? (
                           <>
                             <Button
                               size="sm"
@@ -1130,6 +1250,12 @@ export function FinanceModulePage() {
                               Reject
                             </Button>
                           </>
+                        ) : null}
+                        {!canVerifyUniversity &&
+                        (fee.status === "claimed" || fee.status === "due") ? (
+                          <span className="text-xs text-muted-foreground">
+                            Accounts verifies university fees
+                          </span>
                         ) : null}
                         {fee.verifiedAt ? (
                           <span className="text-xs text-muted-foreground">

@@ -22,6 +22,11 @@ export const ADMISSION_METRIC_DEFINITIONS = {
   submittedToUniversity: "Applications with stage Submitted.",
   offersDecisionsReceived:
     "Applications with stage Offer Received (offer/decision recorded on the application pipeline).",
+  depositCasPending:
+    "Deposits with status due/overdue, or CAS/I-20 records still pending or requested.",
+  visaInProgress: "Visa milestones that have not reached a final decision (approved/refused).",
+  overdueTasks: "Open desk tasks past due (local calendar day).",
+  refusedRejected: "Applications at terminal outcome Rejected.",
   actionRequired:
     "Distinct students/apps needing Admission action: submitted handovers, Docs Pending apps, deadline ≤7 days, or docs needing correction.",
 } as const;
@@ -35,6 +40,10 @@ export const ADMISSION_METRIC_HINTS = {
   returnedForCorrection: "Returned to counsellor",
   submittedToUniversity: "Submitted stage",
   offersDecisionsReceived: "Offer received stage",
+  depositCasPending: "Deposit due or CAS/I-20 pending",
+  visaInProgress: "Visa filing not yet decided",
+  overdueTasks: "Tasks past due",
+  refusedRejected: "Rejected applications",
   actionRequired: "Cases needing your next step",
 } as const;
 
@@ -82,6 +91,10 @@ export type AdmissionAttentionItem = {
   at: string;
 };
 
+export type AdmissionDepositSnap = { studentId: string; status: string };
+export type AdmissionCasSnap = { studentId: string; status: string };
+export type AdmissionVisaSnap = { studentId: string; stage: string; decision: string | null };
+
 export type AdmissionWorkbenchMetrics = {
   assignedToMe: number;
   awaitingInitialReview: number;
@@ -90,8 +103,20 @@ export type AdmissionWorkbenchMetrics = {
   returnedForCorrection: number;
   submittedToUniversity: number;
   offersDecisionsReceived: number;
+  depositCasPending: number;
+  visaInProgress: number;
+  overdueTasks: number;
+  refusedRejected: number;
   actionRequired: number;
   upcomingDeadlines: number;
+  /** Real pipeline strip — uses existing stages / visa records only. */
+  pipeline: {
+    assigned: number;
+    submitted: number;
+    offers: number;
+    visa: number;
+    refused: number;
+  };
 };
 
 export function isAdmissionInProgressStage(stage: string): boolean {
@@ -137,6 +162,10 @@ export function computeAdmissionWorkbenchMetrics(input: {
   applications: AdmissionAppSnap[];
   handovers: AdmissionHandoverSnap[];
   documents: AdmissionDocSnap[];
+  deposits?: AdmissionDepositSnap[];
+  casRecords?: AdmissionCasSnap[];
+  visas?: AdmissionVisaSnap[];
+  overdueTaskCount?: number;
 }): AdmissionWorkbenchMetrics {
   const apps = input.applications;
   const assignedToMe = input.viewerUserId
@@ -169,9 +198,35 @@ export function computeAdmissionWorkbenchMetrics(input: {
   const inProgress = apps.filter((a) => isAdmissionInProgressStage(a.stage)).length;
   const submittedToUniversity = apps.filter((a) => a.stage === "Submitted").length;
   const offersDecisionsReceived = apps.filter((a) => a.stage === "Offer Received").length;
+  const refusedRejected = apps.filter((a) => a.stage === "Rejected").length;
   const upcomingDeadlines = apps.filter(
     (a) => a.deadlineWarning || (a.daysLeft != null && a.daysLeft >= 0 && a.daysLeft <= 7),
   ).length;
+
+  const depositPendingStudents = new Set(
+    (input.deposits ?? [])
+      .filter((d) => {
+        const s = d.status.toLowerCase();
+        return s === "due" || s === "overdue";
+      })
+      .map((d) => d.studentId),
+  );
+  const casPendingStudents = new Set(
+    (input.casRecords ?? [])
+      .filter((c) => {
+        const s = c.status.toLowerCase();
+        return s === "pending" || s === "requested";
+      })
+      .map((c) => c.studentId),
+  );
+  const depositCasPending = new Set([...depositPendingStudents, ...casPendingStudents]).size;
+
+  const visaInProgress = (input.visas ?? []).filter((v) => {
+    const decision = (v.decision ?? "").toLowerCase();
+    return decision !== "approved" && decision !== "refused";
+  }).length;
+
+  const overdueTasks = Math.max(0, input.overdueTaskCount ?? 0);
 
   const actionIds = new Set<string>();
   for (const h of submittedHandovers) actionIds.add(h.studentId);
@@ -180,6 +235,8 @@ export function computeAdmissionWorkbenchMetrics(input: {
     if (a.deadlineWarning) actionIds.add(a.studentId);
   }
   for (const id of docsAttentionStudents) actionIds.add(id);
+  for (const id of depositPendingStudents) actionIds.add(id);
+  for (const id of casPendingStudents) actionIds.add(id);
 
   return {
     assignedToMe,
@@ -189,8 +246,19 @@ export function computeAdmissionWorkbenchMetrics(input: {
     returnedForCorrection: returnedHandovers.length,
     submittedToUniversity,
     offersDecisionsReceived,
+    depositCasPending,
+    visaInProgress,
+    overdueTasks,
+    refusedRejected,
     actionRequired: actionIds.size,
     upcomingDeadlines,
+    pipeline: {
+      assigned: assignedToMe,
+      submitted: submittedToUniversity,
+      offers: offersDecisionsReceived,
+      visa: visaInProgress,
+      refused: refusedRejected,
+    },
   };
 }
 
@@ -291,26 +359,44 @@ export function resolveAdmissionNotificationHref(input: {
   studentId: string | null | undefined;
 }): string {
   const raw = (input.linkPath ?? "").trim();
-  const basePath = raw.split("?")[0] || "";
+  const [pathPart, queryPart = ""] = raw.split("?");
+  const basePath = pathPart || "";
   const studentId = input.studentId?.trim();
-  const withStudent = (path: string, focus?: AdmissionApplicationsFocus) => {
-    const params = new URLSearchParams();
-    if (focus) params.set("focus", focus);
-    if (studentId) params.set("studentId", studentId);
+  const existing = new URLSearchParams(queryPart);
+  const withParams = (path: string, extras?: { focus?: AdmissionApplicationsFocus }) => {
+    const params = new URLSearchParams(existing.toString());
+    if (extras?.focus && !params.has("focus")) params.set("focus", extras.focus);
+    if (studentId && !params.has("studentId")) params.set("studentId", studentId);
     const qs = params.toString();
     return qs ? `${path}?${qs}` : path;
   };
 
+  if (basePath.startsWith("/staff/documents")) {
+    return withParams("/staff/documents");
+  }
+  if (basePath.startsWith("/staff/offers")) {
+    return withParams("/staff/offers");
+  }
+  if (basePath.startsWith("/staff/tasks")) {
+    return withParams("/staff/tasks");
+  }
+  if (basePath.startsWith("/staff/finance")) {
+    return withParams("/staff/finance");
+  }
+  if (basePath.startsWith("/staff/students/") && studentId) {
+    return `/staff/students/${studentId}?tab=applications`;
+  }
+  if (basePath.startsWith("/staff/students") && studentId) {
+    return `/staff/students/${studentId}?tab=applications`;
+  }
   if (basePath.startsWith("/staff/applications")) {
-    // Preserve student deep-link; open the incoming handover queue when no apps yet.
-    return withStudent("/staff/applications", "handovers");
+    const focus = (existing.get("focus") as AdmissionApplicationsFocus | null) ?? "handovers";
+    return withParams("/staff/applications", { focus });
   }
-  if (basePath.startsWith("/staff/documents")) return "/staff/documents";
-  if (basePath.startsWith("/staff/offers")) return "/staff/offers";
   if (studentId) {
-    return withStudent("/staff/applications", "handovers");
+    return withParams("/staff/applications", { focus: "handovers" });
   }
-  if (basePath.startsWith("/staff/students")) return "/staff/applications?focus=handovers";
+  if (basePath.startsWith("/staff/dashboard")) return "/staff/dashboard";
   return "/staff/applications";
 }
 

@@ -50,7 +50,7 @@ import {
   FEE_QUEUE_KEY,
   useFeeVerificationQueueRealtime,
 } from "@/lib/use-fee-verification-queue-realtime";
-import { cn } from "@/lib/utils";
+import { cn, splitPortalHref } from "@/lib/utils";
 
 export const Route = createFileRoute("/staff/front-desk")({
   beforeLoad: ({ context }) => {
@@ -324,7 +324,11 @@ function FrontDeskDashboardPage() {
       }
     }
     setNotifOpen(false);
-    void router.navigate({ to: href });
+    const { to, search } = splitPortalHref(href);
+    void router.navigate({
+      to,
+      ...(Object.keys(search).length ? { search } : {}),
+    } as never);
   }
 
   const activeFeeTabLabel = FEE_TABS.find((t) => t.id === tab)?.label ?? tab;

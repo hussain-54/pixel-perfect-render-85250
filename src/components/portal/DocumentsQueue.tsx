@@ -42,10 +42,14 @@ import { cn } from "@/lib/utils";
 const selectClass =
   "flex h-11 w-full rounded-md border border-input bg-white px-3 text-sm text-navy";
 
-export function DocumentsQueue() {
+export function DocumentsQueue(props?: {
+  initialTab?: DocumentQueueTab;
+  initialQ?: string;
+  initialStudentId?: string;
+}) {
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<DocumentQueueTab>("pending");
-  const [q, setQ] = useState("");
+  const [tab, setTab] = useState<DocumentQueueTab>(props?.initialTab ?? "pending");
+  const [q, setQ] = useState(props?.initialQ ?? props?.initialStudentId ?? "");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [checklistOpen, setChecklistOpen] = useState(false);
   const [checklistStudentId, setChecklistStudentId] = useState("");
@@ -184,20 +188,21 @@ export function DocumentsQueue() {
         }
       />
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5">
         {DOCUMENT_QUEUE_TABS.map((item) => (
           <button
             key={item.key}
             type="button"
             onClick={() => setTab(item.key)}
             className={cn(
-              "rounded-md border px-3 py-1.5 text-xs font-semibold transition-colors",
+              "rounded-xl border bg-white px-4 py-3 text-left transition-colors",
               tab === item.key
-                ? "border-royal bg-accent text-royal"
-                : "border-border bg-white text-navy hover:border-royal/40",
+                ? "border-royal ring-2 ring-royal/30"
+                : "border-border hover:border-royal/40",
             )}
           >
-            {item.label} ({data.counts[item.key]})
+            <span className="text-xs text-muted-foreground">{item.label}</span>
+            <b className="mt-1 block text-2xl font-semibold text-navy">{data.counts[item.key]}</b>
           </button>
         ))}
       </div>

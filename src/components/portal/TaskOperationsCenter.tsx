@@ -60,10 +60,14 @@ const emptyForm = (assigneeId = ""): FormState => ({
   relatedDocumentId: "",
 });
 
-export function TaskOperationsCenter() {
+export function TaskOperationsCenter(props?: {
+  initialTab?: TaskFilterTab;
+  initialQ?: string;
+  initialStudentId?: string;
+}) {
   const queryClient = useQueryClient();
-  const [tab, setTab] = useState<TaskFilterTab>("today");
-  const [q, setQ] = useState("");
+  const [tab, setTab] = useState<TaskFilterTab>(props?.initialTab ?? "today");
+  const [q, setQ] = useState(props?.initialQ ?? props?.initialStudentId ?? "");
   const [selectedDay, setSelectedDay] = useState<Date | undefined>(undefined);
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm());

@@ -28,7 +28,7 @@ import {
 import { AuthError, type TrustedSession } from "@/server/portal-auth";
 import { createServerSupabase } from "@/server/supabase";
 import * as dbSvc from "@/services/db";
-import type { OfficerDashboardPayload } from "@/types/portal-officer";
+import type { OfficerDashboardPayload, StudentDirectoryFilters } from "@/types/portal-officer";
 import type { CounsellorWorkbenchStudentSnap } from "@/lib/counsellor-workspace";
 import type { ApplicationStageHistoryRecord } from "@/types/applications-pipeline";
 import {
@@ -240,21 +240,23 @@ async function buildAdmissionOfficerDashboardFromDb(input: {
   // Handovers visible via RLS (submitted queue + accepted linked students).
   let handoverRows: HandoverSelect[] = [];
   if (ids.length) {
-    const { data } = await client
+    const { data, error: handoverErr } = await client
       .from("admission_handovers")
       .select("id, student_id, status, summary, missing_information, handed_over_at, to_owner_id")
       .in("student_id", ids)
       .order("handed_over_at", { ascending: false });
+    if (handoverErr) throw new Error(handoverErr.message);
     handoverRows = (data ?? []) as HandoverSelect[];
   }
 
   // Also pull org-wide submitted queue (Admission select policy) not yet in ids.
-  const { data: submittedQueue } = await client
+  const { data: submittedQueue, error: submittedErr } = await client
     .from("admission_handovers")
     .select("id, student_id, status, summary, missing_information, handed_over_at, to_owner_id")
     .eq("status", "submitted")
     .order("handed_over_at", { ascending: false })
     .limit(100);
+  if (submittedErr) throw new Error(submittedErr.message);
 
   const handoverById = new Map<string, HandoverSelect>();
   for (const row of [...handoverRows, ...((submittedQueue ?? []) as HandoverSelect[])]) {
@@ -309,11 +311,51 @@ async function buildAdmissionOfficerDashboardFromDb(input: {
     status: d.awaitingUpload ? "awaiting_upload" : d.status,
   }));
 
+  const { isTaskPastDue } = await import("@/lib/counsellor-workspace");
+  const [deposits, casRecords, visas, appointmentRows] = await Promise.all([
+    listDepositsForStudents(client, ids),
+    listCasI20RecordsForStudents(client, ids),
+    listVisaMilestonesForStudents(client, ids),
+    ids.length
+      ? client
+          .from("appointments")
+          .select("id, student_id, scheduled_at, status, notes, location")
+          .in("student_id", ids)
+          .order("scheduled_at", { ascending: true })
+          .limit(100)
+          .then((r) => {
+            if (r.error) throw new Error(r.error.message);
+            return r.data ?? [];
+          })
+      : Promise.resolve(
+          [] as {
+            id: string;
+            student_id: string;
+            scheduled_at: string | null;
+            status: string;
+            notes: string | null;
+            location: string | null;
+          }[],
+        ),
+  ]);
+
+  const overdueTaskCount = tasks.filter((t) =>
+    isTaskPastDue(t.due_at ?? t.created_at, today),
+  ).length;
+
   const admissionMetrics = computeAdmissionWorkbenchMetrics({
     viewerUserId: session.userId ?? null,
     applications: appSnaps,
     handovers,
     documents: docSnaps,
+    deposits: deposits.map((d) => ({ studentId: d.studentId, status: d.status })),
+    casRecords: casRecords.map((c) => ({ studentId: c.studentId, status: c.status })),
+    visas: visas.map((v) => ({
+      studentId: v.studentId,
+      stage: v.stage,
+      decision: v.decision,
+    })),
+    overdueTaskCount,
   });
 
   const attention = buildAdmissionAttentionItems({
@@ -321,6 +363,30 @@ async function buildAdmissionOfficerDashboardFromDb(input: {
     handovers,
     limit: 12,
   });
+
+  const pktToday = new Date().toLocaleDateString("en-CA", { timeZone: "Asia/Karachi" });
+  const todaysAppointments = appointmentRows
+    .filter((row) => {
+      if (!row.scheduled_at) return false;
+      const local = new Date(row.scheduled_at).toLocaleDateString("en-CA", {
+        timeZone: "Asia/Karachi",
+      });
+      return local === pktToday;
+    })
+    .slice(0, 8)
+    .map((row) => {
+      const st = studentById.get(row.student_id);
+      const purpose = (row.notes ?? row.location ?? "Appointment").trim() || "Appointment";
+      return {
+        id: row.id,
+        studentId: row.student_id,
+        studentName: st?.name ?? "Student",
+        purpose,
+        scheduledAt: row.scheduled_at ?? "",
+        status: String(row.status ?? ""),
+        typeLabel: row.location?.trim() ? "In person" : "Appointment",
+      };
+    });
 
   const deadlineRows = appSnaps
     .filter((a) => a.daysLeft !== null && a.daysLeft >= 0 && a.daysLeft <= 14)
@@ -373,6 +439,7 @@ async function buildAdmissionOfficerDashboardFromDb(input: {
         ...(t.reminder_ref ? { reminderRef: t.reminder_ref } : {}),
       };
     }),
+    todaysAppointments,
     assignedOverview: recentApps.slice(0, 8).map((a) => {
       const hand = latestHandoverByStudent.get(a.studentId);
       const next = deriveAdmissionNextAction({
@@ -570,7 +637,9 @@ export async function buildOfficerDashboardFromDb(
         .in("student_id", ids)
         .order("handed_over_at", { ascending: false }),
     ]);
-    // Fail soft on optional tables so a missing migration does not blank the whole dashboard.
+    // Handovers are AO-critical — never treat query failure as an empty queue.
+    if (handoverRes.error) throw new Error(handoverRes.error.message);
+    // Other lifecycle tables fail soft (missing migration should not blank the whole directory).
     for (const row of agreementsRes.data ?? []) {
       if (row.student_id) lifecycle.consentedIds.add(row.student_id);
     }
@@ -772,22 +841,7 @@ export async function buildOfficerDashboardFromDb(
 
 export async function buildStudentsDirectoryFromDb(
   session: TrustedSession,
-  filters: {
-    q?: string;
-    country?: string;
-    intake?: string;
-    stage?: string;
-    consultantId?: string;
-    archived?: boolean;
-    page?: number;
-    pageSize?: number;
-    focus?:
-      | "awaiting_assessment"
-      | "consent_recorded"
-      | "awaiting_response"
-      | "action_required"
-      | "follow_ups";
-  },
+  filters: StudentDirectoryFilters,
 ) {
   const client = requireAoSupabaseClient();
   const includeArchived = Boolean(filters.archived);
@@ -904,8 +958,15 @@ export async function buildStudentsDirectoryFromDb(
     }
   }
 
+  const isAdmissionFocus =
+    focus === "admission_docs" ||
+    focus === "admission_handovers" ||
+    focus === "admission_in_progress" ||
+    focus === "admission_offers" ||
+    focus === "admission_action";
+
   // KPI focus requires lifecycle for the full filtered set so counts match dashboard cards.
-  if (focus) {
+  if (focus && !isAdmissionFocus) {
     await hydrateLifecycle(students.map((s) => s.id));
     students = students.filter((s) =>
       studentMatchesKpiFilter(
@@ -922,6 +983,48 @@ export async function buildStudentsDirectoryFromDb(
         focus,
       ),
     );
+  }
+
+  if (isAdmissionFocus && focus) {
+    await hydrateLifecycle(students.map((s) => s.id));
+    const { isAdmissionInProgressStage } = await import("@/lib/admission-workspace");
+    const appsByStudent = new Map<string, typeof apps>();
+    for (const a of apps) {
+      const list = appsByStudent.get(a.studentId) ?? [];
+      list.push(a);
+      appsByStudent.set(a.studentId, list);
+    }
+    students = students.filter((s) => {
+      const hand = (handoverByStudent.get(s.id) ?? "").toLowerCase();
+      const studentApps = appsByStudent.get(s.id) ?? [];
+      if (focus === "admission_handovers") return hand === "submitted";
+      if (focus === "admission_docs") {
+        return studentApps.some((a) => a.status === "Docs Pending");
+      }
+      if (focus === "admission_in_progress") {
+        return studentApps.some((a) => isAdmissionInProgressStage(a.status));
+      }
+      if (focus === "admission_offers") {
+        return studentApps.some((a) => a.status === "Offer Received");
+      }
+      if (focus === "admission_action") {
+        if (hand === "submitted") return true;
+        return studentApps.some(
+          (a) =>
+            a.status === "Docs Pending" ||
+            isAdmissionInProgressStage(a.status) ||
+            (a.deadline
+              ? (() => {
+                  const d = new Date(a.deadline);
+                  if (Number.isNaN(d.getTime())) return false;
+                  const days = Math.round((d.getTime() - Date.now()) / 86_400_000);
+                  return days >= 0 && days <= 7;
+                })()
+              : false),
+        );
+      }
+      return true;
+    });
   }
 
   const pageSize = Math.min(Math.max(filters.pageSize ?? 20, 1), 50);
@@ -999,7 +1102,12 @@ export async function buildStudentsDirectoryFromDb(
         name: nameById.get(id) || id,
       })),
       canFilterByConsultant: rolesAtLeastAdmin(session.role),
-      canRegister: true,
+      canRegister:
+        rolesAtLeastAdmin(session.role) ||
+        (await import("@/lib/business-permissions")).canEditModule(
+          (await import("@/server/staff-access")).businessRoleFromSession(session),
+          "students",
+        ),
       canExport: true,
     },
   };
@@ -1407,6 +1515,13 @@ export async function buildStudentWorkspaceFromDb(
     student.consultantId === session.userId;
   const canEdit = rolesAtLeastAdmin(session.role) || isAssignedCounsellor;
 
+  const { businessRoleFromSession } = await import("@/server/staff-access");
+  const { canEditModule } = await import("@/lib/business-permissions");
+  const businessRole = businessRoleFromSession(session);
+  const isAdmissionDesk = businessRole === "admission_team";
+  const canOperateAdmissions =
+    rolesAtLeastAdmin(session.role) || canEditModule(businessRole, "admissions");
+
   return {
     student: {
       ...student,
@@ -1424,8 +1539,10 @@ export async function buildStudentWorkspaceFromDb(
     notes,
     offersVisa,
     canEdit,
-    canAddNote: canEdit,
-    canCreateApplication: canEdit,
+    canAddNote: canEdit || canOperateAdmissions,
+    canCreateApplication: canEdit || canOperateAdmissions,
+    canManageAdmissionHandover: canOperateAdmissions,
+    ...(isAdmissionDesk ? { workbenchKind: "admission" as const } : { workbenchKind: "counsellor" as const }),
   };
 }
 

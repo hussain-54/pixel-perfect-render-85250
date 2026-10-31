@@ -33,6 +33,7 @@ import {
   requestFeeVerification,
   saveShortlistItem,
   saveStudentAssessment,
+  updateAdmissionHandover,
 } from "@/services";
 import type { StudentProfileWorkspace } from "@/types/student-profile";
 import {
@@ -45,6 +46,10 @@ import { SearchableSelect } from "@/components/portal/SearchableSelect";
 import { CounsellingAssessmentFormA4 } from "@/components/portal/CounsellingAssessmentFormA4";
 import { validateAssessmentForSave } from "@/lib/counsellor-handover-rules";
 import { printAssessmentFormPdf } from "@/lib/registration-form-a4";
+import {
+  formatAdmissionHandoverStatusLabel,
+  deriveAdmissionNextAction,
+} from "@/lib/admission-workspace";
 import {
   counsellorLifecycleProgressSteps,
   DEFAULT_ADMISSION_HANDOVER_SUMMARY,
@@ -127,6 +132,10 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
   const [showHandoverNote, setShowHandoverNote] = useState(false);
   const [lifecycleMsg, setLifecycleMsg] = useState<string | null>(null);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const [returnNote, setReturnNote] = useState("");
+  const [returnOpen, setReturnOpen] = useState(false);
+  const isAdmissionWorkbench =
+    workspace.workbenchKind === "admission" || Boolean(workspace.canManageAdmissionHandover);
   const [editingAssessment, setEditingAssessment] = useState(
     () => workspace.canEdit && !workspace.assessment.assessedAt,
   );
@@ -271,6 +280,42 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
   const nextStep = resolveCounsellorLifecycleNext(lifecycleInput);
   const progressSteps = counsellorLifecycleProgressSteps(lifecycleInput);
   const fieldsEditable = workspace.canEdit && editingAssessment;
+  const admissionNext = deriveAdmissionNextAction({
+    stage: workspace.applications[0]?.status ?? "",
+    handoverStatus: lifecycleSnap?.handover?.status ?? null,
+    docsNeedingAttention: workspace.documents.some(
+      (d) => d.status === "Pending Review" || d.status === "Needs Correction" || d.awaitingUpload,
+    ),
+    deadlineWarning: false,
+  });
+
+  const handoverM = useMutation({
+    mutationFn: (input: { action: "accept" | "return"; note?: string }) => {
+      const handoverId = lifecycleSnap?.handover?.id;
+      if (!handoverId) throw new Error("No handover record on this student.");
+      return updateAdmissionHandover({
+        handoverId,
+        action: input.action,
+        ...(input.note ? { note: input.note } : {}),
+      });
+    },
+    onSuccess: async (_data, vars) => {
+      setLifecycleMsg(
+        vars.action === "accept"
+          ? "Handover accepted. This file is now in your Admission workspace."
+          : "Handover returned to the counsellor with your note.",
+      );
+      setReturnOpen(false);
+      setReturnNote("");
+      await invalidateProfile();
+      await queryClient.invalidateQueries({ queryKey: ["officer", "admission-handovers"] });
+      await queryClient.invalidateQueries({ queryKey: ["officer", "applications-pipeline"] });
+      await queryClient.invalidateQueries({ queryKey: ["officer", "dashboard"] });
+      await queryClient.invalidateQueries({ queryKey: ["officer", "signup-fee"] });
+    },
+    onError: (err) =>
+      setLifecycleMsg(portalErrorMessage(err, "Could not update the counsellor handover.")),
+  });
 
   const printAssessment = () => {
     if (!hasSavedAssessment) {
@@ -663,22 +708,85 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 <details className="mt-3 text-xs text-muted-foreground" open>
                   <summary className="cursor-pointer font-medium text-navy">
                     Handover status:{" "}
-                    {lifecycleSnap.handover.status === "submitted"
-                      ? "Sent to Admission"
-                      : lifecycleSnap.handover.status === "accepted"
-                        ? "Received by Admission"
-                        : lifecycleSnap.handover.status === "returned"
-                          ? "Returned for Clarification"
-                          : lifecycleSnap.handover.status}
+                    {formatAdmissionHandoverStatusLabel(lifecycleSnap.handover.status)}
                   </summary>
                   <p className="mt-1">
                     Last update{" "}
                     {lifecycleSnap.handover.handedOverAt
                       ? fmtDate(lifecycleSnap.handover.handedOverAt.slice(0, 10))
                       : "—"}
-                    . Admission Team owns the next decision.
+                    .{" "}
+                    {isAdmissionWorkbench
+                      ? admissionNext.label
+                      : "Admission Team owns the next decision."}
                   </p>
                 </details>
+              ) : null}
+
+              {isAdmissionWorkbench &&
+              workspace.canManageAdmissionHandover &&
+              lifecycleSnap?.handover?.status === "submitted" ? (
+                <div className="mt-3 space-y-2 rounded-md border border-royal/30 bg-royal/[0.04] p-3">
+                  <p className="text-sm font-semibold text-navy">Incoming counsellor handover</p>
+                  <p className="text-xs text-muted-foreground">
+                    Accept to take ownership, or return with a clear note for the counsellor.
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button
+                      size="sm"
+                      variant="navy"
+                      disabled={handoverM.isPending}
+                      onClick={() => {
+                        if (
+                          window.confirm(
+                            "Accept this handover and take admissions ownership for this student?",
+                          )
+                        ) {
+                          handoverM.mutate({ action: "accept" });
+                        }
+                      }}
+                    >
+                      {handoverM.isPending ? "Saving…" : "Accept handover"}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={handoverM.isPending}
+                      onClick={() => setReturnOpen((v) => !v)}
+                    >
+                      Return with note
+                    </Button>
+                    <Button asChild size="sm" variant="ghost">
+                      <Link
+                        to="/staff/applications"
+                        search={{ focus: "handovers", studentId: s.id }}
+                      >
+                        Open applications queue
+                      </Link>
+                    </Button>
+                  </div>
+                  {returnOpen ? (
+                    <div className="space-y-2 pt-1">
+                      <Textarea
+                        value={returnNote}
+                        onChange={(e) => setReturnNote(e.target.value)}
+                        placeholder="Explain what the counsellor must correct before re-forwarding…"
+                        rows={3}
+                        className="text-sm"
+                      />
+                      <Button
+                        size="sm"
+                        variant="navy"
+                        disabled={handoverM.isPending || returnNote.trim().length < 5}
+                        onClick={() =>
+                          handoverM.mutate({ action: "return", note: returnNote.trim() })
+                        }
+                      >
+                        Confirm return
+                      </Button>
+                    </div>
+                  ) : null}
+                </div>
               ) : null}
 
               {lifecycleSnap?.feeRequest &&
