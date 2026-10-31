@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -22,6 +22,8 @@ type Props = {
   placeholder?: string;
   disabled?: boolean;
   emptyText?: string;
+  /** Allow clearing the selection back to empty string. */
+  allowClear?: boolean;
 };
 
 function normalizeOptions(
@@ -39,6 +41,7 @@ export function SearchableSelect({
   placeholder = "Select…",
   disabled,
   emptyText = "No matches.",
+  allowClear = false,
 }: Props) {
   const [open, setOpen] = useState(false);
   const items = useMemo(() => normalizeOptions(options), [options]);
@@ -46,22 +49,43 @@ export function SearchableSelect({
 
   return (
     <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild>
-        <Button
-          id={id}
-          type="button"
-          variant="outline"
-          role="combobox"
-          aria-expanded={open}
-          disabled={disabled}
-          className="mt-1.5 h-10 w-full justify-between font-normal"
-        >
-          <span className={cn("truncate", !selected && "text-muted-foreground")}>
-            {selected?.label ?? placeholder}
-          </span>
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
+      <div className="relative mt-1.5">
+        <PopoverTrigger asChild>
+          <Button
+            id={id}
+            type="button"
+            variant="outline"
+            role="combobox"
+            aria-expanded={open}
+            disabled={disabled}
+            className={cn(
+              "h-10 w-full justify-between font-normal",
+              selected && "border-royal/40 bg-royal/[0.03]",
+              allowClear && selected ? "pr-9" : "",
+            )}
+          >
+            <span className={cn("truncate text-left", !selected && "text-muted-foreground")}>
+              {selected?.label ?? placeholder}
+            </span>
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        {allowClear && selected && !disabled ? (
+          <button
+            type="button"
+            aria-label="Clear selection"
+            className="absolute right-8 top-1/2 -translate-y-1/2 rounded p-0.5 text-muted-foreground hover:bg-muted hover:text-navy"
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onChange("");
+              setOpen(false);
+            }}
+          >
+            <X className="h-3.5 w-3.5" />
+          </button>
+        ) : null}
+      </div>
       <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
         <Command>
           <CommandInput placeholder="Search…" />
@@ -70,7 +94,7 @@ export function SearchableSelect({
             <CommandGroup>
               {items.map((item) => (
                 <CommandItem
-                  key={item.value}
+                  key={item.value || `empty-${item.label}`}
                   value={item.label}
                   onSelect={() => {
                     onChange(item.value);
