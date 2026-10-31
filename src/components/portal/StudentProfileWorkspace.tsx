@@ -2,6 +2,12 @@
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  CheckCircle2,
+  Circle,
+  CircleDashed,
+  AlertCircle,
+} from "lucide-react";
+import {
   EmptyState,
   ErrorState,
   InlineFeedback,
@@ -58,6 +64,12 @@ import {
   resolveCounsellorLifecycleNext,
 } from "@/lib/counsellor-lifecycle-next";
 import {
+  assessmentChecklistProgress,
+  assessmentStatusLabel,
+  buildCounsellorAssessmentChecklist,
+  type AssessmentSectionStatus,
+} from "@/lib/counsellor-assessment-checklist";
+import {
   COUNSELLOR_DESTINATIONS,
   COUNSELLOR_ELIGIBILITY,
   COUNSELLOR_FUNDING_SOURCES,
@@ -71,6 +83,27 @@ import {
   type IntakeSeason,
 } from "@/lib/counsellor-form-options";
 import { resolveCatalogOrOther } from "@/lib/intake-form-options";
+
+function assessmentSectionIcon(status: AssessmentSectionStatus) {
+  switch (status) {
+    case "completed":
+      return <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-600" aria-hidden />;
+    case "needs_review":
+      return <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" aria-hidden />;
+    case "in_progress":
+      return <CircleDashed className="h-4 w-4 shrink-0 text-royal" aria-hidden />;
+    case "optional":
+      return <Circle className="h-4 w-4 shrink-0 text-navy/30" aria-hidden />;
+    default:
+      return <Circle className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden />;
+  }
+}
+
+function scrollToAssessmentSection(anchor: string) {
+  const el = document.getElementById(anchor);
+  if (!el) return;
+  el.scrollIntoView({ behavior: "smooth", block: "start" });
+}
 
 type Props = {
   workspace: StudentProfileWorkspace;
@@ -280,6 +313,42 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
   const nextStep = resolveCounsellorLifecycleNext(lifecycleInput);
   const progressSteps = counsellorLifecycleProgressSteps(lifecycleInput);
   const fieldsEditable = workspace.canEdit && editingAssessment;
+  const assessmentChecklist = useMemo(
+    () =>
+      buildCounsellorAssessmentChecklist({
+        form: {
+          ...form,
+          targetIntake: formatIntakeLabel(intakeSeason, intakeYear) || form.targetIntake,
+        },
+        studentName: s.name,
+        studentCaseId: s.caseId,
+        studentDestination: s.destination,
+        studentProgram: s.program,
+        shortlistCount: workspace.shortlist.length,
+        hasConsent: Boolean(lifecycleSnap?.hasConsent),
+        hasSavedAssessment,
+        handoverStatus: lifecycleSnap?.handover?.status ?? null,
+        assessmentDirty,
+      }),
+    [
+      form,
+      intakeSeason,
+      intakeYear,
+      s.name,
+      s.caseId,
+      s.destination,
+      s.program,
+      workspace.shortlist.length,
+      lifecycleSnap?.hasConsent,
+      lifecycleSnap?.handover?.status,
+      hasSavedAssessment,
+      assessmentDirty,
+    ],
+  );
+  const assessmentProgress = useMemo(
+    () => assessmentChecklistProgress(assessmentChecklist),
+    [assessmentChecklist],
+  );
   const admissionNext = deriveAdmissionNextAction({
     stage: workspace.applications[0]?.status ?? "",
     handoverStatus: lifecycleSnap?.handover?.status ?? null,
@@ -288,6 +357,34 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
     ),
     deadlineWarning: false,
   });
+
+  const persistAssessment = () => {
+    if (saveM.isPending) return;
+    setSaveMsg(null);
+    setFieldErrors({});
+    const payload = buildAssessmentPayload();
+    if (!payload) return;
+    const check = validateAssessmentForSave(payload);
+    if (!check.ok) {
+      setSaveMsg(check.message);
+      const next: Partial<Record<keyof AssessmentSaveInput, string>> = {};
+      for (const key of check.missing) {
+        if (key.includes("eligibility")) next.eligibility = check.message;
+        if (key.includes("application")) next.applicationTarget = check.message;
+      }
+      if (!check.missing.length && check.message.toLowerCase().includes("eligibility")) {
+        next.eligibility = check.message;
+      }
+      if (check.message.toLowerCase().includes("application target")) {
+        next.applicationTarget = check.message;
+      }
+      setFieldErrors(next);
+      if (next.eligibility) scrollToAssessmentSection("assess-section-eligibility");
+      else if (next.applicationTarget) scrollToAssessmentSection("assess-section-career");
+      return;
+    }
+    saveM.mutate({ ...payload, eligibility: check.eligibility });
+  };
 
   const handoverM = useMutation({
     mutationFn: (input: { action: "accept" | "return"; note?: string }) => {
@@ -433,7 +530,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
         </div>
 
         <Panel title="Next step">
-          <div className="space-y-4 text-sm">
+          <div id="wb-lifecycle-panel" className="scroll-mt-6 space-y-4 text-sm">
             <ol className="flex flex-wrap gap-2">
               {progressSteps.map((step) => (
                 <li
@@ -454,8 +551,9 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
             </ol>
 
             <div
+              id="assess-section-consent"
               className={cn(
-                "rounded-md border px-4 py-3",
+                "scroll-mt-6 rounded-md border px-4 py-3",
                 lifecycleSnap?.hasConsent
                   ? "border-emerald-200 bg-emerald-50/60"
                   : "border-amber-200 bg-amber-50/50",
@@ -844,98 +942,260 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
           </TabsList>
 
           <TabsContent value="assessment" className="space-y-5">
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <StatCard variant="bare" label="Eligibility" value={form.eligibility || "—"} />
-              <StatCard
-                variant="bare"
-                label="Language"
-                value={form.languageScore || form.languageTest || "—"}
-              />
-              <StatCard variant="bare" label="Annual budget" value={form.annualBudget || "—"} />
-              <StatCard
-                variant="bare"
-                label="Apps submitted"
-                value={`${workspace.appsSubmittedCount} of ${form.applicationTarget || 0} target`}
-              />
-            </div>
-
-            <div className="grid gap-4 lg:grid-cols-2">
-              <Panel compact title="1. Academic background">
-                <div className="grid gap-3">
-                  <Field label="Last qualification" optional hint="Highest completed qualification">
-                    <CatalogOrCustom
-                      value={form.lastQualification}
-                      other={qualificationOther}
-                      options={COUNSELLOR_QUALIFICATIONS}
-                      disabled={!fieldsEditable}
-                      onValue={(v) => setField("lastQualification", v)}
-                      onOther={setQualificationOther}
-                    />
-                  </Field>
-                  <Field label="Marks / CGPA" optional>
-                    <Input
-                      value={form.marksCgpa}
-                      disabled={!fieldsEditable}
-                      onChange={(e) => setField("marksCgpa", e.target.value)}
-                    />
-                  </Field>
-                  <Field label="Education gap" optional hint="e.g. 1 year">
-                    <Input
-                      value={form.educationGap}
-                      disabled={!fieldsEditable}
-                      placeholder="e.g. 1 year"
-                      onChange={(e) => setField("educationGap", e.target.value)}
-                    />
-                  </Field>
-                  <Field label="Work experience (years)" optional>
-                    <Input
-                      value={form.workExperience}
-                      disabled={!fieldsEditable}
-                      onChange={(e) => setField("workExperience", e.target.value)}
-                    />
-                  </Field>
-                  <Field label="Study level" optional>
-                    <CatalogOrCustom
-                      value={form.preferredLevel}
-                      other={levelOther}
-                      options={COUNSELLOR_STUDY_LEVELS}
-                      disabled={!fieldsEditable}
-                      onValue={(v) => setField("preferredLevel", v)}
-                      onOther={setLevelOther}
-                    />
-                  </Field>
+            <div className="grid gap-6 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)] lg:items-start">
+              <aside className="rounded-lg border border-border bg-card p-4 lg:sticky lg:top-4">
+                <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
+                  Assessment checklist
+                </p>
+                <p className="mt-1 text-sm text-navy">
+                  {assessmentProgress.completed} of {assessmentProgress.tracked} sections ·{" "}
+                  {assessmentProgress.percent}%
+                </p>
+                <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+                  <div
+                    className="h-full rounded-full bg-royal transition-[width] duration-300"
+                    style={{ width: `${assessmentProgress.percent}%` }}
+                    aria-hidden
+                  />
                 </div>
-              </Panel>
+                <ul className="mt-4 space-y-1.5">
+                  {assessmentChecklist.map((section) => (
+                    <li key={section.id}>
+                      <button
+                        type="button"
+                        className={cn(
+                          "flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/60",
+                          section.status === "needs_review" && "bg-amber-50/80",
+                        )}
+                        onClick={() => {
+                          if (section.id === "consent" || section.id === "next_steps") {
+                            scrollToAssessmentSection(section.anchor);
+                            return;
+                          }
+                          scrollToAssessmentSection(section.anchor);
+                        }}
+                      >
+                        {assessmentSectionIcon(section.status)}
+                        <span className="min-w-0 flex-1">
+                          <span className="block font-medium text-navy">{section.title}</span>
+                          <span className="block text-[0.7rem] text-muted-foreground">
+                            {assessmentStatusLabel(section.status)}
+                            {section.hint ? ` · ${section.hint}` : ""}
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+                <div className="mt-4 grid gap-2 border-t border-border pt-3 sm:grid-cols-2 lg:grid-cols-1">
+                  <StatCard
+                    variant="bare"
+                    label="Eligibility outcome"
+                    value={form.eligibility || "Not set"}
+                  />
+                  <StatCard
+                    variant="bare"
+                    label="Apps vs target"
+                    value={`${workspace.appsSubmittedCount} / ${form.applicationTarget || 0}`}
+                  />
+                </div>
+              </aside>
 
-              <Panel compact title="2. Eligibility & language">
-                <div className="grid gap-3">
-                  <Field
-                    label="Eligibility outcome *"
-                    error={fieldErrors.eligibility ?? null}
-                    hint="Required for handover. Blank saves as Pending Review."
-                  >
-                    <select
-                      className="field-control w-full"
-                      value={form.eligibility}
-                      disabled={!fieldsEditable}
-                      onChange={(e) => {
-                        setField("eligibility", e.target.value);
-                        setFieldErrors((prev) => {
-                          const next = { ...prev };
-                          delete next.eligibility;
-                          return next;
-                        });
-                      }}
+              <div className="space-y-4">
+                <Panel compact title="1. Student Information">
+                  <div id="assess-section-student" className="scroll-mt-6 grid gap-3 sm:grid-cols-2">
+                    <OverviewItem label="Student" value={s.name} />
+                    <OverviewItem label="Case ID" value={s.caseId} />
+                    <OverviewItem label="Programme interest" value={s.program || "—"} />
+                    <OverviewItem label="Destination on file" value={s.destination || "—"} />
+                    <OverviewItem label="Assigned counsellor" value={s.consultantName || "—"} />
+                    <OverviewItem label="Stage" value={s.stageLabel || "—"} />
+                  </div>
+                </Panel>
+
+                <Panel compact title="2. Academic Background">
+                  <div id="assess-section-academic" className="scroll-mt-6 grid gap-3 sm:grid-cols-2">
+                    <Field label="Last qualification" optional hint="Highest completed qualification">
+                      <CatalogOrCustom
+                        value={form.lastQualification}
+                        other={qualificationOther}
+                        options={COUNSELLOR_QUALIFICATIONS}
+                        disabled={!fieldsEditable}
+                        onValue={(v) => setField("lastQualification", v)}
+                        onOther={setQualificationOther}
+                      />
+                    </Field>
+                    <Field label="Marks / CGPA" optional>
+                      <Input
+                        value={form.marksCgpa}
+                        disabled={!fieldsEditable}
+                        onChange={(e) => setField("marksCgpa", e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Education gap" optional hint="e.g. 1 year">
+                      <Input
+                        value={form.educationGap}
+                        disabled={!fieldsEditable}
+                        placeholder="e.g. 1 year"
+                        onChange={(e) => setField("educationGap", e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Work experience (years)" optional>
+                      <Input
+                        value={form.workExperience}
+                        disabled={!fieldsEditable}
+                        onChange={(e) => setField("workExperience", e.target.value)}
+                      />
+                    </Field>
+                  </div>
+                </Panel>
+
+                <Panel compact title="3. Study Preferences">
+                  <div id="assess-section-study" className="scroll-mt-6 grid gap-3 sm:grid-cols-2">
+                    <Field label="Study level" optional>
+                      <CatalogOrCustom
+                        value={form.preferredLevel}
+                        other={levelOther}
+                        options={COUNSELLOR_STUDY_LEVELS}
+                        disabled={!fieldsEditable}
+                        onValue={(v) => setField("preferredLevel", v)}
+                        onOther={setLevelOther}
+                      />
+                    </Field>
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:col-span-2">
+                      <Field label="Intake season" optional>
+                        <select
+                          className="field-control w-full"
+                          value={intakeSeason}
+                          disabled={!fieldsEditable}
+                          onChange={(e) => setIntakeSeason(e.target.value as IntakeSeason | "")}
+                        >
+                          <option value="">Season</option>
+                          {COUNSELLOR_SEASONS.map((season) => (
+                            <option key={season} value={season}>
+                              {season}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Intake year" optional>
+                        <select
+                          className="field-control w-full"
+                          value={intakeYear === "" ? "" : String(intakeYear)}
+                          disabled={!fieldsEditable}
+                          onChange={(e) =>
+                            setIntakeYear(e.target.value ? Number(e.target.value) : "")
+                          }
+                        >
+                          <option value="">Year</option>
+                          {intakeYearOptions().map((y) => (
+                            <option key={y} value={y}>
+                              {y}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                    </div>
+                    {(intakeSeason && intakeYear) || form.targetIntake ? (
+                      <p className="text-xs text-muted-foreground sm:col-span-2">
+                        Intake:{" "}
+                        <span className="font-medium text-navy">
+                          {formatIntakeLabel(intakeSeason, intakeYear) || form.targetIntake}
+                        </span>
+                      </p>
+                    ) : null}
+                  </div>
+                </Panel>
+
+                <Panel compact title="4. Career & Programme Assessment">
+                  <div id="assess-section-career" className="scroll-mt-6 grid gap-3">
+                    <Field
+                      label="Application target"
+                      error={fieldErrors.applicationTarget ?? null}
+                      hint="How many university applications you plan with this student"
                     >
-                      <option value="">Select outcome (blank saves as Pending Review)</option>
-                      {COUNSELLOR_ELIGIBILITY.map((o) => (
-                        <option key={o} value={o}>
-                          {o}
-                        </option>
-                      ))}
-                    </select>
-                  </Field>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                      <Input
+                        type="number"
+                        min={0}
+                        max={50}
+                        value={form.applicationTarget}
+                        disabled={!fieldsEditable}
+                        onChange={(e) => {
+                          setField("applicationTarget", Number(e.target.value) || 0);
+                          setFieldErrors((prev) => {
+                            const next = { ...prev };
+                            delete next.applicationTarget;
+                            return next;
+                          });
+                        }}
+                      />
+                    </Field>
+                    <Field label="Study plan / counselling notes" optional>
+                      <Textarea
+                        value={form.studyPlan}
+                        disabled={!fieldsEditable}
+                        rows={3}
+                        onChange={(e) => setField("studyPlan", e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Immediate next step" optional>
+                      <Input
+                        value={form.immediateNextStep}
+                        disabled={!fieldsEditable}
+                        onChange={(e) => setField("immediateNextStep", e.target.value)}
+                      />
+                    </Field>
+                  </div>
+                </Panel>
+
+                <Panel compact title="5. Destination & University Preferences">
+                  <div id="assess-section-destination" className="scroll-mt-6 space-y-4">
+                    <Field label="Preferred destination" optional>
+                      <CatalogOrCustom
+                        value={form.targetCountries}
+                        other={countryOther}
+                        options={COUNSELLOR_DESTINATIONS}
+                        disabled={!fieldsEditable}
+                        onValue={(v) => setField("targetCountries", v)}
+                        onOther={setCountryOther}
+                      />
+                    </Field>
+                    <div>
+                      <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          University shortlist
+                        </p>
+                        {workspace.canEdit ? (
+                          <Button size="sm" variant="outline" onClick={() => setShortOpen(true)}>
+                            Add shortlist item
+                          </Button>
+                        ) : null}
+                      </div>
+                      {!workspace.shortlist.length ? (
+                        <EmptyState
+                          title="No shortlist items yet"
+                          body="Add universities and programmes you are considering with this student."
+                        />
+                      ) : (
+                        <div className="grid gap-3 md:grid-cols-2">
+                          {workspace.shortlist.map((item) => (
+                            <div key={item.id} className="border-b border-border pb-3">
+                              <p className="font-semibold text-navy">{item.universityName}</p>
+                              <p className="text-sm text-muted-foreground">{item.programName}</p>
+                              <p className="mt-2 text-xs text-navy">{item.suitabilityNote || "—"}</p>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </Panel>
+
+                <Panel compact title="6. English Language Proficiency">
+                  <div
+                    id="assess-section-english"
+                    className="scroll-mt-6 grid gap-3 sm:grid-cols-2"
+                  >
                     <Field label="English test" optional>
                       <CatalogOrCustom
                         value={form.languageTest}
@@ -966,265 +1226,270 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                       />
                     </Field>
                   </div>
-                  <Field label="Annual budget" optional>
-                    <Input
-                      value={form.annualBudget}
-                      disabled={!fieldsEditable}
-                      placeholder="e.g. PKR 3–4 million"
-                      onChange={(e) => setField("annualBudget", e.target.value)}
-                    />
-                  </Field>
-                  <Field label="Funding source" optional>
-                    <CatalogOrCustom
-                      value={form.fundingSource}
-                      other={fundingOther}
-                      options={COUNSELLOR_FUNDING_SOURCES}
-                      disabled={!fieldsEditable}
-                      onValue={(v) => setField("fundingSource", v)}
-                      onOther={setFundingOther}
-                      searchable={false}
-                    />
-                  </Field>
-                  <Field
-                    label="Application target"
-                    error={fieldErrors.applicationTarget ?? null}
-                    hint="How many university applications you plan with this student"
-                  >
-                    <Input
-                      type="number"
-                      min={0}
-                      max={50}
-                      value={form.applicationTarget}
-                      disabled={!fieldsEditable}
-                      onChange={(e) => {
-                        setField("applicationTarget", Number(e.target.value) || 0);
-                        setFieldErrors((prev) => {
-                          const next = { ...prev };
-                          delete next.applicationTarget;
-                          return next;
-                        });
-                      }}
-                    />
-                  </Field>
-                </div>
-              </Panel>
+                </Panel>
 
-              <Panel compact title="3. Destination & intake">
-                <div className="grid gap-3">
-                  <Field label="Preferred destination" optional>
-                    <CatalogOrCustom
-                      value={form.targetCountries}
-                      other={countryOther}
-                      options={COUNSELLOR_DESTINATIONS}
-                      disabled={!fieldsEditable}
-                      onValue={(v) => setField("targetCountries", v)}
-                      onOther={setCountryOther}
-                    />
-                  </Field>
-                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                    <Field label="Intake season" optional>
-                      <select
-                        className="field-control w-full"
-                        value={intakeSeason}
+                <Panel compact title="7. Financial Readiness">
+                  <div
+                    id="assess-section-financial"
+                    className="scroll-mt-6 grid gap-3 sm:grid-cols-2"
+                  >
+                    <Field label="Annual budget" optional>
+                      <Input
+                        value={form.annualBudget}
                         disabled={!fieldsEditable}
-                        onChange={(e) => setIntakeSeason(e.target.value as IntakeSeason | "")}
-                      >
-                        <option value="">Season</option>
-                        {COUNSELLOR_SEASONS.map((season) => (
-                          <option key={season} value={season}>
-                            {season}
-                          </option>
-                        ))}
-                      </select>
+                        placeholder="e.g. PKR 3–4 million"
+                        onChange={(e) => setField("annualBudget", e.target.value)}
+                      />
                     </Field>
-                    <Field label="Intake year" optional>
-                      <select
-                        className="field-control w-full"
-                        value={intakeYear === "" ? "" : String(intakeYear)}
+                    <Field label="Funding source" optional>
+                      <CatalogOrCustom
+                        value={form.fundingSource}
+                        other={fundingOther}
+                        options={COUNSELLOR_FUNDING_SOURCES}
                         disabled={!fieldsEditable}
-                        onChange={(e) =>
-                          setIntakeYear(e.target.value ? Number(e.target.value) : "")
-                        }
-                      >
-                        <option value="">Year</option>
-                        {intakeYearOptions().map((y) => (
-                          <option key={y} value={y}>
-                            {y}
-                          </option>
-                        ))}
-                      </select>
+                        onValue={(v) => setField("fundingSource", v)}
+                        onOther={setFundingOther}
+                        searchable={false}
+                      />
                     </Field>
                   </div>
-                  {(intakeSeason && intakeYear) || form.targetIntake ? (
-                    <p className="text-xs text-muted-foreground">
-                      Intake:{" "}
-                      <span className="font-medium text-navy">
-                        {formatIntakeLabel(intakeSeason, intakeYear) || form.targetIntake}
-                      </span>
+                </Panel>
+
+                <Panel compact title="8. Counselling Assessment & Outcome">
+                  <div id="assess-section-eligibility" className="scroll-mt-6 grid gap-3">
+                    <Field
+                      label="Eligibility outcome *"
+                      error={fieldErrors.eligibility ?? null}
+                      hint="Manual counsellor judgement. Blank saves as Pending Review. Not an algorithmic score."
+                    >
+                      <select
+                        className="field-control w-full"
+                        value={form.eligibility}
+                        disabled={!fieldsEditable}
+                        onChange={(e) => {
+                          setField("eligibility", e.target.value);
+                          setFieldErrors((prev) => {
+                            const next = { ...prev };
+                            delete next.eligibility;
+                            return next;
+                          });
+                        }}
+                      >
+                        <option value="">Select outcome (blank saves as Pending Review)</option>
+                        {COUNSELLOR_ELIGIBILITY.map((o) => (
+                          <option key={o} value={o}>
+                            {o}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <dl className="grid gap-2 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm sm:grid-cols-2">
+                      <div>
+                        <dt className="text-xs text-muted-foreground">Saved outcome</dt>
+                        <dd className="font-medium text-navy">
+                          {workspace.assessment.eligibility || form.eligibility || "—"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-xs text-muted-foreground">Assessment status</dt>
+                        <dd className="font-medium text-navy">
+                          {hasSavedAssessment
+                            ? assessmentDirty
+                              ? "Saved — unsaved edits"
+                              : "Saved"
+                            : editingAssessment
+                              ? "Draft (not saved)"
+                              : "Not started"}
+                        </dd>
+                      </div>
+                      <div className="sm:col-span-2">
+                        <dt className="text-xs text-muted-foreground">Assessed by</dt>
+                        <dd className="font-medium text-navy">
+                          {workspace.assessment.assessedByName || "—"}
+                          {workspace.assessment.assessedAt
+                            ? ` (${fmtDate(workspace.assessment.assessedAt.slice(0, 10))})`
+                            : ""}
+                        </dd>
+                      </div>
+                    </dl>
+                  </div>
+                </Panel>
+
+                <Panel compact title="9. Student Consent">
+                  <div className="space-y-2 text-sm">
+                    <p className="text-muted-foreground">
+                      Consent is never pre-selected. It is recorded only when you explicitly confirm
+                      the student has agreed — see the consent card in Next step above.
                     </p>
+                    <div
+                      className={cn(
+                        "rounded-md border px-3 py-2",
+                        lifecycleSnap?.hasConsent
+                          ? "border-emerald-200 bg-emerald-50/60"
+                          : "border-amber-200 bg-amber-50/50",
+                      )}
+                    >
+                      <p className="font-semibold text-navy">
+                        {lifecycleSnap?.hasConsent ? "Consent on file" : "Consent not recorded"}
+                      </p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {lifecycleSnap?.hasConsent
+                          ? "Persisted counselling agreement exists for this student."
+                          : "Use Record consent in Next step after the student agrees."}
+                      </p>
+                    </div>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => scrollToAssessmentSection("assess-section-consent")}
+                    >
+                      Go to consent actions
+                    </Button>
+                  </div>
+                </Panel>
+
+                <Panel compact title="10. Counsellor Summary">
+                  <div id="assess-section-summary" className="scroll-mt-6 grid gap-3">
+                    <Field
+                      label="Study plan / findings"
+                      optional
+                      hint="Same field as Career section — edits sync across both"
+                    >
+                      <Textarea
+                        value={form.studyPlan}
+                        disabled={!fieldsEditable}
+                        rows={4}
+                        onChange={(e) => setField("studyPlan", e.target.value)}
+                      />
+                    </Field>
+                    <Field label="Recommended next steps" optional>
+                      <Input
+                        value={form.immediateNextStep}
+                        disabled={!fieldsEditable}
+                        onChange={(e) => setField("immediateNextStep", e.target.value)}
+                      />
+                    </Field>
+                  </div>
+                </Panel>
+
+                <Panel compact title="11. Next Steps & Handover">
+                  <div className="space-y-2 text-sm">
+                    <p className="text-muted-foreground">
+                      Fee verification (Front Desk) and Admission handover use the lifecycle actions
+                      in Next step — they persist via existing RPCs, not local status toggles.
+                    </p>
+                    <dl className="grid gap-2 text-sm sm:grid-cols-2">
+                      <OverviewItem
+                        label="Fee status"
+                        value={(feeStatus ?? "—").replaceAll("_", " ")}
+                      />
+                      <OverviewItem
+                        label="Handover"
+                        value={
+                          lifecycleSnap?.handover
+                            ? formatAdmissionHandoverStatusLabel(lifecycleSnap.handover.status)
+                            : "Not submitted"
+                        }
+                      />
+                    </dl>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => scrollToAssessmentSection("wb-lifecycle-panel")}
+                    >
+                      Open Next step actions
+                    </Button>
+                  </div>
+                </Panel>
+
+                <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
+                  {workspace.canEdit && editingAssessment ? (
+                    <Button variant="navy" disabled={saveM.isPending} onClick={persistAssessment}>
+                      {saveM.isPending
+                        ? "Saving…"
+                        : hasSavedAssessment
+                          ? "Update Assessment"
+                          : "Save Draft"}
+                    </Button>
+                  ) : null}
+                  {workspace.canEdit && editingAssessment ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      disabled={saveM.isPending || !assessmentDirty}
+                      onClick={() => {
+                        setForm(toForm(workspace.assessment));
+                        const parsed = parseIntakeSeasonYear(workspace.assessment.targetIntake);
+                        setIntakeSeason(parsed.season);
+                        setIntakeYear(parsed.year);
+                        setEditingAssessment(
+                          Boolean(workspace.canEdit && !workspace.assessment.assessedAt),
+                        );
+                        setSaveMsg(null);
+                        setFieldErrors({});
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                  ) : null}
+                  {workspace.canEdit && !editingAssessment ? (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setEditingAssessment(true);
+                        setSaveMsg(null);
+                      }}
+                    >
+                      Edit Assessment
+                    </Button>
+                  ) : null}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={!hasSavedAssessment || assessmentDirty}
+                    onClick={printAssessment}
+                    title={
+                      assessmentDirty
+                        ? "Save assessment changes before printing"
+                        : hasSavedAssessment
+                          ? "Print or save as PDF (enable Background graphics for full colour)"
+                          : "Save the assessment first"
+                    }
+                  >
+                    Print / Download PDF
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => scrollToAssessmentSection("wb-lifecycle-panel")}
+                  >
+                    Workflow actions
+                  </Button>
+                  {assessmentDirty ? (
+                    <InlineFeedback kind="warn">You have unsaved assessment changes.</InlineFeedback>
+                  ) : null}
+                  {saveMsg ? (
+                    <InlineFeedback
+                      kind={
+                        saveM.isError ||
+                        saveMsg.toLowerCase().includes("missing") ||
+                        saveMsg.toLowerCase().includes("overwrite") ||
+                        saveMsg.toLowerCase().includes("before") ||
+                        saveMsg.toLowerCase().includes("could not")
+                          ? "err"
+                          : "ok"
+                      }
+                    >
+                      {saveMsg}
+                    </InlineFeedback>
                   ) : null}
                 </div>
-              </Panel>
-
-              <Panel compact title="4. Counsellor notes">
-                <div className="grid gap-3">
-                  <Field label="Study plan / counselling notes" optional>
-                    <Textarea
-                      value={form.studyPlan}
-                      disabled={!fieldsEditable}
-                      rows={4}
-                      onChange={(e) => setField("studyPlan", e.target.value)}
-                    />
-                  </Field>
-                  <Field label="Immediate next step" optional>
-                    <Input
-                      value={form.immediateNextStep}
-                      disabled={!fieldsEditable}
-                      onChange={(e) => setField("immediateNextStep", e.target.value)}
-                    />
-                  </Field>
-                  <p className="text-xs text-muted-foreground">
-                    Assessed by:{" "}
-                    <span className="font-medium text-navy">
-                      {workspace.assessment.assessedByName || "—"}
-                    </span>
-                    {workspace.assessment.assessedAt
-                      ? ` (${fmtDate(workspace.assessment.assessedAt.slice(0, 10))})`
-                      : ""}
-                  </p>
-                </div>
-              </Panel>
+              </div>
             </div>
-
-            <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
-              {workspace.canEdit && editingAssessment ? (
-                <Button
-                  variant="navy"
-                  disabled={saveM.isPending}
-                  onClick={() => {
-                    if (saveM.isPending) return;
-                    setSaveMsg(null);
-                    setFieldErrors({});
-                    const payload = buildAssessmentPayload();
-                    if (!payload) return;
-                    const check = validateAssessmentForSave(payload);
-                    if (!check.ok) {
-                      setSaveMsg(check.message);
-                      const next: Partial<Record<keyof AssessmentSaveInput, string>> = {};
-                      for (const key of check.missing) {
-                        if (key.includes("eligibility")) next.eligibility = check.message;
-                        if (key.includes("application")) next.applicationTarget = check.message;
-                      }
-                      if (
-                        !check.missing.length &&
-                        check.message.toLowerCase().includes("eligibility")
-                      ) {
-                        next.eligibility = check.message;
-                      }
-                      if (check.message.toLowerCase().includes("application target")) {
-                        next.applicationTarget = check.message;
-                      }
-                      setFieldErrors(next);
-                      return;
-                    }
-                    saveM.mutate({ ...payload, eligibility: check.eligibility });
-                  }}
-                >
-                  {saveM.isPending ? "Saving…" : "Save Assessment"}
-                </Button>
-              ) : null}
-              {workspace.canEdit && editingAssessment ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={saveM.isPending || !assessmentDirty}
-                  onClick={() => {
-                    setForm(toForm(workspace.assessment));
-                    const parsed = parseIntakeSeasonYear(workspace.assessment.targetIntake);
-                    setIntakeSeason(parsed.season);
-                    setIntakeYear(parsed.year);
-                    setEditingAssessment(Boolean(workspace.canEdit && !workspace.assessment.assessedAt));
-                    setSaveMsg(null);
-                    setFieldErrors({});
-                  }}
-                >
-                  Cancel
-                </Button>
-              ) : null}
-              {workspace.canEdit && !editingAssessment ? (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setEditingAssessment(true);
-                    setSaveMsg(null);
-                  }}
-                >
-                  Edit Assessment
-                </Button>
-              ) : null}
-              <Button
-                variant="outline"
-                size="sm"
-                disabled={!hasSavedAssessment || assessmentDirty}
-                onClick={printAssessment}
-                title={
-                  assessmentDirty
-                    ? "Save assessment changes before printing"
-                    : hasSavedAssessment
-                      ? "Print or save as PDF (enable Background graphics for full colour)"
-                      : "Save the assessment first"
-                }
-              >
-                Print / Download PDF
-              </Button>
-              {assessmentDirty ? (
-                <InlineFeedback kind="warn">You have unsaved assessment changes.</InlineFeedback>
-              ) : null}
-              {saveMsg ? (
-                <InlineFeedback
-                  kind={
-                    saveM.isError ||
-                    saveMsg.toLowerCase().includes("missing") ||
-                    saveMsg.toLowerCase().includes("overwrite") ||
-                    saveMsg.toLowerCase().includes("before") ||
-                    saveMsg.toLowerCase().includes("could not")
-                      ? "err"
-                      : "ok"
-                  }
-                >
-                  {saveMsg}
-                </InlineFeedback>
-              ) : null}
-            </div>
-
-            <Panel
-              title="University shortlist"
-              action={
-                workspace.canEdit ? (
-                  <Button size="sm" variant="outline" onClick={() => setShortOpen(true)}>
-                    Add shortlist item
-                  </Button>
-                ) : null
-              }
-            >
-              {!workspace.shortlist.length ? (
-                <EmptyState
-                  title="No shortlist items yet"
-                  body="Add universities and programmes you are considering with this student."
-                />
-              ) : (
-                <div className="grid gap-3 md:grid-cols-3">
-                  {workspace.shortlist.map((item) => (
-                    <div key={item.id} className="border-b border-border pb-3">
-                      <p className="font-semibold text-navy">{item.universityName}</p>
-                      <p className="text-sm text-muted-foreground">{item.programName}</p>
-                      <p className="mt-2 text-xs text-navy">{item.suitabilityNote || "—"}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Panel>
           </TabsContent>
 
           <TabsContent value="overview">

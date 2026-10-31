@@ -14,7 +14,8 @@ export type RegisterChecklistSectionId =
   | "contact"
   | "preferences"
   | "signup_fee"
-  | "counsellor";
+  | "counsellor"
+  | "final";
 
 export type RegisterFormSnapshot = {
   fullName: string;
@@ -142,6 +143,16 @@ export function buildRegisterChecklist(
       requiredComplete: counsellor === "complete" ? 1 : 0,
       requiredTotal: 0,
       hint: "Optional — assign later is allowed",
+    },
+    {
+      id: "final",
+      title: "Final Registration",
+      status: registerFormCanSubmit(form) ? "complete" : "pending",
+      requiredComplete: registerFormCanSubmit(form) ? 1 : 0,
+      requiredTotal: 1,
+      hint: registerFormCanSubmit(form)
+        ? "Required fields valid — ready to register"
+        : "Complete required contact and study fields",
     },
   ];
 }

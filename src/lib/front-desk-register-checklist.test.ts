@@ -47,6 +47,7 @@ describe("front-desk register checklist", () => {
     expect(checklist.find((s) => s.id === "preferences")?.status).toBe("complete");
     expect(checklist.find((s) => s.id === "signup_fee")?.status).toBe("optional");
     expect(checklist.find((s) => s.id === "counsellor")?.status).toBe("optional");
+    expect(checklist.find((s) => s.id === "final")?.status).toBe("complete");
   });
 
   it("does not treat optional fee/counsellor as required; Other needs custom text", () => {

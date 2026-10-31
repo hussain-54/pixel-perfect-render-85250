@@ -116,6 +116,7 @@ const SECTION_ANCHORS: Record<RegisterChecklistSectionId, string> = {
   preferences: "register-section-preferences",
   signup_fee: "register-section-fee",
   counsellor: "register-section-counsellor",
+  final: "register-section-actions",
 };
 
 function statusIcon(status: RegisterChecklistStatus) {
@@ -921,7 +922,10 @@ function FrontDeskRegisterPage() {
             </Panel>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 border-t border-border pt-4">
+          <div
+            id={SECTION_ANCHORS.final}
+            className="flex flex-wrap items-center gap-2 border-t border-border pt-4 scroll-mt-6"
+          >
             <Button
               type="submit"
               variant="navy"
