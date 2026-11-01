@@ -28,15 +28,85 @@ import {
   describePersistedSignupFeeStatus,
   printRegistrationFormPdf,
 } from "@/lib/registration-form-a4";
+import {
+  countIntakeStatusFilters,
+  filterIntakeRowsByStatus,
+  INTAKE_STATUS_FILTERS,
+  type IntakeFilterId,
+  type IntakeFilterTone,
+} from "@/lib/front-desk-intake-filters";
+import { FEE_QUEUE_KEY } from "@/lib/use-fee-verification-queue-realtime";
+import { cn } from "@/lib/utils";
 import type { FrontDeskIntakeRow } from "@/server/portal-front-desk";
 import {
   archiveFrontDeskIntake,
   assignCounsellor,
   listCounsellorDesks,
+  listFeeVerificationRequests,
   listFrontDeskIntake,
   provisionStudentPortalAccount,
   updateFrontDeskIntake,
 } from "@/services";
+
+const FILTER_TONE_CLASS: Record<
+  IntakeFilterTone,
+  { idle: string; active: string; dot: string; count: string }
+> = {
+  slate: {
+    idle: "border-slate-200/80 bg-slate-50/80 text-slate-800 hover:border-slate-300",
+    active: "border-slate-400 bg-slate-100 ring-2 ring-slate-300/60",
+    dot: "bg-slate-500",
+    count: "text-slate-700",
+  },
+  blue: {
+    idle: "border-sky-200/80 bg-sky-50/70 text-sky-950 hover:border-sky-300",
+    active: "border-sky-400 bg-sky-100 ring-2 ring-sky-300/50",
+    dot: "bg-sky-500",
+    count: "text-sky-800",
+  },
+  purple: {
+    idle: "border-violet-200/80 bg-violet-50/70 text-violet-950 hover:border-violet-300",
+    active: "border-violet-400 bg-violet-100 ring-2 ring-violet-300/50",
+    dot: "bg-violet-500",
+    count: "text-violet-800",
+  },
+  amber: {
+    idle: "border-amber-200/80 bg-amber-50/70 text-amber-950 hover:border-amber-300",
+    active: "border-amber-400 bg-amber-100 ring-2 ring-amber-300/50",
+    dot: "bg-amber-500",
+    count: "text-amber-900",
+  },
+  orange: {
+    idle: "border-orange-200/80 bg-orange-50/70 text-orange-950 hover:border-orange-300",
+    active: "border-orange-400 bg-orange-100 ring-2 ring-orange-300/50",
+    dot: "bg-orange-500",
+    count: "text-orange-900",
+  },
+  yellow: {
+    idle: "border-yellow-200/80 bg-yellow-50/70 text-yellow-950 hover:border-yellow-300",
+    active: "border-yellow-400 bg-yellow-100 ring-2 ring-yellow-300/50",
+    dot: "bg-yellow-500",
+    count: "text-yellow-900",
+  },
+  green: {
+    idle: "border-emerald-200/80 bg-emerald-50/70 text-emerald-950 hover:border-emerald-300",
+    active: "border-emerald-400 bg-emerald-100 ring-2 ring-emerald-300/50",
+    dot: "bg-emerald-500",
+    count: "text-emerald-800",
+  },
+  teal: {
+    idle: "border-teal-200/80 bg-teal-50/70 text-teal-950 hover:border-teal-300",
+    active: "border-teal-400 bg-teal-100 ring-2 ring-teal-300/50",
+    dot: "bg-teal-500",
+    count: "text-teal-800",
+  },
+  red: {
+    idle: "border-rose-200/80 bg-rose-50/70 text-rose-950 hover:border-rose-300",
+    active: "border-rose-400 bg-rose-100 ring-2 ring-rose-300/50",
+    dot: "bg-rose-500",
+    count: "text-rose-800",
+  },
+};
 
 export const Route = createFileRoute("/staff/intake")({
   beforeLoad: ({ context }) => {
@@ -71,8 +141,7 @@ function FrontDeskIntakeListContent() {
   const [archiveId, setArchiveId] = useState<string | null>(null);
   const [archiveReason, setArchiveReason] = useState("");
   const [search, setSearch] = useState("");
-  const [feeFilter, setFeeFilter] = useState("all");
-  const [assignFilter, setAssignFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<IntakeFilterId>("all");
   const [sortKey, setSortKey] = useState<SortKey>("createdAt");
   const [page, setPage] = useState(0);
   const pageSize = 20;
@@ -80,6 +149,12 @@ function FrontDeskIntakeListContent() {
   const listQ = useQuery({
     queryKey: ["front-desk", "intake"],
     queryFn: listFrontDeskIntake,
+  });
+  const feeReqQ = useQuery({
+    queryKey: [...FEE_QUEUE_KEY, "intake-filters"],
+    queryFn: () => listFeeVerificationRequests({ includeResolved: true }),
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
   });
   const desksQ = useQuery({
     queryKey: ["front-desk", "counsellor-desks"],
@@ -152,24 +227,37 @@ function FrontDeskIntakeListContent() {
   });
 
   const rows = listQ.data?.rows ?? [];
+  const feeRequests = feeReqQ.data?.rows ?? [];
+  const statusCounts = useMemo(
+    () => countIntakeStatusFilters({ rows, feeRequests }),
+    [rows, feeRequests],
+  );
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    let list = rows.filter((r) => {
-      if (feeFilter !== "all" && (r.signupFeeStatus || "none") !== feeFilter) return false;
-      if (assignFilter === "pending" && r.assignmentStatus !== "pending") return false;
-      if (assignFilter === "assigned" && r.assignmentStatus !== "assigned") return false;
-      if (!q) return true;
-      return [r.caseId, r.fullName, r.email, r.phone, r.destination, r.program]
-        .filter(Boolean)
-        .some((v) => String(v).toLowerCase().includes(q));
+    let list = filterIntakeRowsByStatus({
+      rows,
+      filter: statusFilter,
+      feeRequests,
     });
+    if (q) {
+      list = list.filter((r) =>
+        [r.caseId, r.fullName, r.email, r.phone, r.destination, r.program]
+          .filter(Boolean)
+          .some((v) => String(v).toLowerCase().includes(q)),
+      );
+    }
     list = [...list].sort((a, b) => {
       const av = a[sortKey] || "";
       const bv = b[sortKey] || "";
       return String(bv).localeCompare(String(av));
     });
     return list;
-  }, [rows, search, feeFilter, assignFilter, sortKey]);
+  }, [rows, search, statusFilter, feeRequests, sortKey]);
+
+  function selectStatusFilter(next: IntakeFilterId) {
+    setStatusFilter(next);
+    setPage(0);
+  }
 
   const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const pageRows = filtered.slice(page * pageSize, page * pageSize + pageSize);
@@ -217,7 +305,7 @@ function FrontDeskIntakeListContent() {
         <PageHeader
           compact
           title="My registrations"
-          subtitle="Your intake records â€” view, edit, assign, or download the registration PDF."
+          subtitle="View, edit, assign, or download registration PDFs for your intake records."
           actions={
             <Button asChild size="sm">
               <Link to="/staff/register">Register student</Link>
@@ -237,67 +325,86 @@ function FrontDeskIntakeListContent() {
         ) : null}
 
         <Panel title="Find registrations">
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <Label htmlFor="fd-search">Search</Label>
-              <Input
-                id="fd-search"
-                value={search}
-                onChange={(e) => {
-                  setSearch(e.target.value);
-                  setPage(0);
-                }}
-                placeholder="Name, email, case IDâ€¦"
-              />
+          <div className="space-y-3">
+            <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_minmax(10rem,14rem)]">
+              <div>
+                <Label htmlFor="fd-search">Search</Label>
+                <Input
+                  id="fd-search"
+                  className="mt-1 h-9"
+                  value={search}
+                  onChange={(e) => {
+                    setSearch(e.target.value);
+                    setPage(0);
+                  }}
+                  placeholder="Name, email, case ID…"
+                />
+              </div>
+              <div>
+                <Label htmlFor="fd-sort">Sort by</Label>
+                <select
+                  id="fd-sort"
+                  className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-3 text-sm"
+                  value={sortKey}
+                  onChange={(e) => setSortKey(e.target.value as SortKey)}
+                >
+                  <option value="createdAt">Registration date</option>
+                  <option value="updatedAt">Last updated</option>
+                  <option value="nextFollowUpAt">Follow-up date</option>
+                  <option value="fullName">Student name</option>
+                </select>
+              </div>
             </div>
+
             <div>
-              <Label htmlFor="fd-fee">Signup fee</Label>
-              <select
-                id="fd-fee"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                value={feeFilter}
-                onChange={(e) => {
-                  setFeeFilter(e.target.value);
-                  setPage(0);
-                }}
-              >
-                <option value="all">All</option>
-                <option value="claimed">Claimed</option>
-                <option value="verified">Verified</option>
-                <option value="waived">Waived</option>
-                <option value="rejected">Rejected</option>
-                <option value="unpaid">Unpaid</option>
-              </select>
-            </div>
-            <div>
-              <Label htmlFor="fd-assign">Counsellor</Label>
-              <select
-                id="fd-assign"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                value={assignFilter}
-                onChange={(e) => {
-                  setAssignFilter(e.target.value);
-                  setPage(0);
-                }}
-              >
-                <option value="all">All</option>
-                <option value="pending">Awaiting assignment</option>
-                <option value="assigned">Assigned</option>
-              </select>
-            </div>
-            <div>
-              <Label htmlFor="fd-sort">Sort by</Label>
-              <select
-                id="fd-sort"
-                className="flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
-                value={sortKey}
-                onChange={(e) => setSortKey(e.target.value as SortKey)}
-              >
-                <option value="createdAt">Registration date</option>
-                <option value="updatedAt">Last updated</option>
-                <option value="nextFollowUpAt">Follow-up date</option>
-                <option value="fullName">Student name</option>
-              </select>
+              <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+                <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                  Status filters
+                </p>
+                {statusFilter !== "all" ? (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-xs"
+                    onClick={() => selectStatusFilter("all")}
+                  >
+                    Clear filter
+                  </Button>
+                ) : null}
+              </div>
+              <div className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 md:grid md:grid-cols-3 md:overflow-visible lg:grid-cols-5 xl:grid-cols-9">
+                {INTAKE_STATUS_FILTERS.map((def) => {
+                  const tone = FILTER_TONE_CLASS[def.tone];
+                  const active = statusFilter === def.id;
+                  const count = statusCounts[def.id] ?? 0;
+                  return (
+                    <button
+                      key={def.id}
+                      type="button"
+                      aria-pressed={active}
+                      onClick={() => selectStatusFilter(def.id)}
+                      className={cn(
+                        "flex min-w-[7.5rem] shrink-0 flex-col gap-1 rounded-lg border px-2.5 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal/40 md:min-w-0",
+                        active ? tone.active : tone.idle,
+                      )}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        <span
+                          className={cn("h-1.5 w-1.5 shrink-0 rounded-full", tone.dot)}
+                          aria-hidden
+                        />
+                        <span className="truncate text-[0.7rem] font-semibold leading-tight">
+                          {def.label}
+                        </span>
+                      </span>
+                      <span className={cn("text-sm font-semibold tabular-nums", tone.count)}>
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </Panel>
@@ -465,9 +572,22 @@ function FrontDeskIntakeListContent() {
           </Panel>
         ) : null}
 
-        <Panel title={`Intake records (${filtered.length})`}>
+        <Panel
+          title={`Intake records (${filtered.length})`}
+          action={
+            statusFilter !== "all" ? (
+              <span className="text-xs text-muted-foreground">
+                Filter:{" "}
+                {INTAKE_STATUS_FILTERS.find((f) => f.id === statusFilter)?.label ?? statusFilter}
+              </span>
+            ) : null
+          }
+        >
           {filtered.length === 0 ? (
-            <EmptyState title="No matching records" body="Adjust filters or register a student." />
+            <EmptyState
+              title="No matching records"
+              body="Adjust the status filter or search, or register a student."
+            />
           ) : (
             <>
               <TableWrap>
