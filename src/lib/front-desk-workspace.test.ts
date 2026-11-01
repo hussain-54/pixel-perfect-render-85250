@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest";
 import {
   buildFrontDeskAttentionItems,
+  buildFrontDeskFeeWorkflowSteps,
   buildFrontDeskRecordTimeline,
   computeFrontDeskDashboardMetrics,
   deriveFrontDeskNextAction,
+  frontDeskAttentionSupportsFix,
+  frontDeskFeeFocusAnchorId,
   frontDeskIntakeFocusSearch,
   frontDeskNextActionCta,
   isJourneyApplicationInProgress,
@@ -103,6 +106,19 @@ describe("front-desk-workspace", () => {
     expect(metrics.unpaidVouchers).toBe(0);
     expect(metrics.proofsAwaitingFinance).toBe(1);
     expect(metrics.verifiedFees).toBe(0);
+  });
+
+  it("exposes Fix only for correction/rejected attention kinds", () => {
+    expect(frontDeskAttentionSupportsFix("fee_correction")).toBe(true);
+    expect(frontDeskAttentionSupportsFix("fee_rejected")).toBe(true);
+    expect(frontDeskAttentionSupportsFix("fee_open")).toBe(false);
+    expect(frontDeskAttentionSupportsFix("unassigned")).toBe(false);
+    expect(frontDeskFeeFocusAnchorId({ needsFeeCorrection: true })).toBe("fd-signup-fee-panel");
+    expect(
+      buildFrontDeskFeeWorkflowSteps({ hasSignupFee: true, feeStatus: "claimed" }).find(
+        (s) => s.state === "current",
+      )?.id,
+    ).toBe("finance");
   });
 
   it("attaches requestId and deep-link focus for Fix / Sync attention actions", () => {

@@ -23,9 +23,12 @@ import { FrontDeskRegistrationFormA4 } from "@/components/portal/FrontDeskRegist
 import { SignupFeeVoucherA4 } from "@/components/portal/SignupFeeVoucherA4";
 import { isFrontDeskBusinessRole } from "@/lib/staff-business-access";
 import {
+  buildFrontDeskFeeWorkflowSteps,
   cancelledCoordinationNeedsCorrection,
   describeJourneyStageLabel,
   deriveFrontDeskNextAction,
+  frontDeskFeeFocusAnchorId,
+  frontDeskFeePrimaryActionLabel,
   isHistoricalCancelledCoordination,
   selectActionableFeeRequest,
 } from "@/lib/front-desk-workspace";
@@ -141,12 +144,34 @@ function FrontDeskIntakeRecordPage() {
   useEffect(() => {
     if (search.focus !== "fee") return;
     if (!recordQ.data) return;
-    const targetId = search.requestId
-      ? `fd-fee-request-${search.requestId}`
-      : "fd-fee-correction-panel";
-    const el = document.getElementById(targetId) ?? document.getElementById("fd-signup-fee-panel");
+    const feeRequests = recordQ.data.feeRequests ?? [];
+    const focusRequest =
+      (search.requestId ? feeRequests.find((r) => r.id === search.requestId) : null) ??
+      feeRequests.find((r) =>
+        cancelledCoordinationNeedsCorrection({
+          status: r.status,
+          signupFeeStatus: r.signupFeeStatus,
+        }),
+      ) ??
+      null;
+    const needsFeeCorrection = Boolean(
+      focusRequest &&
+        cancelledCoordinationNeedsCorrection({
+          status: focusRequest.status,
+          signupFeeStatus: focusRequest.signupFeeStatus,
+        }),
+    );
+    // Fix / focus=fee must open the voucher+proof form (not only the request table row).
+    const preferred = frontDeskFeeFocusAnchorId({ needsFeeCorrection });
+    // When correcting, still land on the editable fee form — correction banner sits above.
+    const formEl = document.getElementById("fd-signup-fee-panel");
+    const bannerEl = document.getElementById(preferred);
+    const el = formEl ?? bannerEl;
     if (!el) return;
     el.scrollIntoView({ behavior: "smooth", block: "start" });
+    window.setTimeout(() => {
+      document.getElementById("fd-fee-amount")?.focus();
+    }, 250);
   }, [search.focus, search.requestId, recordQ.data, studentId]);
 
   const invalidate = async () => {
@@ -414,6 +439,21 @@ function FrontDeskIntakeRecordPage() {
       signupFeeStatus: focusRequest.signupFeeStatus,
     }),
   );
+  const feeWorkflowSteps = buildFrontDeskFeeWorkflowSteps({
+    hasSignupFee: Boolean(signupFee),
+    feeStatus,
+  });
+  const feePrimaryLabel = frontDeskFeePrimaryActionLabel({
+    feeStatus,
+    canIssueVoucher,
+    canSubmitProof,
+    needsFeeCorrection,
+  });
+  const showProofForm =
+    canIssueVoucher ||
+    canSubmitProof ||
+    needsFeeCorrection ||
+    (feeStatus ?? "").toLowerCase() === "rejected";
 
   return (
     <div className="space-y-4 md:space-y-5">
@@ -672,168 +712,278 @@ function FrontDeskIntakeRecordPage() {
         </Panel>
       </div>
 
-      <Panel title="Signup fee voucher & payment proof">
-        <div id="fd-signup-fee-panel" />
-        <p className="mb-3 text-sm text-navy/70">
-          Authoritative ledger: signup/intake fee only. Issuing a voucher or uploading proof never
-          verifies payment — Finance decides via the trusted Accounts workflow.
-        </p>
-        <div className="mb-4 rounded-md border border-border bg-muted/30 px-3 py-2 text-sm">
-          <p className="font-medium text-navy">{feeOps.label}</p>
-          <p className="mt-1 text-xs text-muted-foreground">
-            {signupFee
-              ? `${signupFee.voucherNumber} · ${formatSignupFeeAmount(signupFee.amount, signupFee.currency)}`
-              : feeDisplay.label}
-          </p>
-        </div>
-
-        {canIssueVoucher ? (
-          <div className="mb-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-            <div>
-              <Label htmlFor="fd-fee-amount">Amount</Label>
-              <Input
-                id="fd-fee-amount"
-                type="number"
-                min={0}
-                step="0.01"
-                value={feeAmount}
-                onChange={(e) => setFeeAmount(e.target.value)}
-                disabled={feeM.isPending || (Boolean(signupFee) && feeStatus === "claimed")}
-              />
-            </div>
-            <div>
-              <Label htmlFor="fd-fee-currency">Currency</Label>
-              <Input
-                id="fd-fee-currency"
-                value={feeCurrency}
-                onChange={(e) => setFeeCurrency(e.target.value)}
-                disabled={feeM.isPending || (Boolean(signupFee) && feeStatus === "claimed")}
-              />
-            </div>
-            <div>
-              <Label htmlFor="fd-fee-method">Payment method</Label>
-              <select
-                id="fd-fee-method"
-                className="mt-0 flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
-                value={feeMethod}
-                onChange={(e) => setFeeMethod(e.target.value)}
-                disabled={feeM.isPending}
+      <Panel
+        title="Signup fee · payment proof"
+        className={cn(search.focus === "fee" && "ring-2 ring-royal/30")}
+      >
+        <div id="fd-signup-fee-panel" className="scroll-mt-6 space-y-4">
+          <ol className="flex flex-wrap gap-1.5">
+            {feeWorkflowSteps.map((step) => (
+              <li
+                key={step.id}
+                className={cn(
+                  "rounded-md border px-2 py-1 text-[0.7rem] font-medium",
+                  step.state === "done" && "border-emerald-200 bg-emerald-50 text-emerald-900",
+                  step.state === "current" && "border-navy/30 bg-navy/5 text-navy",
+                  step.state === "upcoming" && "border-border text-muted-foreground",
+                )}
               >
-                <option value="">Select…</option>
-                {INTAKE_FEE_PAYMENT_METHODS.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
+                {step.state === "done" ? "✓ " : step.state === "current" ? "→ " : ""}
+                {step.label}
+              </li>
+            ))}
+          </ol>
+
+          <div className="grid gap-3 rounded-md border border-border bg-muted/20 px-3 py-3 text-sm sm:grid-cols-2">
+            <div>
+              <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                Student
+              </p>
+              <p className="font-medium text-navy">{student.fullName}</p>
+              <p className="text-xs text-muted-foreground">{student.caseId}</p>
             </div>
             <div>
-              <Label htmlFor="fd-fee-ref">Transaction / receipt reference</Label>
-              <Input
-                id="fd-fee-ref"
-                value={feeReference}
-                onChange={(e) => setFeeReference(e.target.value)}
-                disabled={feeM.isPending}
-                placeholder="Required when submitting proof"
-              />
+              <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                Status
+              </p>
+              <p className="font-medium text-navy">{feeOps.label}</p>
+              <p className="text-xs text-muted-foreground">
+                Front Desk submits proof · Finance verifies
+              </p>
             </div>
-            <div className="sm:col-span-2 lg:col-span-4">
-              <Label htmlFor="fd-fee-notes">Notes (optional)</Label>
-              <Textarea
-                id="fd-fee-notes"
-                value={feeNotes}
-                onChange={(e) => setFeeNotes(e.target.value)}
-                disabled={feeM.isPending}
-              />
+            <div>
+              <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                Amount / voucher
+              </p>
+              <p className="font-medium text-navy">
+                {signupFee
+                  ? `${formatSignupFeeAmount(signupFee.amount, signupFee.currency)} · ${signupFee.voucherNumber}`
+                  : feeAmount.trim()
+                    ? formatSignupFeeAmount(Number(feeAmount) || 0, feeCurrency || "PKR")
+                    : "No voucher yet"}
+              </p>
             </div>
-            {canSubmitProof ? (
-              <div className="sm:col-span-2 lg:col-span-4">
-                <Label htmlFor="fd-fee-proof">Payment screenshot / receipt (optional)</Label>
-                <Input
-                  id="fd-fee-proof"
-                  type="file"
-                  accept={DOCUMENT_ALLOWED_MIME.join(",")}
-                  disabled={feeM.isPending}
-                  onChange={(e) => setProofFile(e.target.files?.[0] ?? null)}
-                  className="mt-1 cursor-pointer"
-                />
-                <p className="mt-1 text-[11px] text-muted-foreground">
-                  PDF or image, max {Math.floor(DOCUMENT_UPLOAD_MAX_BYTES / (1024 * 1024))} MB.
-                  {proofFile ? ` Selected: ${proofFile.name}` : ""}
-                </p>
-              </div>
-            ) : null}
+            <div>
+              <p className="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                Last submission
+              </p>
+              <p className="font-medium text-navy">
+                {signupFee?.updatedAt
+                  ? fmtDate(signupFee.updatedAt.slice(0, 10))
+                  : signupFee?.createdAt
+                    ? fmtDate(signupFee.createdAt.slice(0, 10))
+                    : "—"}
+              </p>
+            </div>
           </div>
-        ) : null}
 
-        <div className="flex flex-wrap gap-2">
-          {canIssueVoucher ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="outline"
-              disabled={feeM.isPending || voucherDlM.isPending || !feeAmount.trim()}
-              onClick={() => feeM.mutate({ markClaimed: false })}
-            >
-              {signupFee ? "Update unpaid voucher" : "Issue unpaid voucher"}
-            </Button>
+          {needsFeeCorrection && focusRequest ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50/80 px-3 py-2.5 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-900">
+                Correction required
+              </p>
+              <p className="mt-1 text-navy">
+                {focusRequest.coordinatorNote ||
+                  focusRequest.summary ||
+                  "Counsellor coordination needs a fee ledger before Finance can verify."}
+              </p>
+            </div>
           ) : null}
-          {canSubmitProof ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="navy"
-              disabled={
-                feeM.isPending || !feeAmount.trim() || !feeMethod.trim() || !feeReference.trim()
-              }
-              onClick={() => feeM.mutate({ markClaimed: true })}
-            >
-              Submit payment proof
-            </Button>
+
+          {(feeStatus ?? "").toLowerCase() === "rejected" ? (
+            <div className="rounded-md border border-amber-200 bg-amber-50/80 px-3 py-2.5 text-sm">
+              <p className="text-xs font-semibold uppercase tracking-wide text-amber-900">
+                Finance rejected this fee
+              </p>
+              <p className="mt-1 text-navy">
+                Correct the claim details and resubmit proof. Previous evidence remains in the fee
+                audit history — you cannot verify from Front Desk.
+              </p>
+            </div>
           ) : null}
-          {signupFee ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="navy"
-              disabled={voucherDlM.isPending || feeM.isPending}
-              onClick={() => {
-                setVoucherDlMsg(null);
-                voucherDlM.mutate();
-              }}
-            >
-              {voucherDlM.isPending ? "Generating PDF…" : "Download Fee Voucher"}
-            </Button>
+
+          {showProofForm ? (
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+              <div>
+                <Label htmlFor="fd-fee-amount">Amount *</Label>
+                <Input
+                  id="fd-fee-amount"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="mt-1"
+                  value={feeAmount}
+                  onChange={(e) => setFeeAmount(e.target.value)}
+                  disabled={feeM.isPending || (Boolean(signupFee) && feeStatus === "claimed")}
+                />
+              </div>
+              <div>
+                <Label htmlFor="fd-fee-currency">Currency</Label>
+                <Input
+                  id="fd-fee-currency"
+                  className="mt-1"
+                  value={feeCurrency}
+                  onChange={(e) => setFeeCurrency(e.target.value)}
+                  disabled={feeM.isPending || (Boolean(signupFee) && feeStatus === "claimed")}
+                />
+              </div>
+              <div>
+                <Label htmlFor="fd-fee-method">Payment method *</Label>
+                <select
+                  id="fd-fee-method"
+                  className="mt-1 flex h-9 w-full rounded-md border border-input bg-background px-2 text-sm"
+                  value={feeMethod}
+                  onChange={(e) => setFeeMethod(e.target.value)}
+                  disabled={feeM.isPending || !canSubmitProof}
+                >
+                  <option value="">Select…</option>
+                  {INTAKE_FEE_PAYMENT_METHODS.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="fd-fee-ref">Transaction / reference *</Label>
+                <Input
+                  id="fd-fee-ref"
+                  className="mt-1"
+                  value={feeReference}
+                  onChange={(e) => setFeeReference(e.target.value)}
+                  disabled={feeM.isPending || !canSubmitProof}
+                  placeholder="Required for proof"
+                />
+              </div>
+              <div className="sm:col-span-2 lg:col-span-4">
+                <Label htmlFor="fd-fee-notes">Remarks (optional)</Label>
+                <Textarea
+                  id="fd-fee-notes"
+                  className="mt-1"
+                  rows={2}
+                  value={feeNotes}
+                  onChange={(e) => setFeeNotes(e.target.value)}
+                  disabled={feeM.isPending || !canSubmitProof}
+                />
+              </div>
+              {canSubmitProof ? (
+                <div className="sm:col-span-2 lg:col-span-4">
+                  <Label htmlFor="fd-fee-proof">Payment proof file (optional)</Label>
+                  <Input
+                    id="fd-fee-proof"
+                    type="file"
+                    accept={DOCUMENT_ALLOWED_MIME.join(",")}
+                    disabled={feeM.isPending}
+                    onChange={(e) => setProofFile(e.target.files?.[0] ?? null)}
+                    className="mt-1 cursor-pointer"
+                  />
+                  <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-muted-foreground">
+                    <span>
+                      PDF or image, max {Math.floor(DOCUMENT_UPLOAD_MAX_BYTES / (1024 * 1024))} MB.
+                    </span>
+                    {proofFile ? (
+                      <>
+                        <span className="font-medium text-navy">Selected: {proofFile.name}</span>
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 px-1.5 text-[11px]"
+                          onClick={() => setProofFile(null)}
+                        >
+                          Remove
+                        </Button>
+                      </>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+            </div>
           ) : null}
-          {signupFee ? (
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => setShowVoucher((v) => !v)}
-            >
-              {showVoucher ? "Hide voucher preview" : "Show voucher preview"}
+
+          <div className="flex flex-wrap gap-2">
+            {canSubmitProof && feePrimaryLabel ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="navy"
+                disabled={
+                  feeM.isPending || !feeAmount.trim() || !feeMethod.trim() || !feeReference.trim()
+                }
+                onClick={() => feeM.mutate({ markClaimed: true })}
+              >
+                {feeM.isPending
+                  ? "Saving…"
+                  : needsFeeCorrection || (feeStatus ?? "").toLowerCase() === "rejected"
+                    ? "Correct & resubmit"
+                    : "Submit payment proof"}
+              </Button>
+            ) : null}
+            {canIssueVoucher ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={feeM.isPending || voucherDlM.isPending || !feeAmount.trim()}
+                onClick={() => feeM.mutate({ markClaimed: false })}
+              >
+                {signupFee ? "Update unpaid voucher" : "Issue unpaid voucher"}
+              </Button>
+            ) : null}
+            {signupFee ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={voucherDlM.isPending || feeM.isPending}
+                onClick={() => {
+                  setVoucherDlMsg(null);
+                  voucherDlM.mutate();
+                }}
+              >
+                {voucherDlM.isPending ? "Generating PDF…" : "Download voucher"}
+              </Button>
+            ) : null}
+            {(feeStatus ?? "").toLowerCase() === "claimed" ||
+            (feeStatus ?? "").toLowerCase() === "verified" ||
+            (feeStatus ?? "").toLowerCase() === "waived" ? (
+              <Button type="button" size="sm" variant="ghost" disabled>
+                {feeOps.label}
+              </Button>
+            ) : null}
+            {signupFee ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={() => setShowVoucher((v) => !v)}
+              >
+                {showVoucher ? "Hide preview" : "Preview voucher"}
+              </Button>
+            ) : null}
+            <Button asChild size="sm" variant="ghost">
+              <Link to="/staff/front-desk">Back to attention queue</Link>
             </Button>
+          </div>
+          {voucherDlMsg ? <p className="text-xs text-navy">{voucherDlMsg}</p> : null}
+          <p className="text-xs text-muted-foreground">
+            You cannot mark fees verified. Accounts / Finance owns verification, waiver, and
+            rejection.
+          </p>
+          {showVoucher && signupFee ? (
+            <div className="overflow-x-auto rounded-lg border border-border bg-white">
+              <SignupFeeVoucherA4
+                feeId={signupFee.feeId}
+                caseId={student.caseId}
+                studentName={student.fullName}
+                amount={signupFee.amount}
+                currency={signupFee.currency}
+                status={signupFee.status}
+                issuedAt={signupFee.createdAt}
+              />
+            </div>
           ) : null}
         </div>
-        {voucherDlMsg ? <p className="mt-2 text-xs text-navy">{voucherDlMsg}</p> : null}
-        <p className="mt-3 text-xs text-muted-foreground">
-          Download generates a real A4 PDF from the fee ledger (same voucher reference on every
-          download). Uploaded proof reaches Finance for review. You cannot mark this fee verified.
-        </p>
-        {showVoucher && signupFee ? (
-          <div className="mt-4 overflow-x-auto rounded-lg border border-border bg-white">
-            <SignupFeeVoucherA4
-              feeId={signupFee.feeId}
-              caseId={student.caseId}
-              studentName={student.fullName}
-              amount={signupFee.amount}
-              currency={signupFee.currency}
-              status={signupFee.status}
-              issuedAt={signupFee.createdAt}
-            />
-          </div>
-        ) : null}
       </Panel>
 
       <Panel title="Counsellor fee-verification coordination">

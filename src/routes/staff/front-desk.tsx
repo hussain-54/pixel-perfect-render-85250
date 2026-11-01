@@ -33,6 +33,7 @@ import {
 import { isFrontDeskBusinessRole } from "@/lib/staff-business-access";
 import {
   buildFrontDeskAttentionItems,
+  frontDeskAttentionSupportsFix,
   frontDeskIntakeFocusSearch,
   resolveFrontDeskNotificationHref,
 } from "@/lib/front-desk-workspace";
@@ -74,16 +75,15 @@ const FEE_TABS: {
   { id: "cancelled", label: "Cancelled (history)", scope: "history" },
 ];
 
-type KpiFilter = "all" | "awaiting" | "fee_verify" | "fee_corrections";
-
-function attentionActionLabel(
-  kind: "unassigned" | "fee_open" | "fee_stuck" | "fee_correction" | "fee_rejected",
-): string {
-  if (kind === "unassigned") return "Assign";
-  if (kind === "fee_correction") return "Fix";
-  if (kind === "fee_stuck") return "Sync";
-  return "Open";
-}
+type KpiFilter =
+  | "all"
+  | "awaiting"
+  | "fee_verify"
+  | "fee_corrections"
+  | "assigned"
+  | "unpaid"
+  | "verified"
+  | "portal_link";
 
 function FrontDeskDashboardPage() {
   const router = useRouter();
@@ -234,6 +234,10 @@ function FrontDeskDashboardPage() {
     if (kpiFilter === "fee_corrections") {
       return items.filter((i) => i.kind === "fee_correction" || i.kind === "fee_rejected");
     }
+    // KPI filters that are list-oriented still show actionable attention for those students.
+    if (kpiFilter === "assigned" || kpiFilter === "unpaid" || kpiFilter === "verified" || kpiFilter === "portal_link") {
+      return [];
+    }
     return items;
   }, [intakeSource, allRows, kpiFilter]);
 
@@ -243,8 +247,23 @@ function FrontDeskDashboardPage() {
     );
     if (kpiFilter === "awaiting") {
       list = list.filter((r) => r.assignmentStatus === "pending");
+    } else if (kpiFilter === "assigned") {
+      list = list.filter((r) => r.assignmentStatus === "assigned");
     } else if (kpiFilter === "fee_verify") {
       list = list.filter((r) => (r.signupFeeStatus || "").toLowerCase() === "claimed");
+    } else if (kpiFilter === "unpaid") {
+      list = list.filter((r) => (r.signupFeeStatus || "").toLowerCase() === "unpaid");
+    } else if (kpiFilter === "verified") {
+      list = list.filter((r) => {
+        const fee = (r.signupFeeStatus || "").toLowerCase();
+        return fee === "verified" || fee === "waived";
+      });
+    } else if (kpiFilter === "portal_link") {
+      list = list.filter((r) => {
+        const fee = (r.signupFeeStatus || "").toLowerCase();
+        if (fee !== "verified" && fee !== "waived") return false;
+        return !r.portalActivatedAt;
+      });
     } else if (kpiFilter === "fee_corrections") {
       list = list.filter(
         (r) =>
@@ -372,8 +391,8 @@ function FrontDeskDashboardPage() {
         }
       />
 
-      {/* Part A — four compact KPI cards */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+      {/* Part A — compact KPI cards (real metrics only) */}
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
         <StatCard
           label="Registrations"
           value={String(data.myRegistrations)}
@@ -383,7 +402,15 @@ function FrontDeskDashboardPage() {
           title="All registrations you manage"
         />
         <StatCard
-          label="Need Counsellor"
+          label="Assigned"
+          value={String(data.assignedStudents)}
+          icon={<Users />}
+          selected={kpiFilter === "assigned"}
+          onClick={() => applyKpiFilter("assigned")}
+          title="Registrations with a counsellor assigned"
+        />
+        <StatCard
+          label="Awaiting Counsellor"
           value={String(data.awaitingAssignment)}
           icon={<Clock3 />}
           selected={kpiFilter === "awaiting"}
@@ -391,18 +418,44 @@ function FrontDeskDashboardPage() {
           title="Registrations awaiting counsellor assignment"
         />
         <StatCard
-          label="Fee to Verify"
+          label="Payment Claims"
+          value={String(data.unpaidVouchers ?? 0)}
+          hint="Unpaid vouchers"
+          icon={<BadgeDollarSign />}
+          selected={kpiFilter === "unpaid"}
+          onClick={() => applyKpiFilter("unpaid")}
+          title="Issued unpaid vouchers — payment claim / proof still needed"
+        />
+        <StatCard
+          label="Awaiting Finance"
           value={String(feeToVerifyCount)}
-          hint="Proofs awaiting Finance"
+          hint="Proofs submitted"
           icon={<BadgeDollarSign />}
           selected={kpiFilter === "fee_verify"}
           onClick={() => applyKpiFilter("fee_verify")}
           title="Signup fee claimed — awaiting Accounts verification"
         />
         <StatCard
+          label="Finance Verified"
+          value={String(data.verifiedFees ?? 0)}
+          icon={<BadgeDollarSign />}
+          selected={kpiFilter === "verified"}
+          onClick={() => applyKpiFilter("verified")}
+          title="Fees verified or waived by Accounts"
+        />
+        <StatCard
+          label="Portal Linking"
+          value={String(data.portalLinkPending ?? 0)}
+          hint="Fee OK · portal pending"
+          icon={<UserPlus />}
+          selected={kpiFilter === "portal_link"}
+          onClick={() => applyKpiFilter("portal_link")}
+          title="Fee authorized but student portal not yet activated"
+        />
+        <StatCard
           label="Fee Corrections"
           value={String(needsCorrectionCount)}
-          hint="Needs counsellor follow-up"
+          hint="Action required"
           icon={<AlertCircle />}
           selected={kpiFilter === "fee_corrections"}
           onClick={() => applyKpiFilter("fee_corrections")}
@@ -413,12 +466,20 @@ function FrontDeskDashboardPage() {
       {kpiFilter !== "all" ? (
         <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <span>
-            Showing filtered view
+            Showing filtered view ·{" "}
             {kpiFilter === "awaiting"
-              ? " · Need Counsellor"
-              : kpiFilter === "fee_verify"
-                ? " · Fee to Verify"
-                : " · Fee Corrections"}
+              ? "Awaiting Counsellor"
+              : kpiFilter === "assigned"
+                ? "Assigned"
+                : kpiFilter === "fee_verify"
+                  ? "Awaiting Finance"
+                  : kpiFilter === "unpaid"
+                    ? "Payment Claims"
+                    : kpiFilter === "verified"
+                      ? "Finance Verified"
+                      : kpiFilter === "portal_link"
+                        ? "Portal Linking"
+                        : "Fee Corrections"}
           </span>
           <Button
             type="button"
@@ -459,71 +520,119 @@ function FrontDeskDashboardPage() {
               {attentionItems.length === 0 ? (
                 <EmptyState
                   title="Nothing needs attention"
-                  body="Unassigned registrations and actionable fee coordination appear here."
+                  body={
+                    kpiFilter !== "all" &&
+                    kpiFilter !== "awaiting" &&
+                    kpiFilter !== "fee_verify" &&
+                    kpiFilter !== "fee_corrections"
+                      ? "This KPI filters registrations on the right. Clear the filter to see the attention queue."
+                      : "Unassigned registrations and actionable fee coordination appear here."
+                  }
                 />
               ) : (
-                <ul className="divide-y divide-border">
-                  {attentionItems.map((item) => (
-                    <li
-                      key={item.id}
-                      className="flex flex-col gap-2 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-center sm:justify-between"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium text-navy">{item.title}</p>
-                        <p className="text-sm text-navy/90">
-                          {item.fullName}{" "}
-                          <span className="font-normal text-muted-foreground">· {item.caseId}</span>
-                        </p>
-                        <p className="text-xs text-muted-foreground line-clamp-2">{item.detail}</p>
-                      </div>
-                      {item.kind === "fee_stuck" ? (
-                        <div className="flex shrink-0 flex-wrap gap-1.5 self-start sm:self-center">
-                          <Button
-                            size="sm"
-                            variant="navy"
-                            disabled={reconcileM.isPending}
-                            onClick={() => {
-                              setActionMsg(null);
-                              reconcileM.mutate(item.studentId);
-                            }}
-                          >
-                            {reconcileM.isPending ? "Syncing…" : "Sync"}
-                          </Button>
-                          <Button asChild size="sm" variant="outline">
-                            <Link
-                              to="/staff/intake/$studentId"
-                              params={{ studentId: item.studentId }}
-                              search={frontDeskIntakeFocusSearch({
-                                kind: item.kind,
-                                requestId: item.requestId ?? null,
-                              })}
-                            >
-                              Open
-                            </Link>
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          asChild
-                          size="sm"
-                          variant="navy"
-                          className="shrink-0 self-start sm:self-center"
-                        >
-                          <Link
-                            to="/staff/intake/$studentId"
-                            params={{ studentId: item.studentId }}
-                            search={frontDeskIntakeFocusSearch({
-                              kind: item.kind,
-                              requestId: item.requestId ?? null,
-                            })}
-                          >
-                            {attentionActionLabel(item.kind)}
-                          </Link>
-                        </Button>
-                      )}
-                    </li>
-                  ))}
-                </ul>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[28rem] text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-border text-[0.65rem] uppercase tracking-wide text-muted-foreground">
+                        <th className="pb-2 pr-3 font-semibold">Student / Case</th>
+                        <th className="pb-2 pr-3 font-semibold">Issue</th>
+                        <th className="pb-2 font-semibold">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-border">
+                      {attentionItems.map((item) => {
+                        const fixSearch = frontDeskIntakeFocusSearch({
+                          kind: item.kind,
+                          requestId: item.requestId ?? null,
+                        });
+                        // Open lands on the record (assign focus only when that is the issue).
+                        const openSearch =
+                          item.kind === "unassigned"
+                            ? ({ focus: "assign" as const })
+                            : item.requestId
+                              ? ({ requestId: item.requestId })
+                              : {};
+                        const showFix = frontDeskAttentionSupportsFix(item.kind);
+                        return (
+                          <tr key={item.id} className="align-top">
+                            <td className="py-3 pr-3">
+                              <p className="font-medium text-navy">{item.fullName}</p>
+                              <p className="text-xs text-muted-foreground">{item.caseId}</p>
+                              {item.at ? (
+                                <p className="mt-0.5 text-[0.65rem] text-muted-foreground">
+                                  Updated {fmtDate(item.at.slice(0, 10))}
+                                </p>
+                              ) : null}
+                            </td>
+                            <td className="py-3 pr-3">
+                              <p className="font-medium text-navy">{item.title}</p>
+                              <p className="text-xs text-muted-foreground line-clamp-2">
+                                {item.detail}
+                              </p>
+                              <p className="mt-1 text-[0.65rem] font-medium uppercase tracking-wide text-muted-foreground">
+                                {item.kind === "unassigned"
+                                  ? "Assignment pending"
+                                  : item.kind === "fee_stuck"
+                                    ? "Sync required"
+                                    : item.kind === "fee_correction" || item.kind === "fee_rejected"
+                                      ? "Correction required"
+                                      : "Action pending"}
+                              </p>
+                            </td>
+                            <td className="py-3">
+                              <div className="flex flex-wrap gap-1.5">
+                                <Button asChild size="sm" variant="outline">
+                                  <Link
+                                    to="/staff/intake/$studentId"
+                                    params={{ studentId: item.studentId }}
+                                    search={openSearch}
+                                  >
+                                    Open
+                                  </Link>
+                                </Button>
+                                {showFix ? (
+                                  <Button asChild size="sm" variant="navy">
+                                    <Link
+                                      to="/staff/intake/$studentId"
+                                      params={{ studentId: item.studentId }}
+                                      search={fixSearch}
+                                    >
+                                      Fix
+                                    </Link>
+                                  </Button>
+                                ) : null}
+                                {item.kind === "fee_stuck" ? (
+                                  <Button
+                                    size="sm"
+                                    variant="navy"
+                                    disabled={reconcileM.isPending}
+                                    onClick={() => {
+                                      setActionMsg(null);
+                                      reconcileM.mutate(item.studentId);
+                                    }}
+                                  >
+                                    {reconcileM.isPending ? "Syncing…" : "Sync"}
+                                  </Button>
+                                ) : null}
+                                {item.kind === "unassigned" ? (
+                                  <Button asChild size="sm" variant="navy">
+                                    <Link
+                                      to="/staff/intake/$studentId"
+                                      params={{ studentId: item.studentId }}
+                                      search={{ focus: "assign" }}
+                                    >
+                                      Assign
+                                    </Link>
+                                  </Button>
+                                ) : null}
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
             </div>
           </div>
@@ -829,7 +938,7 @@ function FrontDeskDashboardPage() {
                                 requestId: row.id,
                               }}
                             >
-                              {tab === "needs_correction" ? "Fix" : "Open record"}
+                              {tab === "needs_correction" ? "Fix · open form" : "Open record"}
                             </Link>
                           </Button>
                           {!isHistory && stuck ? (

@@ -336,6 +336,89 @@ export function frontDeskIntakeFocusSearch(input: {
   return search;
 }
 
+/** Attention kinds that support a Fix / correction CTA (distinct from Open). */
+export function frontDeskAttentionSupportsFix(
+  kind: FrontDeskAttentionItem["kind"],
+): boolean {
+  return kind === "fee_correction" || kind === "fee_rejected";
+}
+
+/**
+ * Where Fix / focus=fee should land. Always the voucher+proof form —
+ * never the request table row alone (that was the Fix-does-not-open-form bug).
+ * Correction banner remains visible above when needsFeeCorrection is true.
+ */
+export function frontDeskFeeFocusAnchorId(_input?: {
+  needsFeeCorrection?: boolean;
+}): "fd-signup-fee-panel" {
+  return "fd-signup-fee-panel";
+}
+
+export type FrontDeskFeeWorkflowStepId =
+  | "voucher"
+  | "claim"
+  | "proof"
+  | "finance"
+  | "final";
+
+export type FrontDeskFeeWorkflowStep = {
+  id: FrontDeskFeeWorkflowStepId;
+  label: string;
+  state: "done" | "current" | "upcoming";
+};
+
+/**
+ * UX-only progress for signup fee (maps existing ledger statuses — no new enum).
+ * Front Desk claims/submits proof; Finance verifies.
+ */
+export function buildFrontDeskFeeWorkflowSteps(input: {
+  hasSignupFee: boolean;
+  feeStatus: string | null | undefined;
+}): FrontDeskFeeWorkflowStep[] {
+  const s = (input.feeStatus ?? "").trim().toLowerCase();
+  const hasFee = input.hasSignupFee || Boolean(s);
+  const labels: { id: FrontDeskFeeWorkflowStepId; label: string }[] = [
+    { id: "voucher", label: "Voucher" },
+    { id: "claim", label: "Payment claim" },
+    { id: "proof", label: "Proof" },
+    { id: "finance", label: "Finance check" },
+    { id: "final", label: "Final" },
+  ];
+  let currentIndex = 0;
+  if (!hasFee) currentIndex = 0;
+  else if (!s || s === "unpaid") currentIndex = 1;
+  else if (s === "claimed") currentIndex = 3;
+  else if (s === "rejected") currentIndex = 2;
+  else if (s === "verified" || s === "waived") currentIndex = 4;
+  else currentIndex = 0;
+
+  return labels.map((step, i) => ({
+    ...step,
+    state: i < currentIndex ? "done" : i === currentIndex ? "current" : "upcoming",
+  }));
+}
+
+/** Primary fee-panel CTA label from ledger status (existing statuses only). */
+export function frontDeskFeePrimaryActionLabel(input: {
+  feeStatus: string | null | undefined;
+  canIssueVoucher: boolean;
+  canSubmitProof: boolean;
+  needsFeeCorrection: boolean;
+}): string | null {
+  const s = (input.feeStatus ?? "").trim().toLowerCase();
+  if (input.needsFeeCorrection || s === "rejected") {
+    return input.canSubmitProof ? "Correct & resubmit proof" : "Correct fee record";
+  }
+  if (!s || s === "unpaid") {
+    if (input.canSubmitProof) return "Submit payment proof";
+    if (input.canIssueVoucher) return "Issue unpaid voucher";
+    return null;
+  }
+  if (s === "claimed") return "View verification status";
+  if (s === "verified" || s === "waived") return "View verification status";
+  return null;
+}
+
 /**
  * Prefer open/in_progress requests; otherwise surface cancelled coordination that still
  * needs a fee ledger (needs_correction) so next-action / Fix UX is accurate.

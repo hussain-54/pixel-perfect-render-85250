@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { createFileRoute, Link, redirect, useNavigate } from "@tanstack/react-router";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Circle, CircleDashed, ChevronDown } from "lucide-react";
@@ -16,6 +16,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@/components/ui/collapsible";
 import {
   INTAKE_DESTINATIONS,
   INTAKE_FEE_PAYMENT_METHODS,
@@ -44,6 +49,64 @@ import {
 import { isFrontDeskBusinessRole } from "@/lib/staff-business-access";
 import { cn } from "@/lib/utils";
 import { assignCounsellor, intakeRegisterStudent, listCounsellorDesks } from "@/services";
+
+type FormSectionId = "contact" | "preferences" | "signup_fee" | "counsellor";
+
+function RegisterAccordionSection({
+  id,
+  title,
+  status,
+  summary,
+  open,
+  onOpenChange,
+  children,
+}: {
+  id: string;
+  title: string;
+  status: RegisterChecklistStatus;
+  summary: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: ReactNode;
+}) {
+  return (
+    <Collapsible open={open} onOpenChange={onOpenChange}>
+      <div id={id} className="scroll-mt-6 overflow-hidden rounded-md border border-border bg-white">
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-muted/30"
+          >
+            {statusIcon(status)}
+            <span className="min-w-0 flex-1">
+              <span className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="text-sm font-semibold text-navy">{title}</span>
+                <span className="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                  {statusLabel(status)}
+                </span>
+              </span>
+              {!open ? (
+                <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                  {summary}
+                </span>
+              ) : null}
+            </span>
+            <ChevronDown
+              className={cn(
+                "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                open && "rotate-180",
+              )}
+              aria-hidden
+            />
+          </button>
+        </CollapsibleTrigger>
+        <CollapsibleContent>
+          <div className="border-t border-border px-4 py-3">{children}</div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
+  );
+}
 
 export const Route = createFileRoute("/staff/register")({
   beforeLoad: ({ context }) => {
@@ -157,7 +220,25 @@ function FrontDeskRegisterPage() {
   } | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [checklistOpen, setChecklistOpen] = useState(false);
+  const [openSections, setOpenSections] = useState<Record<FormSectionId, boolean>>({
+    contact: true,
+    preferences: true,
+    signup_fee: false,
+    counsellor: false,
+  });
+  const [notesOpen, setNotesOpen] = useState(false);
   const years = useMemo(() => intakeYearOptions(), []);
+
+  const setSectionOpen = (id: FormSectionId, open: boolean) => {
+    setOpenSections((prev) => ({ ...prev, [id]: open }));
+  };
+
+  const expandAndScroll = (id: RegisterChecklistSectionId) => {
+    if (id === "contact" || id === "preferences" || id === "signup_fee" || id === "counsellor") {
+      setSectionOpen(id, true);
+    }
+    window.setTimeout(() => scrollToSection(id), 40);
+  };
 
   const desksQ = useQuery({
     queryKey: ["front-desk", "counsellor-desks"],
@@ -268,6 +349,12 @@ function FrontDeskRegisterPage() {
     },
   });
 
+  const failValidation = (message: string, section: FormSectionId) => {
+    setErr(message);
+    setSectionOpen(section, true);
+    window.setTimeout(() => scrollToSection(section), 40);
+  };
+
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (submitting || !canSubmit) return;
@@ -275,33 +362,33 @@ function FrontDeskRegisterPage() {
     setSuccess(null);
 
     if (!form.fullName.trim()) {
-      setErr("Full name is required.");
+      failValidation("Full name is required.", "contact");
       return;
     }
     if (!isValidIntakeEmail(form.email)) {
-      setErr("Enter a valid email address.");
+      failValidation("Enter a valid email address.", "contact");
       return;
     }
     if (!isValidIntakePhone(form.phone)) {
-      setErr("Enter a valid phone / WhatsApp number.");
+      failValidation("Enter a valid phone / WhatsApp number.", "contact");
       return;
     }
     if (!form.whatsappSameAsPhone && form.whatsapp.trim() && !isValidIntakePhone(form.whatsapp)) {
-      setErr("Enter a valid WhatsApp number, or mark it same as phone.");
+      failValidation("Enter a valid WhatsApp number, or mark it same as phone.", "contact");
       return;
     }
     if (!form.destination.trim()) {
-      setErr("Preferred destination is required.");
+      failValidation("Preferred destination is required.", "preferences");
       return;
     }
     if (!form.program.trim()) {
-      setErr("Intended course / programme is required.");
+      failValidation("Intended course / programme is required.", "preferences");
       return;
     }
     if (form.feeAmount.trim()) {
       const amount = Number(form.feeAmount);
       if (!Number.isFinite(amount) || amount <= 0) {
-        setErr("Signup fee amount must be a positive number, or leave it blank.");
+        failValidation("Signup fee amount must be a positive number, or leave it blank.", "signup_fee");
         return;
       }
     }
@@ -445,19 +532,49 @@ function FrontDeskRegisterPage() {
     );
   }
 
+  const sectionById = Object.fromEntries(checklist.map((s) => [s.id, s])) as Record<
+    RegisterChecklistSectionId,
+    (typeof checklist)[number]
+  >;
+
+  const contactSummary = [
+    form.fullName.trim() || null,
+    form.email.trim() || null,
+    form.phone.trim() || null,
+    form.city === "Other" ? form.cityOther.trim() : form.city || null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const preferencesSummary = [
+    form.destination === "Other" ? form.destinationOther.trim() : form.destination || null,
+    form.program === "Other" ? form.programOther.trim() : form.program || null,
+    intakeLabel || null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+
+  const feeSummary = form.feeAmount.trim()
+    ? `PKR ${form.feeAmount}${form.markClaimed ? " · claimed (not verified)" : ""}`
+    : "Optional — skip if unpaid";
+
+  const counsellorSummary = form.assignedConsultantId
+    ? counsellorOptions.find((o) => o.value === form.assignedConsultantId)?.label || "Selected"
+    : "Assign later";
+
   const checklistPanel = (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div>
         <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-          Registration progress
+          Progress
         </p>
         <p className="mt-1 text-sm text-navy">
-          {requiredSectionsDone} of {requiredSectionsTotal} required sections ·{" "}
+          {progressPct}% ·{" "}
           {remainingRequired === 0
-            ? "Ready to register"
-            : `${remainingRequired} required field${remainingRequired === 1 ? "" : "s"} left`}
+            ? "Ready"
+            : `${remainingRequired} required left`}
         </p>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
           <div
             className="h-full rounded-full bg-royal transition-[width] duration-300"
             style={{ width: `${progressPct}%` }}
@@ -465,47 +582,29 @@ function FrontDeskRegisterPage() {
           />
         </div>
       </div>
-      <ul className="space-y-2">
+      <ul className="space-y-1">
         {checklist.map((section) => (
           <li key={section.id}>
             <button
               type="button"
               onClick={() => {
-                scrollToSection(section.id);
+                expandAndScroll(section.id);
                 setChecklistOpen(false);
               }}
               className={cn(
-                "flex w-full items-start gap-2.5 rounded-md border px-3 py-2.5 text-left transition-colors",
-                section.status === "complete"
-                  ? "border-success/30 bg-success-soft/30"
-                  : section.status === "pending"
-                    ? "border-amber-200/80 bg-amber-50/50 hover:border-amber-300"
-                    : "border-border bg-white hover:border-royal/30",
+                "flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/50",
+                section.status === "pending" && "bg-amber-50/40",
               )}
             >
               {statusIcon(section.status)}
-              <span className="min-w-0 flex-1">
-                <span className="flex items-center justify-between gap-2">
-                  <span className="text-sm font-medium text-navy">{section.title}</span>
-                  <span className="text-[0.65rem] font-semibold uppercase tracking-wide text-muted-foreground">
-                    {statusLabel(section.status)}
-                  </span>
-                </span>
-                <span className="mt-0.5 block text-xs text-muted-foreground">{section.hint}</span>
-                {section.requiredTotal > 0 ? (
-                  <span className="mt-1 block text-[0.7rem] tabular-nums text-muted-foreground">
-                    {section.requiredComplete}/{section.requiredTotal} required
-                  </span>
-                ) : null}
+              <span className="min-w-0 flex-1 truncate font-medium text-navy">{section.title}</span>
+              <span className="text-[0.6rem] font-semibold uppercase tracking-wide text-muted-foreground">
+                {statusLabel(section.status)}
               </span>
             </button>
           </li>
         ))}
       </ul>
-      <p className="text-xs text-muted-foreground">
-        Signup fee and counsellor assignment are optional and do not block registration. Claimed
-        fees are not Finance-verified.
-      </p>
     </div>
   );
 
@@ -514,7 +613,7 @@ function FrontDeskRegisterPage() {
       <PageHeader
         compact
         title="Register student"
-        subtitle="Live checklist on the left · Required fields marked * · Fee claims are not Accounts-verified."
+        subtitle="Compact checklist · * required · Fee claims are not Finance-verified."
       />
 
       {err ? (
@@ -553,378 +652,391 @@ function FrontDeskRegisterPage() {
           </div>
         </aside>
 
-        <form className="space-y-4 md:space-y-5" onSubmit={onSubmit} noValidate>
-          <div id={SECTION_ANCHORS.contact} className="scroll-mt-6">
-            <Panel title="1. Student & contact">
-              <div className="grid gap-3 sm:grid-cols-2 sm:gap-4">
-                <div className="sm:col-span-2">
-                  <Label htmlFor="fullName">Full name *</Label>
-                  <Input
-                    id="fullName"
-                    className="mt-1.5"
-                    value={form.fullName}
-                    onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
-                    required
-                    disabled={submitting}
-                    autoComplete="name"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="email">Email *</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    className="mt-1.5"
-                    value={form.email}
-                    onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
-                    required
-                    disabled={submitting}
-                    autoComplete="email"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="phone">Phone / WhatsApp *</Label>
-                  <Input
-                    id="phone"
-                    className="mt-1.5"
-                    value={form.phone}
-                    onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
-                    required
-                    disabled={submitting}
-                    autoComplete="tel"
-                    placeholder="+92 3XX XXXXXXX"
-                  />
-                </div>
-                <div className="sm:col-span-2 flex items-center gap-2">
-                  <input
-                    id="whatsappSame"
-                    type="checkbox"
-                    checked={form.whatsappSameAsPhone}
-                    disabled={submitting}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, whatsappSameAsPhone: e.target.checked }))
-                    }
-                  />
-                  <Label htmlFor="whatsappSame">WhatsApp same as phone number</Label>
-                </div>
-                {!form.whatsappSameAsPhone ? (
-                  <div className="sm:col-span-2">
-                    <Label htmlFor="whatsapp">WhatsApp (if different)</Label>
-                    <Input
-                      id="whatsapp"
-                      className="mt-1.5"
-                      value={form.whatsapp}
-                      onChange={(e) => setForm((f) => ({ ...f, whatsapp: e.target.value }))}
-                      disabled={submitting}
-                    />
-                  </div>
-                ) : null}
-                <div>
-                  <Label htmlFor="city">City</Label>
-                  <SearchableSelect
-                    id="city"
-                    value={form.city}
-                    options={INTAKE_PAKISTAN_CITIES}
-                    onChange={(city) => setForm((f) => ({ ...f, city, cityOther: "" }))}
-                    placeholder="Select city…"
-                    disabled={submitting}
-                    allowClear
-                  />
-                </div>
-                {form.city === "Other" ? (
-                  <div>
-                    <Label htmlFor="cityOther">City name *</Label>
-                    <Input
-                      id="cityOther"
-                      className="mt-1.5"
-                      value={form.cityOther}
-                      onChange={(e) => setForm((f) => ({ ...f, cityOther: e.target.value }))}
-                      disabled={submitting}
-                    />
-                  </div>
-                ) : null}
+        <form className="space-y-3" onSubmit={onSubmit} noValidate>
+          <RegisterAccordionSection
+            id={SECTION_ANCHORS.contact}
+            title="1. Student & contact"
+            status={sectionById.contact.status}
+            summary={contactSummary || "Name, email, phone, city"}
+            open={openSections.contact}
+            onOpenChange={(open) => setSectionOpen("contact", open)}
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div className="sm:col-span-2">
+                <Label htmlFor="fullName">Full name *</Label>
+                <Input
+                  id="fullName"
+                  className="mt-1 h-9"
+                  value={form.fullName}
+                  onChange={(e) => setForm((f) => ({ ...f, fullName: e.target.value }))}
+                  required
+                  disabled={submitting}
+                  autoComplete="name"
+                />
               </div>
-            </Panel>
-          </div>
-
-          <div id={SECTION_ANCHORS.preferences} className="scroll-mt-6">
-            <Panel title="2. Study preferences">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Label htmlFor="destination">Preferred destination *</Label>
-                  <SearchableSelect
-                    id="destination"
-                    value={form.destination}
-                    options={INTAKE_DESTINATIONS}
-                    onChange={(destination) =>
-                      setForm((f) => ({ ...f, destination, destinationOther: "" }))
-                    }
-                    placeholder="Select destination…"
-                    disabled={submitting}
-                    allowClear
-                  />
-                </div>
-                {form.destination === "Other" ? (
-                  <div>
-                    <Label htmlFor="destinationOther">Destination name *</Label>
-                    <Input
-                      id="destinationOther"
-                      className="mt-1.5"
-                      value={form.destinationOther}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, destinationOther: e.target.value }))
-                      }
-                      disabled={submitting}
-                    />
-                  </div>
-                ) : null}
-                <div>
-                  <Label htmlFor="program">Intended course / programme *</Label>
-                  <SearchableSelect
-                    id="program"
-                    value={form.program}
-                    options={INTAKE_PROGRAMMES}
-                    onChange={(program) =>
-                      setForm((f) => ({ ...f, program, programOther: "" }))
-                    }
-                    placeholder="Select programme…"
-                    disabled={submitting}
-                    allowClear
-                  />
-                </div>
-                {form.program === "Other" ? (
-                  <div>
-                    <Label htmlFor="programOther">Programme name *</Label>
-                    <Input
-                      id="programOther"
-                      className="mt-1.5"
-                      value={form.programOther}
-                      onChange={(e) => setForm((f) => ({ ...f, programOther: e.target.value }))}
-                      disabled={submitting}
-                    />
-                  </div>
-                ) : null}
-                <div>
-                  <Label htmlFor="studyLevel">Study level</Label>
-                  <SearchableSelect
-                    id="studyLevel"
-                    value={form.studyLevel}
-                    options={INTAKE_STUDY_LEVELS}
-                    onChange={(studyLevel) =>
-                      setForm((f) => ({ ...f, studyLevel, studyLevelOther: "" }))
-                    }
-                    placeholder="Select level…"
-                    disabled={submitting}
-                    allowClear
-                  />
-                </div>
-                {form.studyLevel === "Other" ? (
-                  <div>
-                    <Label htmlFor="studyLevelOther">Study level *</Label>
-                    <Input
-                      id="studyLevelOther"
-                      className="mt-1.5"
-                      value={form.studyLevelOther}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, studyLevelOther: e.target.value }))
-                      }
-                      disabled={submitting}
-                    />
-                  </div>
-                ) : null}
-                <div>
-                  <Label htmlFor="intakeSeason">Intake season</Label>
-                  <SearchableSelect
-                    id="intakeSeason"
-                    value={form.intakeSeason}
-                    options={INTAKE_SEASONS}
-                    onChange={(intakeSeason) =>
-                      setForm((f) => ({
-                        ...f,
-                        intakeSeason: intakeSeason as IntakeSeason | "",
-                      }))
-                    }
-                    placeholder="Select season…"
-                    disabled={submitting}
-                    allowClear
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="intakeYear">Intake year</Label>
-                  <SearchableSelect
-                    id="intakeYear"
-                    value={form.intakeYear}
-                    options={yearOptions}
-                    onChange={(intakeYear) => setForm((f) => ({ ...f, intakeYear }))}
-                    placeholder="Select year…"
-                    disabled={submitting}
-                    allowClear
-                  />
-                </div>
-                {intakeLabel ? (
-                  <p className="sm:col-span-2 text-xs text-muted-foreground">
-                    Selected intake: <span className="font-medium text-navy">{intakeLabel}</span>
-                  </p>
-                ) : null}
-                <div>
-                  <Label htmlFor="inquiryChannel">Inquiry channel</Label>
-                  <SearchableSelect
-                    id="inquiryChannel"
-                    value={form.inquiryChannel}
-                    options={channelOptions}
-                    onChange={(inquiryChannel) =>
-                      setForm((f) => ({
-                        ...f,
-                        inquiryChannel: inquiryChannel as IntakeInquiryChannelValue | "",
-                      }))
-                    }
-                    placeholder="Select channel…"
-                    disabled={submitting}
-                    allowClear
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="inquirySource">How did they hear about us?</Label>
-                  <SearchableSelect
-                    id="inquirySource"
-                    value={form.inquirySource}
-                    options={INTAKE_INQUIRY_SOURCES}
-                    onChange={(inquirySource) =>
-                      setForm((f) => ({ ...f, inquirySource, inquirySourceOther: "" }))
-                    }
-                    placeholder="Select source…"
-                    disabled={submitting}
-                    allowClear
-                  />
-                </div>
-                {form.inquirySource === "Other" ? (
-                  <div className="sm:col-span-2">
-                    <Label htmlFor="inquirySourceOther">Source details *</Label>
-                    <Input
-                      id="inquirySourceOther"
-                      className="mt-1.5"
-                      value={form.inquirySourceOther}
-                      onChange={(e) =>
-                        setForm((f) => ({ ...f, inquirySourceOther: e.target.value }))
-                      }
-                      disabled={submitting}
-                    />
-                  </div>
-                ) : null}
+              <div>
+                <Label htmlFor="email">Email *</Label>
+                <Input
+                  id="email"
+                  type="email"
+                  className="mt-1 h-9"
+                  value={form.email}
+                  onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))}
+                  required
+                  disabled={submitting}
+                  autoComplete="email"
+                />
+              </div>
+              <div>
+                <Label htmlFor="phone">Phone / WhatsApp *</Label>
+                <Input
+                  id="phone"
+                  className="mt-1 h-9"
+                  value={form.phone}
+                  onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
+                  required
+                  disabled={submitting}
+                  autoComplete="tel"
+                  placeholder="+92 3XX XXXXXXX"
+                />
+              </div>
+              <div className="sm:col-span-2 flex items-center gap-2">
+                <input
+                  id="whatsappSame"
+                  type="checkbox"
+                  checked={form.whatsappSameAsPhone}
+                  disabled={submitting}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, whatsappSameAsPhone: e.target.checked }))
+                  }
+                />
+                <Label htmlFor="whatsappSame">WhatsApp same as phone</Label>
+              </div>
+              {!form.whatsappSameAsPhone ? (
                 <div className="sm:col-span-2">
-                  <Label htmlFor="notes">Registration notes</Label>
+                  <Label htmlFor="whatsapp">WhatsApp (if different)</Label>
+                  <Input
+                    id="whatsapp"
+                    className="mt-1 h-9"
+                    value={form.whatsapp}
+                    onChange={(e) => setForm((f) => ({ ...f, whatsapp: e.target.value }))}
+                    disabled={submitting}
+                  />
+                </div>
+              ) : null}
+              <div>
+                <Label htmlFor="city">City</Label>
+                <SearchableSelect
+                  id="city"
+                  value={form.city}
+                  options={INTAKE_PAKISTAN_CITIES}
+                  onChange={(city) => setForm((f) => ({ ...f, city, cityOther: "" }))}
+                  placeholder="Select city…"
+                  disabled={submitting}
+                  allowClear
+                />
+              </div>
+              {form.city === "Other" ? (
+                <div>
+                  <Label htmlFor="cityOther">City name *</Label>
+                  <Input
+                    id="cityOther"
+                    className="mt-1 h-9"
+                    value={form.cityOther}
+                    onChange={(e) => setForm((f) => ({ ...f, cityOther: e.target.value }))}
+                    disabled={submitting}
+                  />
+                </div>
+              ) : null}
+            </div>
+          </RegisterAccordionSection>
+
+          <RegisterAccordionSection
+            id={SECTION_ANCHORS.preferences}
+            title="2. Study preferences"
+            status={sectionById.preferences.status}
+            summary={preferencesSummary || "Destination, programme, intake"}
+            open={openSections.preferences}
+            onOpenChange={(open) => setSectionOpen("preferences", open)}
+          >
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="destination">Preferred destination *</Label>
+                <SearchableSelect
+                  id="destination"
+                  value={form.destination}
+                  options={INTAKE_DESTINATIONS}
+                  onChange={(destination) =>
+                    setForm((f) => ({ ...f, destination, destinationOther: "" }))
+                  }
+                  placeholder="Select destination…"
+                  disabled={submitting}
+                  allowClear
+                />
+              </div>
+              {form.destination === "Other" ? (
+                <div>
+                  <Label htmlFor="destinationOther">Destination name *</Label>
+                  <Input
+                    id="destinationOther"
+                    className="mt-1 h-9"
+                    value={form.destinationOther}
+                    onChange={(e) => setForm((f) => ({ ...f, destinationOther: e.target.value }))}
+                    disabled={submitting}
+                  />
+                </div>
+              ) : null}
+              <div>
+                <Label htmlFor="program">Intended programme *</Label>
+                <SearchableSelect
+                  id="program"
+                  value={form.program}
+                  options={INTAKE_PROGRAMMES}
+                  onChange={(program) => setForm((f) => ({ ...f, program, programOther: "" }))}
+                  placeholder="Select programme…"
+                  disabled={submitting}
+                  allowClear
+                />
+              </div>
+              {form.program === "Other" ? (
+                <div>
+                  <Label htmlFor="programOther">Programme name *</Label>
+                  <Input
+                    id="programOther"
+                    className="mt-1 h-9"
+                    value={form.programOther}
+                    onChange={(e) => setForm((f) => ({ ...f, programOther: e.target.value }))}
+                    disabled={submitting}
+                  />
+                </div>
+              ) : null}
+              <div>
+                <Label htmlFor="studyLevel">Study level</Label>
+                <SearchableSelect
+                  id="studyLevel"
+                  value={form.studyLevel}
+                  options={INTAKE_STUDY_LEVELS}
+                  onChange={(studyLevel) =>
+                    setForm((f) => ({ ...f, studyLevel, studyLevelOther: "" }))
+                  }
+                  placeholder="Select level…"
+                  disabled={submitting}
+                  allowClear
+                />
+              </div>
+              {form.studyLevel === "Other" ? (
+                <div>
+                  <Label htmlFor="studyLevelOther">Study level *</Label>
+                  <Input
+                    id="studyLevelOther"
+                    className="mt-1 h-9"
+                    value={form.studyLevelOther}
+                    onChange={(e) => setForm((f) => ({ ...f, studyLevelOther: e.target.value }))}
+                    disabled={submitting}
+                  />
+                </div>
+              ) : null}
+              <div>
+                <Label htmlFor="intakeSeason">Intake season</Label>
+                <SearchableSelect
+                  id="intakeSeason"
+                  value={form.intakeSeason}
+                  options={INTAKE_SEASONS}
+                  onChange={(intakeSeason) =>
+                    setForm((f) => ({
+                      ...f,
+                      intakeSeason: intakeSeason as IntakeSeason | "",
+                    }))
+                  }
+                  placeholder="Season…"
+                  disabled={submitting}
+                  allowClear
+                />
+              </div>
+              <div>
+                <Label htmlFor="intakeYear">Intake year</Label>
+                <SearchableSelect
+                  id="intakeYear"
+                  value={form.intakeYear}
+                  options={yearOptions}
+                  onChange={(intakeYear) => setForm((f) => ({ ...f, intakeYear }))}
+                  placeholder="Year…"
+                  disabled={submitting}
+                  allowClear
+                />
+              </div>
+              <div>
+                <Label htmlFor="inquirySource">How did they hear about us?</Label>
+                <SearchableSelect
+                  id="inquirySource"
+                  value={form.inquirySource}
+                  options={INTAKE_INQUIRY_SOURCES}
+                  onChange={(inquirySource) =>
+                    setForm((f) => ({ ...f, inquirySource, inquirySourceOther: "" }))
+                  }
+                  placeholder="Select source…"
+                  disabled={submitting}
+                  allowClear
+                />
+              </div>
+              <div>
+                <Label htmlFor="inquiryChannel">Inquiry channel</Label>
+                <SearchableSelect
+                  id="inquiryChannel"
+                  value={form.inquiryChannel}
+                  options={channelOptions}
+                  onChange={(inquiryChannel) =>
+                    setForm((f) => ({
+                      ...f,
+                      inquiryChannel: inquiryChannel as IntakeInquiryChannelValue | "",
+                    }))
+                  }
+                  placeholder="Select channel…"
+                  disabled={submitting}
+                  allowClear
+                />
+              </div>
+              {form.inquirySource === "Other" ? (
+                <div className="sm:col-span-2">
+                  <Label htmlFor="inquirySourceOther">Source details *</Label>
+                  <Input
+                    id="inquirySourceOther"
+                    className="mt-1 h-9"
+                    value={form.inquirySourceOther}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, inquirySourceOther: e.target.value }))
+                    }
+                    disabled={submitting}
+                  />
+                </div>
+              ) : null}
+              <div className="sm:col-span-2">
+                <button
+                  type="button"
+                  className="text-xs font-medium text-royal hover:underline"
+                  onClick={() => setNotesOpen((v) => !v)}
+                >
+                  {notesOpen || form.registrationNotes.trim()
+                    ? "Hide notes"
+                    : "Add registration notes (optional)"}
+                </button>
+                {notesOpen || form.registrationNotes.trim() ? (
                   <Textarea
                     id="notes"
                     className="mt-1.5"
-                    rows={3}
+                    rows={2}
                     value={form.registrationNotes}
                     onChange={(e) =>
                       setForm((f) => ({ ...f, registrationNotes: e.target.value }))
                     }
                     disabled={submitting}
                   />
-                </div>
+                ) : null}
               </div>
-            </Panel>
-          </div>
+            </div>
+          </RegisterAccordionSection>
 
-          <div id={SECTION_ANCHORS.signup_fee} className="scroll-mt-6">
-            <Panel title="3. Signup fee (optional)">
-              <p className="mb-3 text-xs text-muted-foreground">
-                Fee is optional. Marking claimed only records that payment was reported — it is{" "}
-                <strong>not</strong> finance-verified. Verification is Accounts-only.
-              </p>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <Label htmlFor="feeAmount">Amount (PKR)</Label>
-                  <Input
-                    id="feeAmount"
-                    type="number"
-                    min={0}
-                    step="0.01"
-                    className="mt-1.5"
-                    value={form.feeAmount}
-                    onChange={(e) => setForm((f) => ({ ...f, feeAmount: e.target.value }))}
-                    disabled={submitting}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="feeMethod">Payment method</Label>
-                  <SearchableSelect
-                    id="feeMethod"
-                    value={form.feeMethod}
-                    options={INTAKE_FEE_PAYMENT_METHODS}
-                    onChange={(feeMethod) => setForm((f) => ({ ...f, feeMethod }))}
-                    placeholder="Select method…"
-                    disabled={submitting}
-                    allowClear
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="feeReceipt">Receipt / reference</Label>
-                  <Input
-                    id="feeReceipt"
-                    className="mt-1.5"
-                    value={form.feeReceipt}
-                    onChange={(e) => setForm((f) => ({ ...f, feeReceipt: e.target.value }))}
-                    disabled={submitting}
-                  />
-                </div>
-                <div className="flex items-end gap-2 pb-2">
-                  <input
-                    id="markClaimed"
-                    type="checkbox"
-                    checked={form.markClaimed}
-                    disabled={submitting}
-                    onChange={(e) => setForm((f) => ({ ...f, markClaimed: e.target.checked }))}
-                  />
-                  <Label htmlFor="markClaimed">Mark as claimed (not verified)</Label>
-                </div>
-                <div className="sm:col-span-2">
-                  <Label htmlFor="feeNotes">Fee notes</Label>
-                  <Input
-                    id="feeNotes"
-                    className="mt-1.5"
-                    value={form.feeNotes}
-                    onChange={(e) => setForm((f) => ({ ...f, feeNotes: e.target.value }))}
-                    disabled={submitting}
-                  />
-                </div>
+          <RegisterAccordionSection
+            id={SECTION_ANCHORS.signup_fee}
+            title="3. Signup fee"
+            status={sectionById.signup_fee.status}
+            summary={feeSummary}
+            open={openSections.signup_fee}
+            onOpenChange={(open) => setSectionOpen("signup_fee", open)}
+          >
+            <p className="mb-3 text-xs text-muted-foreground">
+              Optional claim only — not Finance verification. Accounts verifies separately.
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <Label htmlFor="feeAmount">Amount (PKR)</Label>
+                <Input
+                  id="feeAmount"
+                  type="number"
+                  min={0}
+                  step="0.01"
+                  className="mt-1 h-9"
+                  value={form.feeAmount}
+                  onChange={(e) => setForm((f) => ({ ...f, feeAmount: e.target.value }))}
+                  disabled={submitting}
+                />
               </div>
-            </Panel>
-          </div>
+              <div>
+                <Label htmlFor="feeMethod">Payment method</Label>
+                <SearchableSelect
+                  id="feeMethod"
+                  value={form.feeMethod}
+                  options={INTAKE_FEE_PAYMENT_METHODS}
+                  onChange={(feeMethod) => setForm((f) => ({ ...f, feeMethod }))}
+                  placeholder="Select method…"
+                  disabled={submitting}
+                  allowClear
+                />
+              </div>
+              <div>
+                <Label htmlFor="feeReceipt">Receipt / reference</Label>
+                <Input
+                  id="feeReceipt"
+                  className="mt-1 h-9"
+                  value={form.feeReceipt}
+                  onChange={(e) => setForm((f) => ({ ...f, feeReceipt: e.target.value }))}
+                  disabled={submitting}
+                />
+              </div>
+              <div className="flex items-end gap-2 pb-1">
+                <input
+                  id="markClaimed"
+                  type="checkbox"
+                  checked={form.markClaimed}
+                  disabled={submitting}
+                  onChange={(e) => setForm((f) => ({ ...f, markClaimed: e.target.checked }))}
+                />
+                <Label htmlFor="markClaimed">Mark as claimed (not verified)</Label>
+              </div>
+              <div className="sm:col-span-2">
+                <Label htmlFor="feeNotes">Fee notes</Label>
+                <Input
+                  id="feeNotes"
+                  className="mt-1 h-9"
+                  value={form.feeNotes}
+                  onChange={(e) => setForm((f) => ({ ...f, feeNotes: e.target.value }))}
+                  disabled={submitting}
+                />
+              </div>
+            </div>
+          </RegisterAccordionSection>
 
-          <div id={SECTION_ANCHORS.counsellor} className="scroll-mt-6">
-            <Panel title="4. Counsellor assignment">
-              <Label htmlFor="counsellor">Assign counsellor</Label>
-              <SearchableSelect
-                id="counsellor"
-                value={form.assignedConsultantId}
-                options={counsellorOptions}
-                onChange={(assignedConsultantId) =>
-                  setForm((f) => ({ ...f, assignedConsultantId }))
-                }
-                placeholder="Assign later…"
-                disabled={submitting}
-                allowClear
-                emptyText="No matching counsellor desks."
-              />
-              <p className="mt-2 text-xs text-muted-foreground">
-                Eligible active Counsellor / Consultant desks from the staff directory. Assign later
-                keeps the case pending for Intake.
+          <RegisterAccordionSection
+            id={SECTION_ANCHORS.counsellor}
+            title="4. Assign counsellor"
+            status={sectionById.counsellor.status}
+            summary={counsellorSummary}
+            open={openSections.counsellor}
+            onOpenChange={(open) => setSectionOpen("counsellor", open)}
+          >
+            <Label htmlFor="counsellor">Counsellor desk</Label>
+            <SearchableSelect
+              id="counsellor"
+              value={form.assignedConsultantId}
+              options={counsellorOptions}
+              onChange={(assignedConsultantId) =>
+                setForm((f) => ({ ...f, assignedConsultantId }))
+              }
+              placeholder="Assign later…"
+              disabled={submitting}
+              allowClear
+              emptyText="No matching counsellor desks."
+            />
+            {!desksQ.isLoading && (desksQ.data?.options?.length ?? 0) === 0 ? (
+              <p className="mt-2 text-xs text-amber-800">
+                No active desks found. You can still save with pending assignment.
               </p>
-              {!desksQ.isLoading && (desksQ.data?.options?.length ?? 0) === 0 ? (
-                <p className="mt-2 text-xs text-amber-800">
-                  No active Counsellor / Consultant desks found. You can still save with pending
-                  assignment.
-                </p>
-              ) : null}
-            </Panel>
-          </div>
+            ) : null}
+          </RegisterAccordionSection>
 
           <div
             id={SECTION_ANCHORS.final}
-            className="flex flex-wrap items-center gap-2 border-t border-border pt-4 scroll-mt-6"
+            className="flex flex-wrap items-center gap-2 border-t border-border pt-3 scroll-mt-6"
           >
             <Button
               type="submit"
@@ -938,7 +1050,7 @@ function FrontDeskRegisterPage() {
             </Button>
             {!canSubmit ? (
               <span className="text-xs text-muted-foreground">
-                Complete required contact and study fields to enable Register.
+                Complete required contact and study fields.
               </span>
             ) : null}
           </div>
