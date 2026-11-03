@@ -9,33 +9,26 @@ import {
 } from "@/lib/counsellor-lifecycle-next";
 import type { ProfileTabId } from "@/types/student-profile";
 
-/** Documented definitions for dashboard KPI cards (product + audit / tooltips). */
+/** Tooltip definitions for dashboard KPI cards (hover only — keep cards short). */
 export const COUNSELLOR_METRIC_DEFINITIONS = {
-  assignedStudents:
-    "Non-archived students currently assigned to the logged-in counsellor desk (assigned_consultant_id).",
-  awaitingInitialAssessment:
-    "Assigned students with no saved counselling assessment (assessed_at null). Opening the profile does not count as complete.",
-  counsellingCompleted:
-    "Assigned students with at least one counselling_agreements row where consented = true. Not a full session history; registration alone does not count.",
-  followUpsDue:
-    "Open or in-progress tasks for this desk (assignee or assigned student) with due_at on or before end of today.",
-  applicationsInProgress:
-    "Applications for assigned students in Docs Pending, Under Review, Ready to Submit, or Submitted (UI stages).",
-  awaitingResponse:
-    "Distinct assigned students awaiting Admission (handover status submitted) and/or Front Desk/Finance (fee-verification request open or in_progress).",
-  actionRequired:
-    "Distinct assigned students where the counsellor has an actionable lifecycle next step, a returned handover, a cancelled fee request, an overdue or due-today task, or a document pending review.",
+  assignedStudents: "Students assigned to your counsellor desk.",
+  awaitingInitialAssessment: "No saved counselling assessment yet.",
+  counsellingCompleted: "Consent recorded on file (not registration alone).",
+  followUpsDue: "Open tasks due today or earlier.",
+  applicationsInProgress: "Apps in Docs Pending through Submitted.",
+  awaitingResponse: "Waiting on Front Desk, Finance, or Admission.",
+  actionRequired: "Lifecycle, returned handover, fee correction, task, or docs.",
 } as const;
 
-/** Short UI hints for StatCards — keep long definitions in tooltips only. */
+/** On-card hints — omit when the label already says the same thing. */
 export const COUNSELLOR_METRIC_HINTS = {
-  assignedStudents: "On your desk",
-  awaitingInitialAssessment: "No saved counselling assessment yet",
-  counsellingCompleted: "Consent recorded",
-  followUpsDue: "Due today or earlier",
-  applicationsInProgress: "Active pipeline stages",
-  awaitingResponse: "Waiting on FD, Finance, or Admission",
-  actionRequired: "Students needing your next step",
+  assignedStudents: undefined as string | undefined,
+  awaitingInitialAssessment: undefined as string | undefined,
+  counsellingCompleted: undefined as string | undefined,
+  followUpsDue: "Due today+",
+  applicationsInProgress: undefined as string | undefined,
+  awaitingResponse: "FD · Finance · Admission",
+  actionRequired: undefined as string | undefined,
 } as const;
 
 export const IN_PROGRESS_APPLICATION_UI_STATUSES = [

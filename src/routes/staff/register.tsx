@@ -613,7 +613,7 @@ function FrontDeskRegisterPage() {
       <PageHeader
         compact
         title="Register student"
-        subtitle="Compact checklist · * required · Fee claims are not Finance-verified."
+        subtitle="* Required · Fee claims are not Finance-verified."
       />
 
       {err ? (

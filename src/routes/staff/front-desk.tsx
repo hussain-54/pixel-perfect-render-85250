@@ -355,8 +355,9 @@ function FrontDeskDashboardPage() {
   return (
     <div className="mx-auto w-full max-w-7xl space-y-4 md:space-y-5">
       <PageHeader
+        compact
         title={fdTitle}
-        subtitle={`Student intake & tracking · Signed in as ${data.greetingName}`}
+        subtitle={data.greetingName}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             <LiveBadge status={liveStatus} lastSync={lastSync} />
@@ -391,12 +392,12 @@ function FrontDeskDashboardPage() {
         }
       />
 
-      {/* Part A — compact KPI cards (real metrics only) */}
-      <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-4">
+      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-3 xl:grid-cols-4">
         <StatCard
           label="Registrations"
           value={String(data.myRegistrations)}
           icon={<Users />}
+          tone="slate"
           selected={kpiFilter === "all"}
           onClick={() => applyKpiFilter("all")}
           title="All registrations you manage"
@@ -405,61 +406,64 @@ function FrontDeskDashboardPage() {
           label="Assigned"
           value={String(data.assignedStudents)}
           icon={<Users />}
+          tone="purple"
           selected={kpiFilter === "assigned"}
           onClick={() => applyKpiFilter("assigned")}
-          title="Registrations with a counsellor assigned"
+          title="Counsellor assigned"
         />
         <StatCard
           label="Awaiting Counsellor"
           value={String(data.awaitingAssignment)}
           icon={<Clock3 />}
+          tone="amber"
           selected={kpiFilter === "awaiting"}
           onClick={() => applyKpiFilter("awaiting")}
-          title="Registrations awaiting counsellor assignment"
+          title="Awaiting counsellor assignment"
         />
         <StatCard
           label="Payment Claims"
           value={String(data.unpaidVouchers ?? 0)}
-          hint="Unpaid vouchers"
           icon={<BadgeDollarSign />}
+          tone="orange"
           selected={kpiFilter === "unpaid"}
           onClick={() => applyKpiFilter("unpaid")}
-          title="Issued unpaid vouchers — payment claim / proof still needed"
+          title="Unpaid vouchers — claim / proof still needed"
         />
         <StatCard
           label="Awaiting Finance"
           value={String(feeToVerifyCount)}
-          hint="Proofs submitted"
           icon={<BadgeDollarSign />}
+          tone="yellow"
           selected={kpiFilter === "fee_verify"}
           onClick={() => applyKpiFilter("fee_verify")}
-          title="Signup fee claimed — awaiting Accounts verification"
+          title="Proof submitted — awaiting Accounts verification"
         />
         <StatCard
           label="Finance Verified"
           value={String(data.verifiedFees ?? 0)}
           icon={<BadgeDollarSign />}
+          tone="green"
           selected={kpiFilter === "verified"}
           onClick={() => applyKpiFilter("verified")}
-          title="Fees verified or waived by Accounts"
+          title="Verified or waived by Accounts"
         />
         <StatCard
-          label="Portal Linking"
+          label="Portal Pending"
           value={String(data.portalLinkPending ?? 0)}
-          hint="Fee OK · portal pending"
           icon={<UserPlus />}
+          tone="teal"
           selected={kpiFilter === "portal_link"}
           onClick={() => applyKpiFilter("portal_link")}
-          title="Fee authorized but student portal not yet activated"
+          title="Fee authorized · portal not activated"
         />
         <StatCard
-          label="Fee Corrections"
+          label="Needs Attention"
           value={String(needsCorrectionCount)}
-          hint="Action required"
           icon={<AlertCircle />}
+          tone="red"
           selected={kpiFilter === "fee_corrections"}
           onClick={() => applyKpiFilter("fee_corrections")}
-          title="Cancelled coordination with no fee ledger — needs correction"
+          title="Fee coordination needs correction"
         />
       </div>
 
@@ -478,8 +482,8 @@ function FrontDeskDashboardPage() {
                     : kpiFilter === "verified"
                       ? "Finance Verified"
                       : kpiFilter === "portal_link"
-                        ? "Portal Linking"
-                        : "Fee Corrections"}
+                        ? "Portal Pending"
+                        : "Needs Attention"}
           </span>
           <Button
             type="button"
@@ -525,8 +529,8 @@ function FrontDeskDashboardPage() {
                     kpiFilter !== "awaiting" &&
                     kpiFilter !== "fee_verify" &&
                     kpiFilter !== "fee_corrections"
-                      ? "This KPI filters registrations on the right. Clear the filter to see the attention queue."
-                      : "Unassigned registrations and actionable fee coordination appear here."
+                      ? "Clear the KPI filter to see the attention queue."
+                      : "No open actions right now."
                   }
                 />
               ) : (
@@ -647,11 +651,9 @@ function FrontDeskDashboardPage() {
             <div className="px-4 py-3">
               {recentRegistrations.length === 0 ? (
                 <EmptyState
-                  title="No recent registrations"
+                  title="No records found"
                   body={
-                    kpiFilter === "all"
-                      ? "New registrations will appear here."
-                      : "No records match this KPI filter."
+                    kpiFilter === "all" ? "No recent registrations." : "No matches for this filter."
                   }
                 />
               ) : (
@@ -833,7 +835,7 @@ function FrontDeskDashboardPage() {
             ) : (
               <EmptyState
                 title="No fee coordination requests"
-                body="When a counsellor requests signup-fee verification, it appears under Open. Accounts verifies or waives fees — Front Desk coordinates only."
+                body="No open requests. Accounts verifies or waives fees — Front Desk coordinates only."
               />
             )
           ) : (
@@ -1041,7 +1043,7 @@ function FrontDeskDashboardPage() {
             ) : !(notifQ.data ?? []).length ? (
               <EmptyState
                 title="No notifications"
-                body="Fee-verification and intake alerts for your account appear here."
+                body="No alerts."
               />
             ) : (
               <ul className="space-y-2">

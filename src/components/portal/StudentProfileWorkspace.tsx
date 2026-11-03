@@ -1260,7 +1260,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                     <Field
                       label="Eligibility outcome *"
                       error={fieldErrors.eligibility ?? null}
-                      hint="Manual counsellor judgement. Blank saves as Pending Review. Not an algorithmic score."
+                      hint="Blank saves as Pending Review."
                     >
                       <select
                         className="field-control w-full"
@@ -1318,8 +1318,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 <Panel compact title="9. Student Consent">
                   <div className="space-y-2 text-sm">
                     <p className="text-muted-foreground">
-                      Consent is never pre-selected. It is recorded only when you explicitly confirm
-                      the student has agreed — see the consent card in Next step above.
+                      Consent is never pre-selected. Record it in Next step after the student agrees.
                     </p>
                     <div
                       className={cn(
@@ -1351,11 +1350,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
 
                 <Panel compact title="10. Counsellor Summary">
                   <div id="assess-section-summary" className="scroll-mt-6 grid gap-3">
-                    <Field
-                      label="Study plan / findings"
-                      optional
-                      hint="Same field as Career section — edits sync across both"
-                    >
+                    <Field label="Study plan / findings" optional>
                       <Textarea
                         value={form.studyPlan}
                         disabled={!fieldsEditable}
@@ -1376,8 +1371,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 <Panel compact title="11. Next Steps & Handover">
                   <div className="space-y-2 text-sm">
                     <p className="text-muted-foreground">
-                      Fee verification (Front Desk) and Admission handover use the lifecycle actions
-                      in Next step — they persist via existing RPCs, not local status toggles.
+                      Use Next step for fee verification and Admission handover.
                     </p>
                     <dl className="grid gap-2 text-sm sm:grid-cols-2">
                       <OverviewItem

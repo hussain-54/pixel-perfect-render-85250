@@ -9,42 +9,34 @@ import {
 } from "@/types/applications-pipeline";
 
 export const ADMISSION_METRIC_DEFINITIONS = {
-  assignedToMe:
-    "Applications where owned_by_consultant_id is the logged-in desk, among students visible via assignment or admission handover.",
-  awaitingInitialReview:
-    "Students with admission_handovers.status = submitted (awaiting Accept/Return), not application.stage.",
-  documentsMissing:
-    "Pipeline applications at Docs Pending, or students with documents in needs_correction / awaiting_upload (where visible).",
-  inProgress:
-    "Applications in Under Review or Ready to Submit (active processing; excludes Docs Pending and Submitted+).",
-  returnedForCorrection:
-    "Students with latest admission_handovers.status = returned (handover return — not an application stage).",
-  submittedToUniversity: "Applications with stage Submitted.",
-  offersDecisionsReceived:
-    "Applications with stage Offer Received (offer/decision recorded on the application pipeline).",
-  depositCasPending:
-    "Deposits with status due/overdue, or CAS/I-20 records still pending or requested.",
-  visaInProgress: "Visa milestones that have not reached a final decision (approved/refused).",
-  overdueTasks: "Open desk tasks past due (local calendar day).",
-  refusedRejected: "Applications at terminal outcome Rejected.",
-  actionRequired:
-    "Distinct students/apps needing Admission action: submitted handovers, Docs Pending apps, deadline ≤7 days, or docs needing correction.",
+  assignedToMe: "Applications owned by your admission desk.",
+  awaitingInitialReview: "Handovers awaiting Accept or Return.",
+  documentsMissing: "Docs Pending apps or incomplete student documents.",
+  inProgress: "Under Review or Ready to Submit.",
+  returnedForCorrection: "Handovers returned to the counsellor.",
+  submittedToUniversity: "Applications at Submitted stage.",
+  offersDecisionsReceived: "Applications at Offer Received.",
+  depositCasPending: "Deposit due/overdue or CAS/I-20 pending.",
+  visaInProgress: "Visa milestones without a final decision.",
+  overdueTasks: "Open tasks past due.",
+  refusedRejected: "Applications at Rejected.",
+  actionRequired: "Handovers, docs gaps, deadlines ≤7 days, or corrections.",
 } as const;
 
-/** Short UI hints for StatCards — keep long definitions in tooltips only. */
+/** On-card hints — keep labels short; use tooltips for definitions. */
 export const ADMISSION_METRIC_HINTS = {
-  assignedToMe: "Apps owned by your desk",
-  awaitingInitialReview: "Handovers awaiting accept/return",
-  documentsMissing: "Docs pending or incomplete",
-  inProgress: "Under review or ready to submit",
-  returnedForCorrection: "Returned to counsellor",
-  submittedToUniversity: "Submitted stage",
-  offersDecisionsReceived: "Offer received stage",
-  depositCasPending: "Deposit due or CAS/I-20 pending",
-  visaInProgress: "Visa filing not yet decided",
-  overdueTasks: "Tasks past due",
-  refusedRejected: "Rejected applications",
-  actionRequired: "Cases needing your next step",
+  assignedToMe: undefined as string | undefined,
+  awaitingInitialReview: "Accept / Return",
+  documentsMissing: undefined as string | undefined,
+  inProgress: undefined as string | undefined,
+  returnedForCorrection: undefined as string | undefined,
+  submittedToUniversity: undefined as string | undefined,
+  offersDecisionsReceived: undefined as string | undefined,
+  depositCasPending: "Deposit · CAS",
+  visaInProgress: undefined as string | undefined,
+  overdueTasks: undefined as string | undefined,
+  refusedRejected: undefined as string | undefined,
+  actionRequired: undefined as string | undefined,
 } as const;
 
 export type AdmissionAppSnap = {

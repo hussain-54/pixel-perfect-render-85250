@@ -65,6 +65,99 @@ export function PageLoadState({
   );
 }
 
+/** Soft KPI tints — optional; omit/`neutral` keeps legacy white card for Finance/Student/Admin. */
+export type StatCardTone =
+  | "neutral"
+  | "slate"
+  | "blue"
+  | "purple"
+  | "amber"
+  | "orange"
+  | "yellow"
+  | "green"
+  | "teal"
+  | "cyan"
+  | "indigo"
+  | "red";
+
+const STAT_CARD_TONE: Record<
+  StatCardTone,
+  { shell: string; icon: string; selected: string; hover: string }
+> = {
+  neutral: {
+    shell: "border-border bg-card",
+    icon: "text-royal",
+    selected: "border-royal/50 bg-navy/[0.04] ring-1 ring-royal/30",
+    hover: "hover:border-navy/25 hover:bg-navy/[0.03]",
+  },
+  slate: {
+    shell: "border-slate-200/90 bg-slate-50/90",
+    icon: "text-slate-600",
+    selected: "border-slate-400 bg-slate-100 ring-1 ring-slate-300/70",
+    hover: "hover:border-slate-300 hover:bg-slate-100/90",
+  },
+  blue: {
+    shell: "border-sky-200/90 bg-sky-50/80",
+    icon: "text-sky-600",
+    selected: "border-sky-400 bg-sky-100 ring-1 ring-sky-300/60",
+    hover: "hover:border-sky-300 hover:bg-sky-100/80",
+  },
+  purple: {
+    shell: "border-violet-200/90 bg-violet-50/80",
+    icon: "text-violet-600",
+    selected: "border-violet-400 bg-violet-100 ring-1 ring-violet-300/60",
+    hover: "hover:border-violet-300 hover:bg-violet-100/80",
+  },
+  amber: {
+    shell: "border-amber-200/90 bg-amber-50/80",
+    icon: "text-amber-600",
+    selected: "border-amber-400 bg-amber-100 ring-1 ring-amber-300/60",
+    hover: "hover:border-amber-300 hover:bg-amber-100/80",
+  },
+  orange: {
+    shell: "border-orange-200/90 bg-orange-50/80",
+    icon: "text-orange-600",
+    selected: "border-orange-400 bg-orange-100 ring-1 ring-orange-300/60",
+    hover: "hover:border-orange-300 hover:bg-orange-100/80",
+  },
+  yellow: {
+    shell: "border-yellow-200/90 bg-yellow-50/80",
+    icon: "text-yellow-700",
+    selected: "border-yellow-400 bg-yellow-100 ring-1 ring-yellow-300/60",
+    hover: "hover:border-yellow-300 hover:bg-yellow-100/80",
+  },
+  green: {
+    shell: "border-emerald-200/90 bg-emerald-50/80",
+    icon: "text-emerald-600",
+    selected: "border-emerald-400 bg-emerald-100 ring-1 ring-emerald-300/60",
+    hover: "hover:border-emerald-300 hover:bg-emerald-100/80",
+  },
+  teal: {
+    shell: "border-teal-200/90 bg-teal-50/80",
+    icon: "text-teal-600",
+    selected: "border-teal-400 bg-teal-100 ring-1 ring-teal-300/60",
+    hover: "hover:border-teal-300 hover:bg-teal-100/80",
+  },
+  cyan: {
+    shell: "border-cyan-200/90 bg-cyan-50/80",
+    icon: "text-cyan-600",
+    selected: "border-cyan-400 bg-cyan-100 ring-1 ring-cyan-300/60",
+    hover: "hover:border-cyan-300 hover:bg-cyan-100/80",
+  },
+  indigo: {
+    shell: "border-indigo-200/90 bg-indigo-50/80",
+    icon: "text-indigo-600",
+    selected: "border-indigo-400 bg-indigo-100 ring-1 ring-indigo-300/60",
+    hover: "hover:border-indigo-300 hover:bg-indigo-100/80",
+  },
+  red: {
+    shell: "border-rose-200/90 bg-rose-50/80",
+    icon: "text-rose-600",
+    selected: "border-rose-400 bg-rose-100 ring-1 ring-rose-300/60",
+    hover: "hover:border-rose-300 hover:bg-rose-100/80",
+  },
+};
+
 export function StatCard({
   label,
   value,
@@ -75,6 +168,8 @@ export function StatCard({
   selected = false,
   /** White bordered KPI card (default). Use `bare` for denser inline metrics. */
   variant = "card",
+  /** Soft tint. Defaults to neutral so shared screens stay unchanged. */
+  tone = "neutral",
 }: {
   label: string;
   value: ReactNode;
@@ -86,30 +181,36 @@ export function StatCard({
   onClick?: () => void;
   selected?: boolean;
   variant?: "card" | "bare";
+  tone?: StatCardTone;
 }) {
+  const tint = STAT_CARD_TONE[tone] ?? STAT_CARD_TONE.neutral;
   const body = (
     <>
       <div className="flex items-start justify-between gap-2 text-navy/70">
         <span className="text-xs font-semibold leading-snug tracking-wide">{label}</span>
-        {icon ? <span className="shrink-0 text-royal [&_svg]:size-4">{icon}</span> : null}
+        {icon ? (
+          <span className={cn("shrink-0 [&_svg]:size-4", tint.icon)}>{icon}</span>
+        ) : null}
       </div>
       <div className="mt-1.5 font-display text-xl font-semibold leading-none tabular-nums text-navy sm:text-[1.375rem]">
         {value}
       </div>
-      {hint ? <p className="mt-1.5 text-xs leading-snug text-navy/65">{hint}</p> : null}
+      {hint ? <p className="mt-1 text-[0.7rem] leading-snug text-navy/60">{hint}</p> : null}
     </>
   );
   const shellClass = cn(
-    "flex h-full min-h-[5.25rem] flex-col text-left",
+    "flex h-full min-h-[5rem] flex-col text-left",
     variant === "card"
-      ? "rounded-lg border border-border bg-card p-3 shadow-soft"
+      ? cn("rounded-lg border p-3 shadow-soft", tint.shell)
       : "border-b border-border pb-3 pt-1",
     onClick &&
-      "w-full transition-colors hover:border-navy/25 hover:bg-navy/[0.03] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal/40",
+      cn(
+        "w-full cursor-pointer transition-[border-color,background-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal/40",
+        tint.hover,
+        "hover:shadow-sm",
+      ),
     selected &&
-      (variant === "card"
-        ? "border-royal/50 bg-navy/[0.04] ring-1 ring-royal/30"
-        : "border-b-royal bg-navy/[0.04]"),
+      (variant === "card" ? tint.selected : "border-b-royal bg-navy/[0.04]"),
   );
 
   if (onClick) {

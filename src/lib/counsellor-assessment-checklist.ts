@@ -189,7 +189,7 @@ export function buildCounsellorAssessmentChecklist(
       id: "eligibility_score",
       title: "Counselling Assessment & Outcome",
       status: eligibilityStatus(input.form),
-      hint: "Manual eligibility outcome (not an algorithmic score)",
+      hint: "Manual eligibility outcome",
       anchor: "assess-section-eligibility",
     },
     {

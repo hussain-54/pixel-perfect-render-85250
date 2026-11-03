@@ -305,7 +305,7 @@ function FrontDeskIntakeListContent() {
         <PageHeader
           compact
           title="My registrations"
-          subtitle="View, edit, assign, or download registration PDFs for your intake records."
+          subtitle="Search, filter, and open intake records."
           actions={
             <Button asChild size="sm">
               <Link to="/staff/register">Register student</Link>
@@ -585,8 +585,8 @@ function FrontDeskIntakeListContent() {
         >
           {filtered.length === 0 ? (
             <EmptyState
-              title="No matching records"
-              body="Adjust the status filter or search, or register a student."
+              title="No records found"
+              body="Clear filters or register a student."
             />
           ) : (
             <>

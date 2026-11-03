@@ -394,7 +394,7 @@ export function ApplicationsPipeline({
       <PageHeader
         compact
         title="Admission Team Workspace"
-        subtitle="Review counsellor handovers, then verify documents and advance university applications. Handover status stays separate from application stage."
+        subtitle="Handovers · documents · applications"
         actions={
           <>
             <div className="flex rounded-md border border-border p-0.5">
@@ -422,10 +422,11 @@ export function ApplicationsPipeline({
         }
       />
 
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
         <WorkspaceKpi
-          label="Files from Counsellors"
+          label="Counsellor handovers"
           value={handoverCount}
+          tone="amber"
           active={emphasizeHandovers}
           onClick={() => {
             setEmphasizeHandovers(true);
@@ -440,6 +441,7 @@ export function ApplicationsPipeline({
         <WorkspaceKpi
           label="Docs under review"
           value={docsPendingCount}
+          tone="cyan"
           active={docsFilter === "docs_pending"}
           onClick={() => {
             setDocsFilter("docs_pending");
@@ -452,8 +454,9 @@ export function ApplicationsPipeline({
           }}
         />
         <WorkspaceKpi
-          label="Applications in pipeline"
+          label="In pipeline"
           value={inProgressCount}
+          tone="indigo"
           active={progressFilter === "active_processing"}
           onClick={() => {
             setProgressFilter("active_processing");
@@ -466,8 +469,9 @@ export function ApplicationsPipeline({
           }}
         />
         <WorkspaceKpi
-          label="Submitted to university"
+          label="Submitted"
           value={submittedCount}
+          tone="green"
           active={stageFilter === "Submitted"}
           onClick={() => {
             setStageFilter("Submitted");
@@ -484,9 +488,7 @@ export function ApplicationsPipeline({
       {showReturnedNotice ? (
         <Panel title="Returned for clarification" className="mb-4">
           <p className="text-sm text-muted-foreground">
-            Cases returned to a counsellor leave the Admission incoming queue by design. The
-            counsellor sees <strong>Returned for Clarification</strong> and can forward again when
-            ready. Re-submitted cases appear under Files from Counsellors.
+            Returned cases leave this queue. Re-forwards appear under Files from Counsellors.
           </p>
         </Panel>
       ) : null}
@@ -503,8 +505,7 @@ export function ApplicationsPipeline({
           className={cn("mb-4", emphasizeHandovers && "ring-2 ring-royal/30")}
         >
           <p className="mb-3 text-xs text-muted-foreground">
-            Status: {formatAdmissionHandoverStatusLabel("submitted")}. Accept to take ownership, or
-            return with a note. This queue is not an application stage.
+            {formatAdmissionHandoverStatusLabel("submitted")} · Accept or return with a note
           </p>
           {focusStudentId ? (
             <div className="mb-3 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
@@ -1122,16 +1123,30 @@ function WorkspaceKpi({
   value,
   active,
   onClick,
+  tone = "slate",
 }: {
   label: string;
   value: number;
   active?: boolean;
   onClick?: () => void;
+  tone?: "slate" | "amber" | "cyan" | "indigo" | "green";
 }) {
+  const toneClass =
+    tone === "amber"
+      ? "border-amber-200/90 bg-amber-50/80 hover:border-amber-300"
+      : tone === "cyan"
+        ? "border-cyan-200/90 bg-cyan-50/80 hover:border-cyan-300"
+        : tone === "indigo"
+          ? "border-indigo-200/90 bg-indigo-50/80 hover:border-indigo-300"
+          : tone === "green"
+            ? "border-emerald-200/90 bg-emerald-50/80 hover:border-emerald-300"
+            : "border-slate-200/90 bg-slate-50/90 hover:border-slate-300";
   const body = (
     <>
-      <span className="text-xs text-muted-foreground">{label}</span>
-      <b className="mt-1 block text-2xl font-semibold text-navy">{value}</b>
+      <span className="text-xs font-semibold text-navy/70">{label}</span>
+      <b className="mt-1 block font-display text-xl font-semibold tabular-nums text-navy sm:text-2xl">
+        {value}
+      </b>
     </>
   );
   if (onClick) {
@@ -1140,7 +1155,8 @@ function WorkspaceKpi({
         type="button"
         onClick={onClick}
         className={cn(
-          "rounded-xl border border-border bg-white px-4 py-3 text-left transition-colors hover:border-royal/40",
+          "min-h-[5rem] rounded-lg border px-3 py-3 text-left shadow-soft transition-[border-color,box-shadow] hover:shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal/40",
+          toneClass,
           active && "ring-2 ring-royal/30",
         )}
       >
@@ -1148,7 +1164,11 @@ function WorkspaceKpi({
       </button>
     );
   }
-  return <div className="rounded-xl border border-border bg-white px-4 py-3">{body}</div>;
+  return (
+    <div className={cn("min-h-[5rem] rounded-lg border px-3 py-3 shadow-soft", toneClass)}>
+      {body}
+    </div>
+  );
 }
 
 function FilterSelect({

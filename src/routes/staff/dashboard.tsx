@@ -394,21 +394,23 @@ function StaffDashboard() {
       />
 
       {isAdmission && am ? (
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
           <StatCard
             label="Assigned to me"
             value={String(am.assignedToMe)}
             hint={ADMISSION_METRIC_HINTS.assignedToMe}
             title={ADMISSION_METRIC_DEFINITIONS.assignedToMe}
             icon={<Users />}
+            tone="purple"
             onClick={() => void router.navigate({ to: "/staff/students" })}
           />
           <StatCard
-            label="Awaiting initial review"
+            label="Awaiting review"
             value={String(am.awaitingInitialReview)}
             hint={ADMISSION_METRIC_HINTS.awaitingInitialReview}
             title={ADMISSION_METRIC_DEFINITIONS.awaitingInitialReview}
             icon={<Hourglass />}
+            tone="amber"
             onClick={() =>
               void router.navigate({
                 to: "/staff/applications",
@@ -422,6 +424,7 @@ function StaffDashboard() {
             hint={ADMISSION_METRIC_HINTS.documentsMissing}
             title={ADMISSION_METRIC_DEFINITIONS.documentsMissing}
             icon={<FileWarning />}
+            tone="cyan"
             onClick={() =>
               void router.navigate({ to: "/staff/applications", search: { focus: "docs" } })
             }
@@ -432,6 +435,7 @@ function StaffDashboard() {
             hint={ADMISSION_METRIC_HINTS.inProgress}
             title={ADMISSION_METRIC_DEFINITIONS.inProgress}
             icon={<FolderKanban />}
+            tone="indigo"
             onClick={() =>
               void router.navigate({
                 to: "/staff/applications",
@@ -440,11 +444,12 @@ function StaffDashboard() {
             }
           />
           <StatCard
-            label="Returned for correction"
+            label="Returned"
             value={String(am.returnedForCorrection)}
             hint={ADMISSION_METRIC_HINTS.returnedForCorrection}
             title={ADMISSION_METRIC_DEFINITIONS.returnedForCorrection}
             icon={<RotateCcw />}
+            tone="orange"
             onClick={() =>
               void router.navigate({
                 to: "/staff/applications",
@@ -453,11 +458,12 @@ function StaffDashboard() {
             }
           />
           <StatCard
-            label="Submitted to university"
+            label="Submitted"
             value={String(am.submittedToUniversity)}
             hint={ADMISSION_METRIC_HINTS.submittedToUniversity}
             title={ADMISSION_METRIC_DEFINITIONS.submittedToUniversity}
             icon={<Send />}
+            tone="blue"
             onClick={() =>
               void router.navigate({
                 to: "/staff/applications",
@@ -466,21 +472,23 @@ function StaffDashboard() {
             }
           />
           <StatCard
-            label="Offers / decisions"
+            label="Offers"
             value={String(am.offersDecisionsReceived)}
             hint={ADMISSION_METRIC_HINTS.offersDecisionsReceived}
             title={ADMISSION_METRIC_DEFINITIONS.offersDecisionsReceived}
             icon={<ClipboardCheck />}
+            tone="green"
             onClick={() =>
               void router.navigate({ to: "/staff/applications", search: { focus: "offers" } })
             }
           />
           <StatCard
-            label="Deposit / CAS pending"
+            label="Deposit / CAS"
             value={String(am.depositCasPending)}
             hint={ADMISSION_METRIC_HINTS.depositCasPending}
             title={ADMISSION_METRIC_DEFINITIONS.depositCasPending}
             icon={<Landmark />}
+            tone="yellow"
             onClick={() =>
               void router.navigate({
                 to: "/staff/offers",
@@ -494,6 +502,7 @@ function StaffDashboard() {
             hint={ADMISSION_METRIC_HINTS.visaInProgress}
             title={ADMISSION_METRIC_DEFINITIONS.visaInProgress}
             icon={<Plane />}
+            tone="teal"
             onClick={() =>
               void router.navigate({
                 to: "/staff/offers",
@@ -507,16 +516,18 @@ function StaffDashboard() {
             hint={ADMISSION_METRIC_HINTS.overdueTasks}
             title={ADMISSION_METRIC_DEFINITIONS.overdueTasks}
             icon={<Clock3 />}
+            tone="amber"
             onClick={() =>
               void router.navigate({ to: "/staff/tasks", search: { tab: "overdue" } })
             }
           />
           <StatCard
-            label="Refused / rejected"
+            label="Rejected"
             value={String(am.refusedRejected)}
             hint={ADMISSION_METRIC_HINTS.refusedRejected}
             title={ADMISSION_METRIC_DEFINITIONS.refusedRejected}
             icon={<XCircle />}
+            tone="red"
             onClick={() =>
               void router.navigate({
                 to: "/staff/offers",
@@ -530,6 +541,7 @@ function StaffDashboard() {
             hint={ADMISSION_METRIC_HINTS.actionRequired}
             title={ADMISSION_METRIC_DEFINITIONS.actionRequired}
             icon={<AlertCircle />}
+            tone="red"
             onClick={() =>
               void router.navigate({ to: "/staff/applications", search: { focus: "action" } })
             }
@@ -537,13 +549,14 @@ function StaffDashboard() {
         </div>
       ) : (
         <div className="space-y-2">
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+          <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
             <StatCard
-              label="My assigned students"
+              label="Assigned students"
               value={String(m.assignedStudents)}
               hint={COUNSELLOR_METRIC_HINTS.assignedStudents}
               title={COUNSELLOR_METRIC_DEFINITIONS.assignedStudents}
               icon={<Users />}
+              tone="purple"
               onClick={() => {
                 setKpiFilter(null);
                 void router.navigate({ to: "/staff/students" });
@@ -555,6 +568,7 @@ function StaffDashboard() {
               hint={COUNSELLOR_METRIC_HINTS.actionRequired}
               title={COUNSELLOR_METRIC_DEFINITIONS.actionRequired}
               icon={<AlertCircle />}
+              tone="red"
               selected={kpiFilter === "action_required"}
               onClick={() => {
                 setKpiFilter("action_required");
@@ -571,6 +585,7 @@ function StaffDashboard() {
               hint={COUNSELLOR_METRIC_HINTS.awaitingInitialAssessment}
               title={COUNSELLOR_METRIC_DEFINITIONS.awaitingInitialAssessment}
               icon={<ClipboardCheck />}
+              tone="amber"
               selected={kpiFilter === "awaiting_assessment"}
               onClick={() => {
                 setKpiFilter("awaiting_assessment");
@@ -587,6 +602,7 @@ function StaffDashboard() {
               hint={COUNSELLOR_METRIC_HINTS.counsellingCompleted}
               title={COUNSELLOR_METRIC_DEFINITIONS.counsellingCompleted}
               icon={<ClipboardCheck />}
+              tone="green"
               selected={kpiFilter === "consent_recorded"}
               onClick={() => {
                 setKpiFilter(null);
@@ -602,6 +618,7 @@ function StaffDashboard() {
               hint={COUNSELLOR_METRIC_HINTS.followUpsDue}
               title={COUNSELLOR_METRIC_DEFINITIONS.followUpsDue}
               icon={<Clock3 />}
+              tone="orange"
               selected={kpiFilter === "follow_ups"}
               onClick={() => {
                 setKpiFilter("follow_ups");
@@ -614,6 +631,7 @@ function StaffDashboard() {
               hint={COUNSELLOR_METRIC_HINTS.awaitingResponse}
               title={COUNSELLOR_METRIC_DEFINITIONS.awaitingResponse}
               icon={<Hourglass />}
+              tone="yellow"
               selected={kpiFilter === "awaiting_response"}
               onClick={() => {
                 setKpiFilter("awaiting_response");
@@ -627,11 +645,12 @@ function StaffDashboard() {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <StatCard
-              label="Applications in progress"
+              label="Applications"
               value={String(m.appsInProgress)}
               hint={COUNSELLOR_METRIC_HINTS.applicationsInProgress}
               title={COUNSELLOR_METRIC_DEFINITIONS.applicationsInProgress}
               icon={<FolderKanban />}
+              tone="indigo"
               onClick={() => {
                 setKpiFilter(null);
                 void router.navigate({ to: "/staff/applications" });
@@ -757,7 +776,7 @@ function StaffDashboard() {
               {(data.needsAttention ?? []).length === 0 ? (
                 <EmptyState
                   title="Nothing needs attention"
-                  body="Handovers awaiting review, document gaps, and approaching deadlines will appear here."
+                  body="No open admission actions."
                 />
               ) : (
                 <ul className="divide-y divide-border">
@@ -1047,7 +1066,7 @@ function StaffDashboard() {
             {(data.recentActivity ?? data.assignedOverview).length === 0 ? (
               <EmptyState
                 title="No applications yet"
-                body="Applications appear after counsellor handover acceptance or when you create a pipeline row."
+                body="No applications yet."
               />
             ) : (
               <TableWrap compact>
@@ -1159,7 +1178,7 @@ function StaffDashboard() {
                   body={
                     kpiFilter || attentionFilter !== "all"
                       ? "Clear filters to see the full attention queue."
-                      : "Lifecycle steps, returned cases, due tasks, and pending documents will appear here."
+                      : "No open counsellor actions."
                   }
                   action={
                     kpiFilter || attentionFilter !== "all" ? (
