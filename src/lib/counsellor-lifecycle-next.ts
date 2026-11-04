@@ -53,6 +53,21 @@ export function normalizeOptionalActionSummary(
   return t || fallback;
 }
 
+/** Consent panel status from persisted agreement + unsaved local draft. */
+export function describeCounsellorConsentStatus(input: {
+  hasConsent: boolean;
+  /** Latest agreement row's consented flag when present (including declines). */
+  latestConsented: boolean | null | undefined;
+  draftChoice: boolean | null;
+  editing: boolean;
+}): "Not Recorded" | "Partially Recorded" | "Completed" | "Needs Review" {
+  if (input.hasConsent) return "Completed";
+  if (input.latestConsented === false && input.draftChoice === null) return "Needs Review";
+  if (input.draftChoice !== null) return "Partially Recorded";
+  if (input.latestConsented === false) return "Needs Review";
+  return "Not Recorded";
+}
+
 export function describeSignupFeeStatusForCounsellor(status: string | null | undefined): string {
   const s = (status ?? "").trim().toLowerCase();
   if (!s || s === "unpaid") return "Signup fee not yet claimed";
@@ -75,7 +90,7 @@ export function resolveCounsellorLifecycleNext(
     return {
       stepId: "done",
       title: "With Admission Team",
-      body: "Admission has accepted this case. Continue documents and applications as needed.",
+      body: "Case accepted. Continue documents and applications as needed.",
       primaryAction: "none",
       primaryLabel: null,
       feeStatusLabel,
@@ -86,7 +101,7 @@ export function resolveCounsellorLifecycleNext(
     return {
       stepId: "with_admission",
       title: "Forwarded to Admission",
-      body: "Waiting for the Admission Team to accept or return this case.",
+      body: "Waiting for Admission to accept or return this case.",
       primaryAction: "view_handover",
       primaryLabel: null,
       feeStatusLabel,
@@ -97,7 +112,7 @@ export function resolveCounsellorLifecycleNext(
     return {
       stepId: "forward_admission",
       title: "Admission returned the case",
-      body: "Review notes, update the assessment if needed, then forward to Admission again when ready.",
+      body: "Review the return note, update if needed, then forward again.",
       primaryAction: feeOk ? "forward_admission" : "request_fee_verification",
       primaryLabel: feeOk ? "Forward to Admission" : "Request fee verification",
       feeStatusLabel,
@@ -107,8 +122,8 @@ export function resolveCounsellorLifecycleNext(
   if (!input.hasSavedAssessment) {
     return {
       stepId: "complete_assessment",
-      title: "Complete assessment",
-      body: "Save the eligibility assessment before consent, fee verification, or Admission.",
+      title: "Complete Assessment",
+      body: "Save the eligibility assessment before consent or handover.",
       primaryAction: "go_assessment",
       primaryLabel: "Open assessment",
       feeStatusLabel,
@@ -118,10 +133,10 @@ export function resolveCounsellorLifecycleNext(
   if (!input.hasConsent) {
     return {
       stepId: "record_consent",
-      title: "Record counselling consent",
-      body: "Confirm that the student consented to counselling. This is required before fee verification or Admission.",
+      title: "Complete Required Consent",
+      body: "Record Yes or No for the counselling agreement, then Save Consent.",
       primaryAction: "record_consent",
-      primaryLabel: "Record consent",
+      primaryLabel: "Open Student Consent",
       feeStatusLabel,
     };
   }
@@ -129,8 +144,8 @@ export function resolveCounsellorLifecycleNext(
   if (feeOk) {
     return {
       stepId: "forward_admission",
-      title: "Ready for Admission",
-      body: "Signup fee is authorized. Forward this case to the Admission Team when counselling is complete.",
+      title: "Forward to Admission",
+      body: "Signup fee is authorized. Forward when counselling is complete.",
       primaryAction: "forward_admission",
       primaryLabel: "Forward to Admission",
       feeStatusLabel,
@@ -143,8 +158,8 @@ export function resolveCounsellorLifecycleNext(
       title: openReq === "in_progress" ? "Awaiting Accounts/Finance" : "With Front Desk",
       body:
         openReq === "in_progress"
-          ? "Front Desk forwarded this request. Accounts must verify or waive before Admission."
-          : "Fee verification request is with Front Desk. They will coordinate with Accounts.",
+          ? "Accounts must verify or waive before Admission."
+          : "Fee request is with Front Desk.",
       primaryAction: "none",
       primaryLabel: null,
       feeStatusLabel,
@@ -155,7 +170,7 @@ export function resolveCounsellorLifecycleNext(
     return {
       stepId: "request_fee_verification",
       title: "Fee was rejected",
-      body: "Accounts rejected the signup fee. Coordinate a corrected claim, then request verification again if needed.",
+      body: "Coordinate a corrected claim, then request verification again.",
       primaryAction: "request_fee_verification",
       primaryLabel: "Request fee verification",
       feeStatusLabel,
@@ -164,8 +179,8 @@ export function resolveCounsellorLifecycleNext(
 
   return {
     stepId: "request_fee_verification",
-    title: "Request fee verification",
-    body: "Ask Front Desk to coordinate signup-fee verification with Accounts. Optional notes can help them.",
+    title: "Send Update to Front Desk",
+    body: "Request signup-fee verification. Optional note for Front Desk.",
     primaryAction: "request_fee_verification",
     primaryLabel: "Send to Front Desk",
     feeStatusLabel,

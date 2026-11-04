@@ -3,6 +3,7 @@ import {
   counsellorLifecycleProgressSteps,
   DEFAULT_ADMISSION_HANDOVER_SUMMARY,
   DEFAULT_FEE_VERIFICATION_SUMMARY,
+  describeCounsellorConsentStatus,
   normalizeOptionalActionSummary,
   resolveCounsellorLifecycleNext,
 } from "./counsellor-lifecycle-next";
@@ -31,6 +32,50 @@ describe("counsellor lifecycle next-step", () => {
     });
     expect(next.stepId).toBe("record_consent");
     expect(next.primaryAction).toBe("record_consent");
+    expect(next.primaryLabel).toBe("Open Student Consent");
+  });
+
+  it("maps consent status from persisted rows only", () => {
+    expect(
+      describeCounsellorConsentStatus({
+        hasConsent: false,
+        latestConsented: null,
+        draftChoice: null,
+        editing: false,
+      }),
+    ).toBe("Not Recorded");
+    expect(
+      describeCounsellorConsentStatus({
+        hasConsent: false,
+        latestConsented: null,
+        draftChoice: true,
+        editing: false,
+      }),
+    ).toBe("Partially Recorded");
+    expect(
+      describeCounsellorConsentStatus({
+        hasConsent: true,
+        latestConsented: true,
+        draftChoice: null,
+        editing: false,
+      }),
+    ).toBe("Completed");
+    expect(
+      describeCounsellorConsentStatus({
+        hasConsent: false,
+        latestConsented: false,
+        draftChoice: null,
+        editing: false,
+      }),
+    ).toBe("Needs Review");
+    expect(
+      describeCounsellorConsentStatus({
+        hasConsent: false,
+        latestConsented: false,
+        draftChoice: true,
+        editing: true,
+      }),
+    ).toBe("Partially Recorded");
   });
 
   it("requests fee verification when fee not authorized and no open request", () => {

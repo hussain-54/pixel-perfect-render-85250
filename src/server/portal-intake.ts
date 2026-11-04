@@ -1734,6 +1734,7 @@ export const portalGetSignupFeeStatus = createServerFn({ method: "GET" })
           fee: null as SignupFeeView | null,
           lifecycle: {
             hasConsent: false,
+            agreement: null,
             feeRequest: null,
             handover: null,
           },
@@ -1759,33 +1760,68 @@ export const portalGetSignupFeeStatus = createServerFn({ method: "GET" })
         .eq("id", studentId)
         .maybeSingle();
 
-      const [{ data: agreement }, { data: feeReq }, { data: handover }] = await Promise.all([
-        client
-          .from("counselling_agreements")
-          .select("id, consented")
-          .eq("student_id", studentId)
-          .eq("consented", true)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        client
-          .from("counselling_fee_verification_requests")
-          .select("id, status, summary, updated_at")
-          .eq("student_id", studentId)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-        client
-          .from("admission_handovers")
-          .select("id, status, handed_over_at")
-          .eq("student_id", studentId)
-          .order("handed_over_at", { ascending: false })
-          .limit(1)
-          .maybeSingle(),
-      ]);
+      const mapAgreement = (
+        row:
+          | {
+              id: string;
+              consented: boolean;
+              consent_label: string | null;
+              summary: string | null;
+              outcome: string | null;
+              created_at: string;
+              recorded_by: string | null;
+            }
+          | null
+          | undefined,
+      ) =>
+        row
+          ? {
+              id: row.id as string,
+              consented: Boolean(row.consented),
+              consentLabel: String(row.consent_label ?? "Counselling agreement / consent recorded"),
+              summary: row.summary ? String(row.summary) : null,
+              outcome: row.outcome ? String(row.outcome) : null,
+              createdAt: row.created_at as string,
+              recordedBy: (row.recorded_by as string | null) ?? null,
+            }
+          : null;
+
+      const [{ data: agreement }, { data: latestAgreement }, { data: feeReq }, { data: handover }] =
+        await Promise.all([
+          client
+            .from("counselling_agreements")
+            .select("id, consented, consent_label, summary, outcome, created_at, recorded_by")
+            .eq("student_id", studentId)
+            .eq("consented", true)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          client
+            .from("counselling_agreements")
+            .select("id, consented, consent_label, summary, outcome, created_at, recorded_by")
+            .eq("student_id", studentId)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          client
+            .from("counselling_fee_verification_requests")
+            .select("id, status, summary, updated_at")
+            .eq("student_id", studentId)
+            .order("created_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+          client
+            .from("admission_handovers")
+            .select("id, status, handed_over_at")
+            .eq("student_id", studentId)
+            .order("handed_over_at", { ascending: false })
+            .limit(1)
+            .maybeSingle(),
+        ]);
 
       const lifecycle = {
         hasConsent: Boolean(agreement?.consented),
+        agreement: mapAgreement(agreement) ?? mapAgreement(latestAgreement),
         feeRequest: feeReq
           ? {
               id: feeReq.id as string,
@@ -1833,6 +1869,7 @@ export const portalGetSignupFeeStatus = createServerFn({ method: "GET" })
           lifecycle: isStudentViewer
             ? {
                 hasConsent: lifecycle.hasConsent,
+                agreement: null,
                 feeRequest: null,
                 handover: lifecycle.handover
                   ? {
@@ -1863,6 +1900,7 @@ export const portalGetSignupFeeStatus = createServerFn({ method: "GET" })
         lifecycle: isStudentViewer
           ? {
               hasConsent: lifecycle.hasConsent,
+              agreement: null,
               feeRequest: null,
               handover: lifecycle.handover
                 ? {

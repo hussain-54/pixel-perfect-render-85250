@@ -60,6 +60,7 @@ import {
   counsellorLifecycleProgressSteps,
   DEFAULT_ADMISSION_HANDOVER_SUMMARY,
   DEFAULT_FEE_VERIFICATION_SUMMARY,
+  describeCounsellorConsentStatus,
   normalizeOptionalActionSummary,
   resolveCounsellorLifecycleNext,
 } from "@/lib/counsellor-lifecycle-next";
@@ -165,6 +166,12 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
   const [showHandoverNote, setShowHandoverNote] = useState(false);
   const [lifecycleMsg, setLifecycleMsg] = useState<string | null>(null);
   const [lifecycleBusy, setLifecycleBusy] = useState(false);
+  const [consentChoice, setConsentChoice] = useState<boolean | null>(null);
+  const [consentSummaryNote, setConsentSummaryNote] = useState("");
+  const [consentEditing, setConsentEditing] = useState(false);
+  const [consentError, setConsentError] = useState<string | null>(null);
+  const [consentMsg, setConsentMsg] = useState<string | null>(null);
+  const [saveContinueAfter, setSaveContinueAfter] = useState(false);
   const [returnNote, setReturnNote] = useState("");
   const [returnOpen, setReturnOpen] = useState(false);
   const isAdmissionWorkbench =
@@ -288,17 +295,37 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
     mutationFn: (payload: AssessmentSaveInput) =>
       saveStudentAssessment(s.id, payload, workspace.assessment.updatedAt),
     onSuccess: async () => {
-      setSaveMsg("Assessment saved.");
-      setEditingAssessment(false);
+      const continueNext = saveContinueAfter;
+      setSaveContinueAfter(false);
+      setSaveMsg(continueNext ? "Assessment saved. Continue with the next section." : "Assessment saved.");
       setFieldErrors({});
       await invalidateProfile();
+      if (continueNext) {
+        setEditingAssessment(true);
+        window.setTimeout(() => {
+          const nextIncomplete = document.querySelector<HTMLElement>(
+            "[data-assess-incomplete='true']",
+          );
+          if (nextIncomplete?.id) {
+            scrollToAssessmentSection(nextIncomplete.id);
+            return;
+          }
+          scrollToAssessmentSection("assess-section-consent");
+        }, 80);
+      } else {
+        setEditingAssessment(false);
+      }
     },
-    onError: (err) => setSaveMsg(portalErrorMessage(err, "Could not save assessment.")),
+    onError: (err) => {
+      setSaveContinueAfter(false);
+      setSaveMsg(portalErrorMessage(err, "Could not save assessment."));
+    },
   });
 
   const feeStatus = feeQ.data?.fee?.status ?? null;
   const hasSavedAssessment = Boolean(workspace.assessment.assessedAt);
   const lifecycleSnap = feeQ.data?.lifecycle;
+  const savedAgreement = lifecycleSnap?.agreement ?? null;
   const openFeeRequestStatus =
     lifecycleSnap?.feeRequest && ["open", "in_progress"].includes(lifecycleSnap.feeRequest.status)
       ? lifecycleSnap.feeRequest.status
@@ -349,6 +376,22 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
     () => assessmentChecklistProgress(assessmentChecklist),
     [assessmentChecklist],
   );
+  const incompleteAnchors = useMemo(() => {
+    const set = new Set<string>();
+    for (const section of assessmentChecklist) {
+      if (section.status === "completed" || section.status === "optional") continue;
+      set.add(section.anchor);
+    }
+    return set;
+  }, [assessmentChecklist]);
+  const formSectionsReadyForComplete = useMemo(() => {
+    const required = assessmentChecklist.filter(
+      (section) =>
+        !["consent", "next_steps", "counsellor_summary"].includes(section.id) &&
+        section.status !== "optional",
+    );
+    return required.every((section) => section.status === "completed");
+  }, [assessmentChecklist]);
   const admissionNext = deriveAdmissionNextAction({
     stage: workspace.applications[0]?.status ?? "",
     handoverStatus: lifecycleSnap?.handover?.status ?? null,
@@ -358,7 +401,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
     deadlineWarning: false,
   });
 
-  const persistAssessment = () => {
+  const persistAssessment = (opts?: { continueNext?: boolean; complete?: boolean }) => {
     if (saveM.isPending) return;
     setSaveMsg(null);
     setFieldErrors({});
@@ -383,7 +426,64 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
       else if (next.applicationTarget) scrollToAssessmentSection("assess-section-career");
       return;
     }
+    setSaveContinueAfter(Boolean(opts?.continueNext));
+    if (opts?.complete) {
+      setSaveMsg(null);
+    }
     saveM.mutate({ ...payload, eligibility: check.eligibility });
+  };
+
+  const consentStatusLabel = describeCounsellorConsentStatus({
+    hasConsent: Boolean(lifecycleSnap?.hasConsent),
+    latestConsented: savedAgreement?.consented,
+    draftChoice: consentChoice,
+    editing: consentEditing,
+  });
+
+  const discardConsentEdits = () => {
+    setConsentChoice(savedAgreement ? savedAgreement.consented : null);
+    setConsentSummaryNote(savedAgreement?.summary ?? "");
+    setConsentError(null);
+    setConsentMsg(null);
+    setConsentEditing(false);
+  };
+
+  const saveConsent = async () => {
+    if (lifecycleBusy || !workspace.canEdit) return;
+    if (consentChoice === null) {
+      setConsentError("Select Yes or No before saving consent.");
+      setConsentMsg(null);
+      return;
+    }
+    try {
+      setLifecycleBusy(true);
+      setConsentError(null);
+      setConsentMsg(null);
+      await recordCounsellingAgreement({
+        studentId: s.id,
+        consented: consentChoice,
+        consentLabel: "Counselling agreement / consent recorded",
+        summary:
+          consentSummaryNote.trim() ||
+          (consentChoice
+            ? "Counselling session consent recorded in portal."
+            : "Student declined counselling agreement."),
+        outcome: consentChoice
+          ? "Proceed to assessment and fee verification"
+          : "Consent declined — do not treat as accepted",
+      });
+      setConsentMsg(
+        consentChoice ? "Consent saved." : "Decline recorded. Status is not Completed.",
+      );
+      setConsentEditing(false);
+      setLifecycleMsg(null);
+      await invalidateProfile();
+      await feeQ.refetch();
+    } catch (e) {
+      setConsentError(portalErrorMessage(e, "Could not save consent."));
+    } finally {
+      setLifecycleBusy(false);
+    }
   };
 
   const handoverM = useMutation({
@@ -550,40 +650,13 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
               ))}
             </ol>
 
-            <div
-              id="assess-section-consent"
-              className={cn(
-                "scroll-mt-6 rounded-md border px-4 py-3",
-                lifecycleSnap?.hasConsent
-                  ? "border-emerald-200 bg-emerald-50/60"
-                  : "border-amber-200 bg-amber-50/50",
-              )}
-              aria-live="polite"
-            >
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                Counsellor consent
-              </p>
-              <p className="mt-1 font-semibold text-navy">
-                {feeQ.isLoading
-                  ? "Checking consent…"
-                  : lifecycleSnap?.hasConsent
-                    ? "Consent recorded"
-                    : "Consent pending"}
-              </p>
-              <p className="mt-0.5 text-xs text-muted-foreground">
-                {lifecycleSnap?.hasConsent
-                  ? "Persisted counselling agreement is on file. Opening this page does not change consent status."
-                  : hasSavedAssessment
-                    ? "Use Record consent below when the student has agreed. Status updates only after a successful save."
-                    : "Save the assessment first, then record consent before fee verification or Admission."}
-              </p>
-            </div>
-
             <div className="rounded-md border border-border bg-white px-4 py-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                 {nextStep.feeStatusLabel}
                 {feeQ.isLoading ? " · Loading…" : null}
                 {feeQ.data?.fee?.portalActivatedAt ? " · Portal activated" : null}
+                {" · Consent: "}
+                {feeQ.isLoading ? "…" : consentStatusLabel}
               </p>
               <h2 className="mt-1 font-display text-lg font-semibold text-navy">
                 {nextStep.title}
@@ -606,28 +679,20 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                   className="mt-3"
                   size="sm"
                   variant="navy"
-                  disabled={!workspace.canEdit || lifecycleBusy}
-                  onClick={async () => {
-                    try {
-                      setLifecycleBusy(true);
-                      setLifecycleMsg(null);
-                      await recordCounsellingAgreement({
-                        studentId: s.id,
-                        consented: true,
-                        summary: "Counselling session consent recorded in portal.",
-                        outcome: "Proceed to assessment and fee verification",
-                      });
-                      setLifecycleMsg("Counselling consent recorded.");
-                      await invalidateProfile();
-                      await feeQ.refetch();
-                    } catch (e) {
-                      setLifecycleMsg(portalErrorMessage(e, "Could not record consent."));
-                    } finally {
-                      setLifecycleBusy(false);
-                    }
+                  disabled={!workspace.canEdit}
+                  onClick={() => {
+                    onTabChange("assessment");
+                    window.setTimeout(() => {
+                      setConsentEditing(true);
+                      if (consentChoice === null && savedAgreement) {
+                        setConsentChoice(savedAgreement.consented);
+                        setConsentSummaryNote(savedAgreement.summary ?? "");
+                      }
+                      scrollToAssessmentSection("assess-section-consent");
+                    }, 40);
                   }}
                 >
-                  {lifecycleBusy ? "Saving…" : nextStep.primaryLabel}
+                  {nextStep.primaryLabel}
                 </Button>
               ) : null}
 
@@ -943,37 +1008,31 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
 
           <TabsContent value="assessment" className="space-y-5">
             <div className="grid gap-6 lg:grid-cols-[minmax(220px,260px)_minmax(0,1fr)] lg:items-start">
-              <aside className="rounded-lg border border-border bg-card p-4 lg:sticky lg:top-4">
+              <aside className="rounded-lg border border-border bg-card p-3 lg:sticky lg:top-4">
                 <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.1em] text-muted-foreground">
-                  Assessment checklist
+                  Assessment progress
                 </p>
-                <p className="mt-1 text-sm text-navy">
-                  {assessmentProgress.completed} of {assessmentProgress.tracked} sections ·{" "}
-                  {assessmentProgress.percent}%
+                <p className="mt-1 text-sm font-medium text-navy">
+                  {assessmentProgress.completed} of {assessmentProgress.tracked} sections completed
                 </p>
-                <div className="mt-3 h-2 overflow-hidden rounded-full bg-muted">
+                <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
                   <div
                     className="h-full rounded-full bg-royal transition-[width] duration-300"
                     style={{ width: `${assessmentProgress.percent}%` }}
                     aria-hidden
                   />
                 </div>
-                <ul className="mt-4 space-y-1.5">
+                <ul className="mt-3 space-y-0.5">
                   {assessmentChecklist.map((section) => (
                     <li key={section.id}>
                       <button
                         type="button"
                         className={cn(
-                          "flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left text-sm transition-colors hover:bg-muted/60",
+                          "flex w-full items-center gap-2 rounded-md px-2 py-1 text-left text-sm transition-colors hover:bg-muted/60",
                           section.status === "needs_review" && "bg-amber-50/80",
+                          section.status === "in_progress" && "bg-navy/5",
                         )}
-                        onClick={() => {
-                          if (section.id === "consent" || section.id === "next_steps") {
-                            scrollToAssessmentSection(section.anchor);
-                            return;
-                          }
-                          scrollToAssessmentSection(section.anchor);
-                        }}
+                        onClick={() => scrollToAssessmentSection(section.anchor)}
                       >
                         {assessmentSectionIcon(section.status)}
                         <span className="min-w-0 flex-1">
@@ -1003,7 +1062,13 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
 
               <div className="space-y-4">
                 <Panel compact title="1. Student Information">
-                  <div id="assess-section-student" className="scroll-mt-6 grid gap-3 sm:grid-cols-2">
+                  <div
+                    id="assess-section-student"
+                    className="scroll-mt-6 grid gap-3 sm:grid-cols-2"
+                    data-assess-incomplete={
+                      incompleteAnchors.has("assess-section-student") ? "true" : undefined
+                    }
+                  >
                     <OverviewItem label="Student" value={s.name} />
                     <OverviewItem label="Case ID" value={s.caseId} />
                     <OverviewItem label="Programme interest" value={s.program || "—"} />
@@ -1014,7 +1079,13 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 </Panel>
 
                 <Panel compact title="2. Academic Background">
-                  <div id="assess-section-academic" className="scroll-mt-6 grid gap-3 sm:grid-cols-2">
+                  <div
+                    id="assess-section-academic"
+                    className="scroll-mt-6 grid gap-3 sm:grid-cols-2"
+                    data-assess-incomplete={
+                      incompleteAnchors.has("assess-section-academic") ? "true" : undefined
+                    }
+                  >
                     <Field label="Last qualification" optional hint="Highest completed qualification">
                       <CatalogOrCustom
                         value={form.lastQualification}
@@ -1051,7 +1122,13 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 </Panel>
 
                 <Panel compact title="3. Study Preferences">
-                  <div id="assess-section-study" className="scroll-mt-6 grid gap-3 sm:grid-cols-2">
+                  <div
+                    id="assess-section-study"
+                    className="scroll-mt-6 grid gap-3 sm:grid-cols-2"
+                    data-assess-incomplete={
+                      incompleteAnchors.has("assess-section-study") ? "true" : undefined
+                    }
+                  >
                     <Field label="Study level" optional>
                       <CatalogOrCustom
                         value={form.preferredLevel}
@@ -1108,7 +1185,13 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 </Panel>
 
                 <Panel compact title="4. Career & Programme Assessment">
-                  <div id="assess-section-career" className="scroll-mt-6 grid gap-3">
+                  <div
+                    id="assess-section-career"
+                    className="scroll-mt-6 grid gap-3"
+                    data-assess-incomplete={
+                      incompleteAnchors.has("assess-section-career") ? "true" : undefined
+                    }
+                  >
                     <Field
                       label="Application target"
                       error={fieldErrors.applicationTarget ?? null}
@@ -1149,7 +1232,13 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 </Panel>
 
                 <Panel compact title="5. Destination & University Preferences">
-                  <div id="assess-section-destination" className="scroll-mt-6 space-y-4">
+                  <div
+                    id="assess-section-destination"
+                    className="scroll-mt-6 space-y-4"
+                    data-assess-incomplete={
+                      incompleteAnchors.has("assess-section-destination") ? "true" : undefined
+                    }
+                  >
                     <Field label="Preferred destination" optional>
                       <CatalogOrCustom
                         value={form.targetCountries}
@@ -1195,6 +1284,9 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                   <div
                     id="assess-section-english"
                     className="scroll-mt-6 grid gap-3 sm:grid-cols-2"
+                    data-assess-incomplete={
+                      incompleteAnchors.has("assess-section-english") ? "true" : undefined
+                    }
                   >
                     <Field label="English test" optional>
                       <CatalogOrCustom
@@ -1232,6 +1324,9 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                   <div
                     id="assess-section-financial"
                     className="scroll-mt-6 grid gap-3 sm:grid-cols-2"
+                    data-assess-incomplete={
+                      incompleteAnchors.has("assess-section-financial") ? "true" : undefined
+                    }
                   >
                     <Field label="Annual budget" optional>
                       <Input
@@ -1256,7 +1351,13 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 </Panel>
 
                 <Panel compact title="8. Counselling Assessment & Outcome">
-                  <div id="assess-section-eligibility" className="scroll-mt-6 grid gap-3">
+                  <div
+                    id="assess-section-eligibility"
+                    className="scroll-mt-6 grid gap-3"
+                    data-assess-incomplete={
+                      incompleteAnchors.has("assess-section-eligibility") ? "true" : undefined
+                    }
+                  >
                     <Field
                       label="Eligibility outcome *"
                       error={fieldErrors.eligibility ?? null}
@@ -1316,35 +1417,159 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 </Panel>
 
                 <Panel compact title="9. Student Consent">
-                  <div className="space-y-2 text-sm">
+                  <div
+                    id="assess-section-consent"
+                    className="scroll-mt-6 space-y-3 text-sm"
+                    data-assess-incomplete={lifecycleSnap?.hasConsent ? undefined : "true"}
+                  >
                     <p className="text-muted-foreground">
-                      Consent is never pre-selected. Record it in Next step after the student agrees.
+                      Record the student&apos;s consent and preferences.
                     </p>
-                    <div
-                      className={cn(
-                        "rounded-md border px-3 py-2",
-                        lifecycleSnap?.hasConsent
-                          ? "border-emerald-200 bg-emerald-50/60"
-                          : "border-amber-200 bg-amber-50/50",
-                      )}
-                    >
-                      <p className="font-semibold text-navy">
-                        {lifecycleSnap?.hasConsent ? "Consent on file" : "Consent not recorded"}
-                      </p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        {lifecycleSnap?.hasConsent
-                          ? "Persisted counselling agreement exists for this student."
-                          : "Use Record consent in Next step after the student agrees."}
-                      </p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={cn(
+                          "rounded-md border px-2 py-0.5 text-xs font-semibold",
+                          consentStatusLabel === "Completed" &&
+                            "border-emerald-200 bg-emerald-50 text-emerald-900",
+                          consentStatusLabel === "Needs Review" &&
+                            "border-amber-200 bg-amber-50 text-amber-900",
+                          consentStatusLabel === "Partially Recorded" &&
+                            "border-navy/20 bg-navy/5 text-navy",
+                          consentStatusLabel === "Not Recorded" &&
+                            "border-border bg-muted/40 text-muted-foreground",
+                        )}
+                      >
+                        {consentStatusLabel}
+                      </span>
                     </div>
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => scrollToAssessmentSection("assess-section-consent")}
-                    >
-                      Go to consent actions
-                    </Button>
+
+                    {!consentEditing && savedAgreement ? (
+                      <div className="rounded-md border border-border bg-white px-3 py-2 space-y-1.5">
+                        <dl className="grid gap-1.5 sm:grid-cols-2">
+                          <OverviewItem
+                            label="Consent status"
+                            value={savedAgreement.consented ? "Yes — agreed" : "No — declined"}
+                          />
+                          <OverviewItem
+                            label="Recorded"
+                            value={fmtDate(savedAgreement.createdAt.slice(0, 10))}
+                          />
+                          <OverviewItem
+                            label="Agreement"
+                            value={savedAgreement.consentLabel || "—"}
+                          />
+                          {savedAgreement.summary ? (
+                            <OverviewItem label="Note" value={savedAgreement.summary} />
+                          ) : null}
+                        </dl>
+                        {workspace.canEdit ? (
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="outline"
+                            className="mt-2"
+                            onClick={() => {
+                              setConsentChoice(savedAgreement.consented);
+                              setConsentSummaryNote(savedAgreement.summary ?? "");
+                              setConsentError(null);
+                              setConsentMsg(null);
+                              setConsentEditing(true);
+                            }}
+                          >
+                            Edit Consent
+                          </Button>
+                        ) : null}
+                      </div>
+                    ) : null}
+
+                    {(consentEditing || !savedAgreement) && workspace.canEdit ? (
+                      <div className="space-y-3 rounded-md border border-border bg-white px-3 py-3">
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                            Question 1 — Counselling agreement / consent
+                          </p>
+                          <p className="mt-1 text-navy">
+                            Does the student agree to the counselling agreement?
+                          </p>
+                          <div className="mt-2 flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={consentChoice === true ? "navy" : "outline"}
+                              className={cn(
+                                consentChoice === true && "ring-2 ring-navy/20",
+                              )}
+                              disabled={lifecycleBusy}
+                              onClick={() => {
+                                setConsentChoice(true);
+                                setConsentError(null);
+                              }}
+                            >
+                              Yes
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant={consentChoice === false ? "outline" : "outline"}
+                              className={cn(
+                                consentChoice === false
+                                  ? "border-danger/40 bg-danger/5 text-danger ring-2 ring-danger/15"
+                                  : "text-muted-foreground",
+                              )}
+                              disabled={lifecycleBusy}
+                              onClick={() => {
+                                setConsentChoice(false);
+                                setConsentError(null);
+                              }}
+                            >
+                              No
+                            </Button>
+                          </div>
+                          {consentChoice === null ? (
+                            <p className="mt-1.5 text-xs text-amber-800">Required — select Yes or No</p>
+                          ) : null}
+                        </div>
+                        <Field label="Session note" optional>
+                          <Textarea
+                            value={consentSummaryNote}
+                            rows={2}
+                            disabled={lifecycleBusy}
+                            onChange={(e) => setConsentSummaryNote(e.target.value)}
+                          />
+                        </Field>
+                        <div className="flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="navy"
+                            disabled={lifecycleBusy}
+                            onClick={() => void saveConsent()}
+                          >
+                            {lifecycleBusy ? "Saving…" : "Save Consent"}
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            disabled={lifecycleBusy}
+                            onClick={discardConsentEdits}
+                          >
+                            {savedAgreement ? "Cancel" : "Discard Changes"}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : null}
+
+                    {!workspace.canEdit && !savedAgreement ? (
+                      <p className="text-xs text-muted-foreground">
+                        Only the assigned counsellor can record consent.
+                      </p>
+                    ) : null}
+
+                    {consentError ? (
+                      <InlineFeedback kind="err">{consentError}</InlineFeedback>
+                    ) : null}
+                    {consentMsg ? <InlineFeedback kind="ok">{consentMsg}</InlineFeedback> : null}
                   </div>
                 </Panel>
 
@@ -1354,7 +1579,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                       <Textarea
                         value={form.studyPlan}
                         disabled={!fieldsEditable}
-                        rows={4}
+                        rows={3}
                         onChange={(e) => setField("studyPlan", e.target.value)}
                       />
                     </Field>
@@ -1370,9 +1595,6 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
 
                 <Panel compact title="11. Next Steps & Handover">
                   <div className="space-y-2 text-sm">
-                    <p className="text-muted-foreground">
-                      Use Next step for fee verification and Admission handover.
-                    </p>
                     <dl className="grid gap-2 text-sm sm:grid-cols-2">
                       <OverviewItem
                         label="Fee status"
@@ -1393,40 +1615,59 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                       variant="outline"
                       onClick={() => scrollToAssessmentSection("wb-lifecycle-panel")}
                     >
-                      Open Next step actions
+                      Open workflow actions
                     </Button>
                   </div>
                 </Panel>
 
-                <div className="flex flex-wrap items-center gap-3 rounded-lg border border-border bg-card px-4 py-3">
+                <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-card px-3 py-2.5">
                   {workspace.canEdit && editingAssessment ? (
-                    <Button variant="navy" disabled={saveM.isPending} onClick={persistAssessment}>
-                      {saveM.isPending
-                        ? "Saving…"
-                        : hasSavedAssessment
-                          ? "Update Assessment"
-                          : "Save Draft"}
-                    </Button>
-                  ) : null}
-                  {workspace.canEdit && editingAssessment ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={saveM.isPending || !assessmentDirty}
-                      onClick={() => {
-                        setForm(toForm(workspace.assessment));
-                        const parsed = parseIntakeSeasonYear(workspace.assessment.targetIntake);
-                        setIntakeSeason(parsed.season);
-                        setIntakeYear(parsed.year);
-                        setEditingAssessment(
-                          Boolean(workspace.canEdit && !workspace.assessment.assessedAt),
-                        );
-                        setSaveMsg(null);
-                        setFieldErrors({});
-                      }}
-                    >
-                      Cancel
-                    </Button>
+                    <>
+                      <Button
+                        variant="navy"
+                        size="sm"
+                        disabled={saveM.isPending}
+                        onClick={() =>
+                          persistAssessment({
+                            complete: formSectionsReadyForComplete && !hasSavedAssessment,
+                          })
+                        }
+                      >
+                        {saveM.isPending
+                          ? "Saving…"
+                          : hasSavedAssessment
+                            ? "Update Assessment"
+                            : formSectionsReadyForComplete
+                              ? "Complete Assessment"
+                              : "Save Draft"}
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={saveM.isPending}
+                        onClick={() => persistAssessment({ continueNext: true })}
+                      >
+                        Save &amp; Continue
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        disabled={saveM.isPending || !assessmentDirty}
+                        onClick={() => {
+                          setForm(toForm(workspace.assessment));
+                          const parsed = parseIntakeSeasonYear(workspace.assessment.targetIntake);
+                          setIntakeSeason(parsed.season);
+                          setIntakeYear(parsed.year);
+                          setEditingAssessment(
+                            Boolean(workspace.canEdit && !workspace.assessment.assessedAt),
+                          );
+                          setSaveMsg(null);
+                          setFieldErrors({});
+                        }}
+                      >
+                        Cancel
+                      </Button>
+                    </>
                   ) : null}
                   {workspace.canEdit && !editingAssessment ? (
                     <Button
