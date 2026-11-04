@@ -35,6 +35,8 @@ Local migration files do **not** prove remote apply. M1–M4 apply status on rem
 
 **Read-only probe notes:** [`REMOTE-STATUS-PROBE-2026-10-13.md`](./REMOTE-STATUS-PROBE-2026-10-13.md)
 
+**Applications deadline column (required for New Application):** [`APPLICATIONS-DEADLINE-04120000-OWNER-APPLY.md`](./APPLICATIONS-DEADLINE-04120000-OWNER-APPLY.md) — apply `20261104120000_applications_deadline_column.sql` on `gjasuvlqfofpvrqvvnyz` if PostgREST reports `column applications.deadline does not exist`.
+
 ---
 
 # Phase 2C — Supabase owner SQL verification

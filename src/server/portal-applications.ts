@@ -505,13 +505,15 @@ export const portalCreatePipelineApplication = createServerFn({ method: "POST" }
       const program = data.program.trim();
       const country = data.country.trim();
       const intake = data.intake.trim();
-      const deadline = data.deadline.trim();
+      const { normalizeOptionalApplicationDeadline } = await import("@/lib/application-deadline");
+      const deadlineNorm = normalizeOptionalApplicationDeadline(data.deadline);
       if (!university || !program || !country || !intake) {
         throw new AuthError("University, program, country and intake are required.", 400);
       }
-      if (deadline && Number.isNaN(new Date(deadline).getTime())) {
-        throw new AuthError("Deadline must be a valid date.", 400);
+      if (!deadlineNorm.ok) {
+        throw new AuthError(deadlineNorm.message, 400);
       }
+      const deadline = deadlineNorm.value;
 
       const {
         usesSupabaseDataPlane,
@@ -543,7 +545,7 @@ export const portalCreatePipelineApplication = createServerFn({ method: "POST" }
           program_name: program,
           country,
           intake,
-          deadline: deadline || null,
+          deadline,
           stage: "docs_pending",
           owned_by_consultant_id: ownedByConsultantId,
         });
@@ -625,7 +627,7 @@ export const portalCreatePipelineApplication = createServerFn({ method: "POST" }
         program,
         intake,
         appliedOn: "-",
-        deadline: deadline || "-",
+        deadline: deadline ?? "-",
         status: "Docs Pending",
         officerId,
       };

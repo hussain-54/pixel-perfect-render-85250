@@ -921,8 +921,13 @@ export const portalCreateStudentApplication = createServerFn({ method: "POST" })
       const program = data.program.trim();
       const country = data.country.trim();
       const intake = data.intake.trim();
+      const { normalizeOptionalApplicationDeadline } = await import("@/lib/application-deadline");
+      const deadlineNorm = normalizeOptionalApplicationDeadline(data.deadline);
       if (!university || !program || !country || !intake) {
         throw new AuthError("University, program, country and intake are required.", 400);
+      }
+      if (!deadlineNorm.ok) {
+        throw new AuthError(deadlineNorm.message, 400);
       }
 
       const {
@@ -961,7 +966,7 @@ export const portalCreateStudentApplication = createServerFn({ method: "POST" })
           program_name: program,
           country,
           intake,
-          deadline: data.deadline.trim() || null,
+          deadline: deadlineNorm.value,
           stage: "docs_pending",
           owned_by_consultant_id: ownedByConsultantId,
         });
@@ -1005,7 +1010,7 @@ export const portalCreateStudentApplication = createServerFn({ method: "POST" })
         program,
         intake,
         appliedOn: "-",
-        deadline: data.deadline.trim() || "-",
+        deadline: deadlineNorm.value ?? "-",
         status: "Docs Pending",
         officerId,
       };

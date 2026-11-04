@@ -818,19 +818,20 @@ export function ApplicationsPipeline({
             </label>
             {(
               [
-                ["university", "University", true],
-                ["program", "Program", true],
-                ["country", "Country", true],
-                ["intake", "Intake", true],
-                ["deadline", "Deadline (YYYY-MM-DD)", false],
+                ["university", "University", true, "text"],
+                ["program", "Program", true, "text"],
+                ["country", "Country", true, "text"],
+                ["intake", "Intake", true, "text"],
+                ["deadline", "Deadline", false, "date"],
               ] as const
-            ).map(([key, label, required]) => (
+            ).map(([key, label, required, inputType]) => (
               <label key={key} className="text-sm">
                 <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
                   {label}
                   {required ? <span className="text-danger"> *</span> : " (optional)"}
                 </span>
                 <Input
+                  type={inputType}
                   aria-label={label}
                   value={form[key]}
                   onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}

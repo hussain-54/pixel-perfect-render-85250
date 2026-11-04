@@ -17,6 +17,17 @@
 | `ops_suppliers` | 200, `*/0` | Table **exists** |
 | OpenAPI `/rest/v1/` | 401 | Cannot list full schema via OpenAPI with this key |
 
+## Follow-up probe — 2026-11-04 (applications.deadline)
+
+Read-only anon probes against the same project:
+
+| Request | Result |
+|---|---|
+| `applications?select=id&limit=0` | `42501` permission denied → **table exists** |
+| `applications?select=deadline&limit=0` | `42703 column applications.deadline does not exist` → **column missing on remote** |
+
+Root cause for New Application failures: remotes that already had `applications` before foundation DDL never gained `deadline` because of `CREATE TABLE IF NOT EXISTS`. Fix: apply `20261104120000_applications_deadline_column.sql` (see `APPLICATIONS-DEADLINE-04120000-OWNER-APPLY.md`).
+
 ## What this does **not** prove
 
 - Migration history / which files were applied
