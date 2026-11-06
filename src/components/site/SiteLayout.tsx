@@ -2,15 +2,28 @@ import type { ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { Mail, Phone, MapPin, MessageCircle, Navigation } from "lucide-react";
 import { Logo } from "@/components/Logo";
+import { AnnouncementBar } from "@/components/site/AnnouncementBar";
 import { Header } from "@/components/site/Header";
 import { SocialLinks } from "@/components/site/SocialLinks";
 import { WhatsAppFloat } from "@/components/site/WhatsAppFloat";
 import { getFollowUsSocialLinks, siteContact } from "@/data/contact";
 import { stats, topDestinations } from "@/data/site";
+import { usePublishedCms } from "@/hooks/use-published-cms";
+import type { CmsFooterSettings } from "@/lib/cms-types";
 
-function Footer() {
+function Footer({ cmsFooter }: { cmsFooter?: CmsFooterSettings }) {
   const followLinks = getFollowUsSocialLinks();
   const showWhatsApp = !siteContact.whatsapp.placeholder;
+  const description =
+    cmsFooter?.description?.trim() ||
+    "Global Education & Visa Consultants. Guiding students from first conversation to first day on campus.";
+  const registration = cmsFooter?.registration?.trim() || siteContact.registration;
+  const phoneDisplay = cmsFooter?.phoneDisplay?.trim() || siteContact.phone.display;
+  const emailDisplay = cmsFooter?.emailDisplay?.trim() || siteContact.email.display;
+  const addressDisplay = cmsFooter?.addressDisplay?.trim() || siteContact.location.fullDisplay;
+  const copyright =
+    cmsFooter?.copyright?.trim() || "© 2026 Global Roots Consultants. All rights reserved.";
+  const columns = (cmsFooter?.columns ?? []).filter((c) => c.visible !== false);
 
   return (
     <footer className="border-t border-navy-soft/20 bg-navy text-navy-foreground">
@@ -18,10 +31,9 @@ function Footer() {
         <div className="lg:col-span-4">
           <Logo light />
           <p className="mt-4 max-w-xs text-sm leading-relaxed text-navy-foreground/65">
-            Global Education & Visa Consultants. Guiding students from first conversation to first
-            day on campus.
+            {description}
           </p>
-          <p className="mt-3 text-sm font-semibold text-bright">{siteContact.registration}</p>
+          <p className="mt-3 text-sm font-semibold text-bright">{registration}</p>
           <ul className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-navy-foreground/60">
             {stats.slice(0, 3).map((s) => (
               <li key={s.label}>
@@ -45,78 +57,126 @@ function Footer() {
             )}
           </div>
         </div>
-        <div className="lg:col-span-2">
-          <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
-            Study Abroad
-          </p>
-          <ul className="mt-4 space-y-2.5 text-sm text-navy-foreground/75">
-            <li>
-              <Link to="/destinations" className="transition-colors hover:text-bright">
-                Destinations
-              </Link>
-            </li>
-            {topDestinations.slice(0, 5).map((d) => (
-              <li key={d.name}>
-                <Link
-                  to="/destinations"
-                  hash={d.name.toLowerCase().replace(/\s/g, "-")}
-                  className="transition-colors hover:text-bright"
-                >
-                  Study in {d.name}
-                </Link>
-              </li>
-            ))}
-            <li>
-              <Link to="/scholarships" className="transition-colors hover:text-bright">
-                Scholarships
-              </Link>
-            </li>
-          </ul>
-        </div>
-        <div className="lg:col-span-2">
-          <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
-            Services
-          </p>
-          <ul className="mt-4 space-y-2.5 text-sm text-navy-foreground/75">
-            <li>
-              <Link to="/services" className="transition-colors hover:text-bright">
-                All Services
-              </Link>
-            </li>
-            <li>
-              <Link to="/student-visa" className="transition-colors hover:text-bright">
-                Student Visa
-              </Link>
-            </li>
-            <li>
-              <Link to="/contact" className="transition-colors hover:text-bright">
-                Consultation
-              </Link>
-            </li>
-          </ul>
-        </div>
-        <div className="lg:col-span-2">
-          <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
-            Company
-          </p>
-          <ul className="mt-4 space-y-2.5 text-sm text-navy-foreground/75">
-            <li>
-              <Link to="/about" className="transition-colors hover:text-bright">
-                About Us
-              </Link>
-            </li>
-            <li>
-              <Link to="/success-stories" className="transition-colors hover:text-bright">
-                Success Stories
-              </Link>
-            </li>
-            <li>
-              <Link to="/resources" className="transition-colors hover:text-bright">
-                Resources
-              </Link>
-            </li>
-          </ul>
-        </div>
+        {columns.length > 0
+          ? columns.map((col) => (
+              <div key={col.id} className="lg:col-span-2">
+                <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
+                  {col.heading}
+                </p>
+                <ul className="mt-4 space-y-2.5 text-sm text-navy-foreground/75">
+                  {col.links.map((link) => (
+                    <li key={`${col.id}-${link.label}`}>
+                      {link.href.startsWith("/") ? (
+                        <Link
+                          to={link.href as "/about"}
+                          className="transition-colors hover:text-bright"
+                        >
+                          {link.label}
+                        </Link>
+                      ) : (
+                        <a
+                          href={link.href}
+                          className="transition-colors hover:text-bright"
+                          target={link.openInNewTab ? "_blank" : undefined}
+                          rel={link.openInNewTab ? "noopener noreferrer" : undefined}
+                        >
+                          {link.label}
+                        </a>
+                      )}
+                    </li>
+                  ))}
+                  {col.id === "study"
+                    ? topDestinations.slice(0, 5).map((d) => (
+                        <li key={d.name}>
+                          <Link
+                            to="/destinations"
+                            hash={d.name.toLowerCase().replace(/\s/g, "-")}
+                            className="transition-colors hover:text-bright"
+                          >
+                            Study in {d.name}
+                          </Link>
+                        </li>
+                      ))
+                    : null}
+                </ul>
+              </div>
+            ))
+          : (
+            <>
+              <div className="lg:col-span-2">
+                <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
+                  Study Abroad
+                </p>
+                <ul className="mt-4 space-y-2.5 text-sm text-navy-foreground/75">
+                  <li>
+                    <Link to="/destinations" className="transition-colors hover:text-bright">
+                      Destinations
+                    </Link>
+                  </li>
+                  {topDestinations.slice(0, 5).map((d) => (
+                    <li key={d.name}>
+                      <Link
+                        to="/destinations"
+                        hash={d.name.toLowerCase().replace(/\s/g, "-")}
+                        className="transition-colors hover:text-bright"
+                      >
+                        Study in {d.name}
+                      </Link>
+                    </li>
+                  ))}
+                  <li>
+                    <Link to="/scholarships" className="transition-colors hover:text-bright">
+                      Scholarships
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+              <div className="lg:col-span-2">
+                <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
+                  Services
+                </p>
+                <ul className="mt-4 space-y-2.5 text-sm text-navy-foreground/75">
+                  <li>
+                    <Link to="/services" className="transition-colors hover:text-bright">
+                      All Services
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/student-visa" className="transition-colors hover:text-bright">
+                      Student Visa
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/contact" className="transition-colors hover:text-bright">
+                      Consultation
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+              <div className="lg:col-span-2">
+                <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
+                  Company
+                </p>
+                <ul className="mt-4 space-y-2.5 text-sm text-navy-foreground/75">
+                  <li>
+                    <Link to="/about" className="transition-colors hover:text-bright">
+                      About Us
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/success-stories" className="transition-colors hover:text-bright">
+                      Success Stories
+                    </Link>
+                  </li>
+                  <li>
+                    <Link to="/resources" className="transition-colors hover:text-bright">
+                      Resources
+                    </Link>
+                  </li>
+                </ul>
+              </div>
+            </>
+          )}
         <div className="lg:col-span-2">
           <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
             {siteContact.location.label}
@@ -132,10 +192,10 @@ function Footer() {
                   className="transition-colors hover:text-bright"
                   aria-label="Open office location in Google Maps"
                 >
-                  {siteContact.location.fullDisplay}
+                  {addressDisplay}
                 </a>
               ) : (
-                siteContact.location.fullDisplay
+                addressDisplay
               )}
             </li>
             <li className="flex gap-2">
@@ -154,7 +214,7 @@ function Footer() {
               <li className="flex gap-2">
                 <Phone className="mt-0.5 h-4 w-4 shrink-0 text-bright" aria-hidden />
                 <a href={siteContact.phone.href} className="transition-colors hover:text-bright">
-                  {siteContact.phone.display}
+                  {phoneDisplay}
                 </a>
               </li>
             ) : null}
@@ -174,8 +234,11 @@ function Footer() {
             ) : null}
             <li className="flex gap-2">
               <Mail className="mt-0.5 h-4 w-4 shrink-0 text-bright" aria-hidden />
-              <a href={siteContact.email.href} className="transition-colors hover:text-bright">
-                {siteContact.email.display}
+              <a
+                href={`mailto:${emailDisplay}`}
+                className="transition-colors hover:text-bright"
+              >
+                {emailDisplay}
               </a>
             </li>
           </ul>
@@ -184,7 +247,7 @@ function Footer() {
       <div className="border-t border-navy-foreground/10">
         <div className="container-page flex flex-col justify-between gap-3 py-5 text-xs text-navy-foreground/50 sm:flex-row sm:items-center">
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-            <span>© 2026 Global Roots Consultants. All rights reserved.</span>
+            <span>{copyright}</span>
             <span className="hidden h-3 w-px bg-navy-foreground/20 sm:block" aria-hidden />
             <nav aria-label="Legal" className="flex flex-wrap gap-3">
               <Link to="/privacy" className="transition-colors hover:text-bright">
@@ -203,6 +266,7 @@ function Footer() {
 }
 
 export function SiteLayout({ children }: { children: ReactNode }) {
+  const cms = usePublishedCms();
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <a
@@ -211,11 +275,12 @@ export function SiteLayout({ children }: { children: ReactNode }) {
       >
         Skip to main content
       </a>
-      <Header />
+      <AnnouncementBar announcements={cms.announcements} />
+      <Header cmsHeader={cms.header} cmsNav={cms.nav} />
       <main id="main-content" className="flex-1" tabIndex={-1}>
         {children}
       </main>
-      <Footer />
+      <Footer cmsFooter={cms.footer} />
       <WhatsAppFloat />
     </div>
   );

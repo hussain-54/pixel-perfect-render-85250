@@ -8,15 +8,18 @@ import { MobileNavDrawer } from "@/components/site/MobileNavDrawer";
 import { SiteSearch } from "@/components/site/SiteSearch";
 import { UtilityBar } from "@/components/site/UtilityBar";
 import { mainNavigation, type MegaMenuId } from "@/data/navigation";
+import type { CmsHeaderSettings, CmsNavSettings } from "@/lib/cms-types";
 import { cn } from "@/lib/utils";
-
-/** Desktop omits Home — the logo already links home. Mobile drawer keeps it. */
-const desktopNavigation = mainNavigation.filter((item) => item.id !== "home");
 
 const navItemClass =
   "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-2 text-[0.8125rem] font-medium leading-none text-navy/75 transition-colors hover:bg-accent/70 hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring 2xl:gap-1.5 2xl:px-2.5 2xl:text-sm";
 
-export function Header() {
+type HeaderProps = {
+  cmsHeader?: CmsHeaderSettings;
+  cmsNav?: CmsNavSettings;
+};
+
+export function Header({ cmsHeader, cmsNav }: HeaderProps = {}) {
   const [openMenu, setOpenMenu] = useState<MegaMenuId | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -24,6 +27,32 @@ export function Header() {
   const headerRef = useRef<HTMLElement>(null);
   const menuRegionId = useId();
   const mobileDrawerId = useId();
+
+  const sticky = cmsHeader?.sticky !== false;
+  const showUtilityBar = cmsHeader?.showUtilityBar !== false;
+  const ctaLabel = cmsHeader?.cta.label?.trim() || "Book Consultation";
+  const ctaHref = cmsHeader?.cta.href?.trim() || "/contact";
+
+  const desktopNavigation = (cmsNav?.items?.length ? cmsNav.items : null)
+    ? cmsNav!.items
+        .filter((item) => item.visible !== false && item.id !== "home")
+        .map((item) => {
+          const base = mainNavigation.find((m) => m.id === item.id);
+          if (item.type === "link") {
+            return {
+              id: item.id,
+              label: item.label || base?.label || item.id,
+              type: "link" as const,
+              to: (item.href || (base && base.type === "link" ? base.to : "/")) as "/",
+            };
+          }
+          return {
+            id: (item.megaId || item.id) as MegaMenuId,
+            label: item.label || base?.label || item.id,
+            type: "mega" as const,
+          };
+        })
+    : mainNavigation.filter((item) => item.id !== "home");
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -72,15 +101,27 @@ export function Header() {
       <header
         ref={headerRef}
         className={cn(
-          "relative sticky top-0 z-50 border-b border-border/80 bg-white/95 backdrop-blur-sm transition-[box-shadow,background-color] duration-300",
+          "relative z-50 border-b border-border/80 bg-white/95 backdrop-blur-sm transition-[box-shadow,background-color] duration-300",
+          sticky ? "sticky top-0" : "relative",
           scrolled && "border-border bg-white shadow-soft",
         )}
       >
-        <UtilityBar />
+        {showUtilityBar ? <UtilityBar /> : null}
 
         <div className="mx-auto flex h-[68px] w-full max-w-[1680px] items-center px-5 md:px-6 lg:px-8 xl:px-10">
           {/* Logo */}
-          <Logo className="mr-4 shrink-0 xl:mr-6" />
+          {cmsHeader?.logoUrl ? (
+            <Link to="/" className="mr-4 shrink-0 xl:mr-6" onClick={closeMenus}>
+              <img
+                src={cmsHeader.logoUrl}
+                alt="Global Roots Consultants"
+                style={{ height: cmsHeader.logoHeightPx || 40 }}
+                className="w-auto"
+              />
+            </Link>
+          ) : (
+            <Logo className="mr-4 shrink-0 xl:mr-6" />
+          )}
 
           {/* Navigation — desktop from 1400px so items never collide with actions */}
           <nav
@@ -92,7 +133,7 @@ export function Header() {
                 return (
                   <Link
                     key={item.id}
-                    to={item.to}
+                    to={item.to as "/"}
                     activeOptions={{ exact: item.to === "/" }}
                     onClick={closeMenus}
                     className={navItemClass}
@@ -144,9 +185,15 @@ export function Header() {
               size="sm"
               className="hidden h-10 shrink-0 whitespace-nowrap px-3 text-sm sm:inline-flex min-[1400px]:px-4"
             >
-              <Link to="/contact" onClick={closeMenus}>
-                Book Consultation
-              </Link>
+              {ctaHref.startsWith("/") ? (
+                <Link to={ctaHref as "/contact"} onClick={closeMenus}>
+                  {ctaLabel}
+                </Link>
+              ) : (
+                <a href={ctaHref} onClick={closeMenus}>
+                  {ctaLabel}
+                </a>
+              )}
             </Button>
 
             <Link

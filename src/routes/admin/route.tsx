@@ -13,6 +13,7 @@ import {
   BarChart3,
   UserCog,
   Settings,
+  Globe,
 } from "lucide-react";
 import { PortalShell, type PortalNavItem } from "@/components/portal/PortalShell";
 import { requirePortalAccess } from "@/lib/portal-guard";
@@ -34,6 +35,7 @@ const adminNav: PortalNavItem[] = [
   { to: "/admin/banking", label: "Banking & Finance", icon: Landmark },
   { to: "/admin/hr", label: "HR & Attendance", icon: IdCard },
   { to: "/admin/marketing", label: "Digital Marketing", icon: Megaphone },
+  { to: "/admin/website", label: "Website Management", icon: Globe },
   { to: "/admin/operations", label: "Orders / Sales / Purchase", icon: Package },
   { to: "/admin/reports", label: "Reports", icon: BarChart3 },
   { to: "/admin/users-roles", label: "Users & Roles", icon: UserCog },

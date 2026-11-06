@@ -51,6 +51,7 @@ import { Route as AdminProgramsRouteImport } from './routes/admin/programs'
 import { Route as AdminReportsRouteImport } from './routes/admin/reports'
 import { Route as AdminScholarshipsRouteImport } from './routes/admin/scholarships'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
+import { Route as AdminWebsiteRouteImport } from './routes/admin/website'
 import { Route as AdminStudentsRouteImport } from './routes/admin/students'
 import { Route as AdminUniversitiesRouteImport } from './routes/admin/universities'
 import { Route as AdminUsersRolesRouteImport } from './routes/admin/users-roles'
@@ -293,6 +294,11 @@ const AdminSettingsRoute = AdminSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AdminRouteRoute,
 } as any)
+const AdminWebsiteRoute = AdminWebsiteRouteImport.update({
+  id: '/website',
+  path: '/website',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const AdminStudentsRoute = AdminStudentsRouteImport.update({
   id: '/students',
   path: '/students',
@@ -491,6 +497,7 @@ export interface FileRoutesByFullPath {
   '/admin/reports': typeof AdminReportsRoute
   '/admin/scholarships': typeof AdminScholarshipsRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/website': typeof AdminWebsiteRoute
   '/admin/students': typeof AdminStudentsRoute
   '/admin/universities': typeof AdminUniversitiesRoute
   '/admin/users-roles': typeof AdminUsersRolesRoute
@@ -563,6 +570,7 @@ export interface FileRoutesByTo {
   '/admin/reports': typeof AdminReportsRoute
   '/admin/scholarships': typeof AdminScholarshipsRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/website': typeof AdminWebsiteRoute
   '/admin/students': typeof AdminStudentsRoute
   '/admin/universities': typeof AdminUniversitiesRoute
   '/admin/users-roles': typeof AdminUsersRolesRoute
@@ -639,6 +647,7 @@ export interface FileRoutesById {
   '/admin/reports': typeof AdminReportsRoute
   '/admin/scholarships': typeof AdminScholarshipsRoute
   '/admin/settings': typeof AdminSettingsRoute
+  '/admin/website': typeof AdminWebsiteRoute
   '/admin/students': typeof AdminStudentsRoute
   '/admin/universities': typeof AdminUniversitiesRoute
   '/admin/users-roles': typeof AdminUsersRolesRoute
@@ -716,6 +725,7 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/scholarships'
     | '/admin/settings'
+    | '/admin/website'
     | '/admin/students'
     | '/admin/universities'
     | '/admin/users-roles'
@@ -788,6 +798,7 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/scholarships'
     | '/admin/settings'
+    | '/admin/website'
     | '/admin/students'
     | '/admin/universities'
     | '/admin/users-roles'
@@ -863,6 +874,7 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/scholarships'
     | '/admin/settings'
+    | '/admin/website'
     | '/admin/students'
     | '/admin/universities'
     | '/admin/users-roles'
@@ -1217,6 +1229,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
+    '/admin/website': {
+      id: '/admin/website'
+      path: '/website'
+      fullPath: '/admin/website'
+      preLoaderRoute: typeof AdminWebsiteRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/admin/students': {
       id: '/admin/students'
       path: '/students'
@@ -1458,6 +1477,7 @@ interface AdminRouteRouteChildren {
   AdminReportsRoute: typeof AdminReportsRoute
   AdminScholarshipsRoute: typeof AdminScholarshipsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
+  AdminWebsiteRoute: typeof AdminWebsiteRoute
   AdminStudentsRoute: typeof AdminStudentsRoute
   AdminUniversitiesRoute: typeof AdminUniversitiesRoute
   AdminUsersRolesRoute: typeof AdminUsersRolesRoute
@@ -1485,6 +1505,7 @@ const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminReportsRoute: AdminReportsRoute,
   AdminScholarshipsRoute: AdminScholarshipsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
+  AdminWebsiteRoute: AdminWebsiteRoute,
   AdminStudentsRoute: AdminStudentsRoute,
   AdminUniversitiesRoute: AdminUniversitiesRoute,
   AdminUsersRolesRoute: AdminUsersRolesRoute,

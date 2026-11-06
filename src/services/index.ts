@@ -242,6 +242,18 @@ import {
 import type { OrganizationSettingsInput } from "@/lib/admin-settings-rules";
 import { portalGetConsultantLeaderboard } from "@/server/portal-leaderboard";
 import type { LeaderboardFilters } from "@/server/portal-leaderboard";
+import {
+  portalGetCmsAdminOverview,
+  portalGetCmsDocument,
+  portalGetPublishedCmsBundle,
+  portalListCmsAnnouncements,
+  portalListCmsRevisions,
+  portalPublishCmsDocument,
+  portalRestoreCmsRevision,
+  portalSaveCmsAnnouncement,
+  portalSaveCmsDraft,
+} from "@/server/portal-cms";
+import type { CmsAnnouncementInput } from "@/lib/cms-types";
 
 async function withAuth<T>(fn: (opts: { headers?: HeadersInit }) => Promise<T>): Promise<T> {
   const headers = await getAuthRequestHeaders();
@@ -394,6 +406,38 @@ export const getOrganizationSettings = () =>
 
 export const updateOrganizationSettings = (data: OrganizationSettingsInput) =>
   withAuth((opts) => portalUpdateOrganizationSettings({ ...opts, data }));
+
+/** Public website CMS — published documents + active announcements (fallback-safe). */
+export const getPublishedCmsBundle = () => portalGetPublishedCmsBundle();
+
+export const getCmsAdminOverview = () =>
+  withAuth((opts) => portalGetCmsAdminOverview(opts));
+
+export const getCmsDocument = (documentKey: string) =>
+  withAuth((opts) => portalGetCmsDocument({ ...opts, data: { documentKey } }));
+
+export const saveCmsDraft = (data: {
+  documentKey: string;
+  draft: unknown;
+  expectedDraftVersion?: number;
+}) => withAuth((opts) => portalSaveCmsDraft({ ...opts, data }));
+
+export const publishCmsDocument = (data: {
+  documentKey: string;
+  expectedDraftVersion?: number;
+}) => withAuth((opts) => portalPublishCmsDocument({ ...opts, data }));
+
+export const listCmsAnnouncements = () =>
+  withAuth((opts) => portalListCmsAnnouncements(opts));
+
+export const saveCmsAnnouncement = (data: CmsAnnouncementInput) =>
+  withAuth((opts) => portalSaveCmsAnnouncement({ ...opts, data }));
+
+export const listCmsRevisions = (documentKey: string) =>
+  withAuth((opts) => portalListCmsRevisions({ ...opts, data: { documentKey } }));
+
+export const restoreCmsRevision = (revisionId: string) =>
+  withAuth((opts) => portalRestoreCmsRevision({ ...opts, data: { revisionId } }));
 
 /** Firm consultant leaderboard — live aggregates only (no demo score invention). */
 export const getConsultantLeaderboard = (filters?: LeaderboardFilters) =>

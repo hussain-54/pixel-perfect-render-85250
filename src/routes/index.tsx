@@ -9,6 +9,7 @@ import { OfficeLocationMap } from "@/components/site/OfficeLocationMap";
 import { UniversityLogoCarousel } from "@/components/site/UniversityLogoCarousel";
 import { Button } from "@/components/ui/button";
 import { siteContact } from "@/data/contact";
+import { usePublishedCms } from "@/hooks/use-published-cms";
 import {
   Accordion,
   AccordionContent,
@@ -45,12 +46,29 @@ export const Route = createFileRoute("/")({
 });
 
 function Home() {
+  const cms = usePublishedCms();
+  const heroSection = cms.home.sections.find((s) => s.id === "hero" || s.type === "hero");
+  const sectionVisible = (id: string) => {
+    const found = cms.home.sections.find((s) => s.id === id || s.type === id);
+    return found ? found.visible !== false : true;
+  };
+  const heroTitle = heroSection?.title || "Your Global Education Journey Starts Here.";
+  const heroBody =
+    heroSection?.body ||
+    "Discover universities abroad and get clear guidance from application through visa — starting with a free consultation.";
+  const heroEyebrow = heroSection?.eyebrow || "Global Education & Visa Consultants";
+  const heroCtaLabel = heroSection?.primaryCta?.label || "Book Free Consultation";
+  const heroCtaHref = heroSection?.primaryCta?.href || "/contact";
+  const heroSecondaryLabel = heroSection?.secondaryCta?.label || "Explore Study Destinations";
+  const heroSecondaryHref = heroSection?.secondaryCta?.href || "/destinations";
+
   return (
     <SiteLayout>
       {/* Hero */}
+      {sectionVisible("hero") ? (
       <section className="relative overflow-hidden bg-navy text-navy-foreground">
         <img
-          src={hero}
+          src={heroSection?.imageUrl || hero}
           alt="International students on a university campus"
           width={1920}
           height={1080}
@@ -62,18 +80,21 @@ function Home() {
             Global Roots Consultants
           </p>
           <p className="mt-2 text-[0.6875rem] font-semibold uppercase tracking-[0.18em] text-bright">
-            Global Education & Visa Consultants
+            {heroEyebrow}
           </p>
           <h1 className="mt-6 max-w-2xl font-display text-[2.35rem] font-semibold leading-[1.08] text-navy-foreground md:text-5xl lg:text-[3.4rem]">
-            Your Global Education Journey Starts Here.
+            {heroTitle}
           </h1>
           <p className="mt-5 max-w-lg text-base leading-relaxed text-navy-foreground/80 md:text-[1.05rem]">
-            Discover universities abroad and get clear guidance from application through visa —
-            starting with a free consultation.
+            {heroBody}
           </p>
           <div className="mt-8 flex flex-wrap gap-3">
             <Button asChild variant="bright" size="lg">
-              <Link to="/contact">Book Free Consultation</Link>
+              {heroCtaHref.startsWith("/") ? (
+                <Link to={heroCtaHref as "/contact"}>{heroCtaLabel}</Link>
+              ) : (
+                <a href={heroCtaHref}>{heroCtaLabel}</a>
+              )}
             </Button>
             {!siteContact.whatsapp.placeholder ? (
               <Button
@@ -92,7 +113,11 @@ function Home() {
               </Button>
             ) : null}
             <Button asChild variant="outline-light" size="lg">
-              <Link to="/destinations">Explore Study Destinations</Link>
+              {heroSecondaryHref.startsWith("/") ? (
+                <Link to={heroSecondaryHref as "/destinations"}>{heroSecondaryLabel}</Link>
+              ) : (
+                <a href={heroSecondaryHref}>{heroSecondaryLabel}</a>
+              )}
             </Button>
           </div>
         </div>
@@ -114,8 +139,10 @@ function Home() {
           </div>
         </div>
       </section>
+      ) : null}
 
       {/* Trust */}
+      {sectionVisible("trust") ? (
       <section className="border-b">
         <div className="container-page flex flex-wrap items-center justify-center gap-x-10 gap-y-3 py-6 text-sm font-semibold text-muted-foreground">
           {trustSignals.map((signal, i) => (
@@ -126,16 +153,26 @@ function Home() {
           ))}
         </div>
       </section>
+      ) : null}
 
       {/* Destinations */}
+      {sectionVisible("destinations") ? (
       <section className="container-page section-y">
         <SectionHead
-          eyebrow="Top study destinations"
-          title="Where will your degree take you?"
+          eyebrow={
+            cms.home.sections.find((s) => s.id === "destinations")?.eyebrow ||
+            "Top study destinations"
+          }
+          title={
+            cms.home.sections.find((s) => s.id === "destinations")?.title ||
+            "Where will your degree take you?"
+          }
           action={
             <Button asChild variant="outline">
               <Link to="/destinations">
-                All destinations <ArrowRight />
+                {cms.home.sections.find((s) => s.id === "destinations")?.primaryCta?.label ||
+                  "All destinations"}{" "}
+                <ArrowRight />
               </Link>
             </Button>
           }
@@ -146,6 +183,7 @@ function Home() {
           ))}
         </div>
       </section>
+      ) : null}
 
       {/* European destinations — blue-hour card treatment */}
       <section className="section-y bg-surface">
