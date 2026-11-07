@@ -57,6 +57,8 @@ export type PortalNavItem = {
     | "/admin/banking"
     | "/admin/hr"
     | "/admin/marketing"
+    | "/admin/website"
+    | "/admin/blog"
     | "/admin/operations"
     | "/admin/applications"
     | "/admin/documents"

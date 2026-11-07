@@ -4,7 +4,7 @@
  *
  * Missing (not linked — add later if pages are built):
  * - Eligibility Calculator, Study Plan, Resume Builder, University Comparison tool
- * - Blog, Videos
+ * - Videos
  * - Destinations: South Korea, Turkey (not in site data)
  * - Dedicated scholarship-type / study-level detail pages
  */
@@ -14,6 +14,7 @@ import { universities, scholarships } from "@/data/mock";
 export type AppPath =
   | "/"
   | "/about"
+  | "/blog"
   | "/contact"
   | "/destinations"
   | "/programs"
@@ -60,7 +61,8 @@ export type MegaMenuId =
 export type MainNavItem =
   | { id: "home"; label: string; type: "link"; to: AppPath }
   | { id: MegaMenuId; label: string; type: "mega" }
-  | { id: "success"; label: string; type: "link"; to: AppPath };
+  | { id: "success"; label: string; type: "link"; to: AppPath }
+  | { id: "blog"; label: string; type: "link"; to: AppPath };
 
 export const mainNavigation: MainNavItem[] = [
   { id: "home", label: "Home", type: "link", to: "/" },
@@ -70,6 +72,7 @@ export const mainNavigation: MainNavItem[] = [
   { id: "destinations", label: "Study Destinations", type: "mega" },
   { id: "services", label: "Services", type: "mega" },
   { id: "success", label: "Success Stories", type: "link", to: "/success-stories" },
+  { id: "blog", label: "Blog", type: "link", to: "/blog" },
   { id: "resources", label: "Resources", type: "mega" },
 ];
 
@@ -278,6 +281,7 @@ export const resourceMenu: { columns: MegaColumn[]; cta: MegaCta } = {
       heading: "Explore",
       links: [
         { label: "All Resources", to: "/resources" },
+        { label: "Blog", to: "/blog" },
         { label: "Success Stories", to: "/success-stories" },
         { label: "Universities", to: "/universities" },
         { label: "Scholarships", to: "/scholarships" },

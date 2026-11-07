@@ -10,3 +10,4 @@ Disallow: /sign-up
 Disallow: /forgot-password
 
 Sitemap: https://globalroots.pk/sitemap.xml
+Sitemap: https://globalroots.pk/sitemap-articles.xml

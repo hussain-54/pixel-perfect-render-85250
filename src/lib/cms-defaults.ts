@@ -88,6 +88,7 @@ export const DEFAULT_CMS_FOOTER: CmsFooterSettings = {
       links: [
         { label: "About Us", href: "/about" },
         { label: "Success Stories", href: "/success-stories" },
+        { label: "Blog", href: "/blog" },
         { label: "Resources", href: "/resources" },
       ],
     },

@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as AdminRouteRouteImport } from './routes/admin/route'
+import { Route as BlogRouteImport } from './routes/blog'
 import { Route as ChangePasswordRouteImport } from './routes/change-password'
 import { Route as ContactRouteImport } from './routes/contact'
 import { Route as DestinationsRouteImport } from './routes/destinations'
@@ -24,6 +25,7 @@ import { Route as ScholarshipsRouteImport } from './routes/scholarships'
 import { Route as ServicesRouteImport } from './routes/services'
 import { Route as SignInRouteImport } from './routes/sign-in'
 import { Route as SignUpRouteImport } from './routes/sign-up'
+import { Route as SitemapArticlesDotxmlRouteImport } from './routes/sitemap-articles[.]xml'
 import { Route as StaffRouteRouteImport } from './routes/staff/route'
 import { Route as StudentRouteRouteImport } from './routes/student/route'
 import { Route as StudentVisaRouteImport } from './routes/student-visa'
@@ -36,6 +38,7 @@ import { Route as AdminApplicationsRouteImport } from './routes/admin/applicatio
 import { Route as AdminAppointmentsRouteImport } from './routes/admin/appointments'
 import { Route as AdminAuditLogsRouteImport } from './routes/admin/audit-logs'
 import { Route as AdminBankingRouteImport } from './routes/admin/banking'
+import { Route as AdminBlogRouteImport } from './routes/admin/blog'
 import { Route as AdminConsultantsRouteImport } from './routes/admin/consultants'
 import { Route as AdminDashboardRouteImport } from './routes/admin/dashboard'
 import { Route as AdminDocumentsRouteImport } from './routes/admin/documents'
@@ -51,10 +54,11 @@ import { Route as AdminProgramsRouteImport } from './routes/admin/programs'
 import { Route as AdminReportsRouteImport } from './routes/admin/reports'
 import { Route as AdminScholarshipsRouteImport } from './routes/admin/scholarships'
 import { Route as AdminSettingsRouteImport } from './routes/admin/settings'
-import { Route as AdminWebsiteRouteImport } from './routes/admin/website'
 import { Route as AdminStudentsRouteImport } from './routes/admin/students'
 import { Route as AdminUniversitiesRouteImport } from './routes/admin/universities'
 import { Route as AdminUsersRolesRouteImport } from './routes/admin/users-roles'
+import { Route as AdminWebsiteRouteImport } from './routes/admin/website'
+import { Route as BlogSlugRouteImport } from './routes/blog_.$slug'
 import { Route as StaffIndexRouteImport } from './routes/staff/index'
 import { Route as StaffActivityRouteImport } from './routes/staff/activity'
 import { Route as StaffApplicationsRouteImport } from './routes/staff/applications'
@@ -81,6 +85,7 @@ import { Route as StudentDashboardRouteImport } from './routes/student/dashboard
 import { Route as StudentDocumentsRouteImport } from './routes/student/documents'
 import { Route as StudentNotificationsRouteImport } from './routes/student/notifications'
 import { Route as StudentProfileRouteImport } from './routes/student/profile'
+import { Route as AdminBlogEditRouteImport } from './routes/admin/blog_.edit'
 import { Route as StaffIntakeStudentIdRouteImport } from './routes/staff/intake.$studentId'
 import { Route as StaffStudentsStudentIdRouteImport } from './routes/staff/students.$studentId'
 
@@ -97,6 +102,11 @@ const AboutRoute = AboutRouteImport.update({
 const AdminRouteRoute = AdminRouteRouteImport.update({
   id: '/admin',
   path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const BlogRoute = BlogRouteImport.update({
+  id: '/blog',
+  path: '/blog',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChangePasswordRoute = ChangePasswordRouteImport.update({
@@ -159,6 +169,11 @@ const SignUpRoute = SignUpRouteImport.update({
   path: '/sign-up',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SitemapArticlesDotxmlRoute = SitemapArticlesDotxmlRouteImport.update({
+  id: '/sitemap-articles.xml',
+  path: '/sitemap-articles.xml',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StaffRouteRoute = StaffRouteRouteImport.update({
   id: '/staff',
   path: '/staff',
@@ -217,6 +232,11 @@ const AdminAuditLogsRoute = AdminAuditLogsRouteImport.update({
 const AdminBankingRoute = AdminBankingRouteImport.update({
   id: '/banking',
   path: '/banking',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminBlogRoute = AdminBlogRouteImport.update({
+  id: '/blog',
+  path: '/blog',
   getParentRoute: () => AdminRouteRoute,
 } as any)
 const AdminConsultantsRoute = AdminConsultantsRouteImport.update({
@@ -294,11 +314,6 @@ const AdminSettingsRoute = AdminSettingsRouteImport.update({
   path: '/settings',
   getParentRoute: () => AdminRouteRoute,
 } as any)
-const AdminWebsiteRoute = AdminWebsiteRouteImport.update({
-  id: '/website',
-  path: '/website',
-  getParentRoute: () => AdminRouteRoute,
-} as any)
 const AdminStudentsRoute = AdminStudentsRouteImport.update({
   id: '/students',
   path: '/students',
@@ -313,6 +328,16 @@ const AdminUsersRolesRoute = AdminUsersRolesRouteImport.update({
   id: '/users-roles',
   path: '/users-roles',
   getParentRoute: () => AdminRouteRoute,
+} as any)
+const AdminWebsiteRoute = AdminWebsiteRouteImport.update({
+  id: '/website',
+  path: '/website',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
+const BlogSlugRoute = BlogSlugRouteImport.update({
+  id: '/blog_/$slug',
+  path: '/blog/$slug',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const StaffIndexRoute = StaffIndexRouteImport.update({
   id: '/',
@@ -444,6 +469,11 @@ const StudentProfileRoute = StudentProfileRouteImport.update({
   path: '/profile',
   getParentRoute: () => StudentRouteRoute,
 } as any)
+const AdminBlogEditRoute = AdminBlogEditRouteImport.update({
+  id: '/blog_/edit',
+  path: '/blog/edit',
+  getParentRoute: () => AdminRouteRoute,
+} as any)
 const StaffIntakeStudentIdRoute = StaffIntakeStudentIdRouteImport.update({
   id: '/$studentId',
   path: '/$studentId',
@@ -461,6 +491,7 @@ export interface FileRoutesByFullPath {
   '/staff': typeof StaffRouteRouteWithChildren
   '/student': typeof StudentRouteRouteWithChildren
   '/about': typeof AboutRoute
+  '/blog': typeof BlogRoute
   '/change-password': typeof ChangePasswordRoute
   '/contact': typeof ContactRoute
   '/destinations': typeof DestinationsRoute
@@ -473,6 +504,7 @@ export interface FileRoutesByFullPath {
   '/services': typeof ServicesRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
+  '/sitemap-articles.xml': typeof SitemapArticlesDotxmlRoute
   '/student-visa': typeof StudentVisaRoute
   '/success-stories': typeof SuccessStoriesRoute
   '/terms': typeof TermsRoute
@@ -482,6 +514,7 @@ export interface FileRoutesByFullPath {
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
   '/admin/banking': typeof AdminBankingRoute
+  '/admin/blog': typeof AdminBlogRoute
   '/admin/consultants': typeof AdminConsultantsRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/documents': typeof AdminDocumentsRoute
@@ -497,10 +530,11 @@ export interface FileRoutesByFullPath {
   '/admin/reports': typeof AdminReportsRoute
   '/admin/scholarships': typeof AdminScholarshipsRoute
   '/admin/settings': typeof AdminSettingsRoute
-  '/admin/website': typeof AdminWebsiteRoute
   '/admin/students': typeof AdminStudentsRoute
   '/admin/universities': typeof AdminUniversitiesRoute
   '/admin/users-roles': typeof AdminUsersRolesRoute
+  '/admin/website': typeof AdminWebsiteRoute
+  '/blog/$slug': typeof BlogSlugRoute
   '/staff/activity': typeof StaffActivityRoute
   '/staff/applications': typeof StaffApplicationsRoute
   '/staff/appointments': typeof StaffAppointmentsRoute
@@ -528,12 +562,14 @@ export interface FileRoutesByFullPath {
   '/admin/': typeof AdminIndexRoute
   '/staff/': typeof StaffIndexRoute
   '/student/': typeof StudentIndexRoute
+  '/admin/blog/edit': typeof AdminBlogEditRoute
   '/staff/intake/$studentId': typeof StaffIntakeStudentIdRoute
   '/staff/students/$studentId': typeof StaffStudentsStudentIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
+  '/blog': typeof BlogRoute
   '/change-password': typeof ChangePasswordRoute
   '/contact': typeof ContactRoute
   '/destinations': typeof DestinationsRoute
@@ -546,6 +582,7 @@ export interface FileRoutesByTo {
   '/services': typeof ServicesRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
+  '/sitemap-articles.xml': typeof SitemapArticlesDotxmlRoute
   '/student-visa': typeof StudentVisaRoute
   '/success-stories': typeof SuccessStoriesRoute
   '/terms': typeof TermsRoute
@@ -555,6 +592,7 @@ export interface FileRoutesByTo {
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
   '/admin/banking': typeof AdminBankingRoute
+  '/admin/blog': typeof AdminBlogRoute
   '/admin/consultants': typeof AdminConsultantsRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/documents': typeof AdminDocumentsRoute
@@ -570,10 +608,11 @@ export interface FileRoutesByTo {
   '/admin/reports': typeof AdminReportsRoute
   '/admin/scholarships': typeof AdminScholarshipsRoute
   '/admin/settings': typeof AdminSettingsRoute
-  '/admin/website': typeof AdminWebsiteRoute
   '/admin/students': typeof AdminStudentsRoute
   '/admin/universities': typeof AdminUniversitiesRoute
   '/admin/users-roles': typeof AdminUsersRolesRoute
+  '/admin/website': typeof AdminWebsiteRoute
+  '/blog/$slug': typeof BlogSlugRoute
   '/staff/activity': typeof StaffActivityRoute
   '/staff/applications': typeof StaffApplicationsRoute
   '/staff/appointments': typeof StaffAppointmentsRoute
@@ -601,6 +640,7 @@ export interface FileRoutesByTo {
   '/admin': typeof AdminIndexRoute
   '/staff': typeof StaffIndexRoute
   '/student': typeof StudentIndexRoute
+  '/admin/blog/edit': typeof AdminBlogEditRoute
   '/staff/intake/$studentId': typeof StaffIntakeStudentIdRoute
   '/staff/students/$studentId': typeof StaffStudentsStudentIdRoute
 }
@@ -611,6 +651,7 @@ export interface FileRoutesById {
   '/staff': typeof StaffRouteRouteWithChildren
   '/student': typeof StudentRouteRouteWithChildren
   '/about': typeof AboutRoute
+  '/blog': typeof BlogRoute
   '/change-password': typeof ChangePasswordRoute
   '/contact': typeof ContactRoute
   '/destinations': typeof DestinationsRoute
@@ -623,6 +664,7 @@ export interface FileRoutesById {
   '/services': typeof ServicesRoute
   '/sign-in': typeof SignInRoute
   '/sign-up': typeof SignUpRoute
+  '/sitemap-articles.xml': typeof SitemapArticlesDotxmlRoute
   '/student-visa': typeof StudentVisaRoute
   '/success-stories': typeof SuccessStoriesRoute
   '/terms': typeof TermsRoute
@@ -632,6 +674,7 @@ export interface FileRoutesById {
   '/admin/appointments': typeof AdminAppointmentsRoute
   '/admin/audit-logs': typeof AdminAuditLogsRoute
   '/admin/banking': typeof AdminBankingRoute
+  '/admin/blog': typeof AdminBlogRoute
   '/admin/consultants': typeof AdminConsultantsRoute
   '/admin/dashboard': typeof AdminDashboardRoute
   '/admin/documents': typeof AdminDocumentsRoute
@@ -647,10 +690,11 @@ export interface FileRoutesById {
   '/admin/reports': typeof AdminReportsRoute
   '/admin/scholarships': typeof AdminScholarshipsRoute
   '/admin/settings': typeof AdminSettingsRoute
-  '/admin/website': typeof AdminWebsiteRoute
   '/admin/students': typeof AdminStudentsRoute
   '/admin/universities': typeof AdminUniversitiesRoute
   '/admin/users-roles': typeof AdminUsersRolesRoute
+  '/admin/website': typeof AdminWebsiteRoute
+  '/blog_/$slug': typeof BlogSlugRoute
   '/staff/activity': typeof StaffActivityRoute
   '/staff/applications': typeof StaffApplicationsRoute
   '/staff/appointments': typeof StaffAppointmentsRoute
@@ -678,6 +722,7 @@ export interface FileRoutesById {
   '/admin/': typeof AdminIndexRoute
   '/staff/': typeof StaffIndexRoute
   '/student/': typeof StudentIndexRoute
+  '/admin/blog_/edit': typeof AdminBlogEditRoute
   '/staff/intake/$studentId': typeof StaffIntakeStudentIdRoute
   '/staff/students/$studentId': typeof StaffStudentsStudentIdRoute
 }
@@ -689,6 +734,7 @@ export interface FileRouteTypes {
     | '/staff'
     | '/student'
     | '/about'
+    | '/blog'
     | '/change-password'
     | '/contact'
     | '/destinations'
@@ -701,6 +747,7 @@ export interface FileRouteTypes {
     | '/services'
     | '/sign-in'
     | '/sign-up'
+    | '/sitemap-articles.xml'
     | '/student-visa'
     | '/success-stories'
     | '/terms'
@@ -710,6 +757,7 @@ export interface FileRouteTypes {
     | '/admin/appointments'
     | '/admin/audit-logs'
     | '/admin/banking'
+    | '/admin/blog'
     | '/admin/consultants'
     | '/admin/dashboard'
     | '/admin/documents'
@@ -725,10 +773,11 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/scholarships'
     | '/admin/settings'
-    | '/admin/website'
     | '/admin/students'
     | '/admin/universities'
     | '/admin/users-roles'
+    | '/admin/website'
+    | '/blog/$slug'
     | '/staff/activity'
     | '/staff/applications'
     | '/staff/appointments'
@@ -756,12 +805,14 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/staff/'
     | '/student/'
+    | '/admin/blog/edit'
     | '/staff/intake/$studentId'
     | '/staff/students/$studentId'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
     | '/about'
+    | '/blog'
     | '/change-password'
     | '/contact'
     | '/destinations'
@@ -774,6 +825,7 @@ export interface FileRouteTypes {
     | '/services'
     | '/sign-in'
     | '/sign-up'
+    | '/sitemap-articles.xml'
     | '/student-visa'
     | '/success-stories'
     | '/terms'
@@ -783,6 +835,7 @@ export interface FileRouteTypes {
     | '/admin/appointments'
     | '/admin/audit-logs'
     | '/admin/banking'
+    | '/admin/blog'
     | '/admin/consultants'
     | '/admin/dashboard'
     | '/admin/documents'
@@ -798,10 +851,11 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/scholarships'
     | '/admin/settings'
-    | '/admin/website'
     | '/admin/students'
     | '/admin/universities'
     | '/admin/users-roles'
+    | '/admin/website'
+    | '/blog/$slug'
     | '/staff/activity'
     | '/staff/applications'
     | '/staff/appointments'
@@ -829,6 +883,7 @@ export interface FileRouteTypes {
     | '/admin'
     | '/staff'
     | '/student'
+    | '/admin/blog/edit'
     | '/staff/intake/$studentId'
     | '/staff/students/$studentId'
   id:
@@ -838,6 +893,7 @@ export interface FileRouteTypes {
     | '/staff'
     | '/student'
     | '/about'
+    | '/blog'
     | '/change-password'
     | '/contact'
     | '/destinations'
@@ -850,6 +906,7 @@ export interface FileRouteTypes {
     | '/services'
     | '/sign-in'
     | '/sign-up'
+    | '/sitemap-articles.xml'
     | '/student-visa'
     | '/success-stories'
     | '/terms'
@@ -859,6 +916,7 @@ export interface FileRouteTypes {
     | '/admin/appointments'
     | '/admin/audit-logs'
     | '/admin/banking'
+    | '/admin/blog'
     | '/admin/consultants'
     | '/admin/dashboard'
     | '/admin/documents'
@@ -874,10 +932,11 @@ export interface FileRouteTypes {
     | '/admin/reports'
     | '/admin/scholarships'
     | '/admin/settings'
-    | '/admin/website'
     | '/admin/students'
     | '/admin/universities'
     | '/admin/users-roles'
+    | '/admin/website'
+    | '/blog_/$slug'
     | '/staff/activity'
     | '/staff/applications'
     | '/staff/appointments'
@@ -905,6 +964,7 @@ export interface FileRouteTypes {
     | '/admin/'
     | '/staff/'
     | '/student/'
+    | '/admin/blog_/edit'
     | '/staff/intake/$studentId'
     | '/staff/students/$studentId'
   fileRoutesById: FileRoutesById
@@ -915,6 +975,7 @@ export interface RootRouteChildren {
   StaffRouteRoute: typeof StaffRouteRouteWithChildren
   StudentRouteRoute: typeof StudentRouteRouteWithChildren
   AboutRoute: typeof AboutRoute
+  BlogRoute: typeof BlogRoute
   ChangePasswordRoute: typeof ChangePasswordRoute
   ContactRoute: typeof ContactRoute
   DestinationsRoute: typeof DestinationsRoute
@@ -927,10 +988,12 @@ export interface RootRouteChildren {
   ServicesRoute: typeof ServicesRoute
   SignInRoute: typeof SignInRoute
   SignUpRoute: typeof SignUpRoute
+  SitemapArticlesDotxmlRoute: typeof SitemapArticlesDotxmlRoute
   StudentVisaRoute: typeof StudentVisaRoute
   SuccessStoriesRoute: typeof SuccessStoriesRoute
   TermsRoute: typeof TermsRoute
   UniversitiesRoute: typeof UniversitiesRoute
+  BlogSlugRoute: typeof BlogSlugRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -954,6 +1017,13 @@ declare module '@tanstack/react-router' {
       path: '/admin'
       fullPath: '/admin'
       preLoaderRoute: typeof AdminRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/blog': {
+      id: '/blog'
+      path: '/blog'
+      fullPath: '/blog'
+      preLoaderRoute: typeof BlogRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/change-password': {
@@ -1040,6 +1110,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignUpRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sitemap-articles.xml': {
+      id: '/sitemap-articles.xml'
+      path: '/sitemap-articles.xml'
+      fullPath: '/sitemap-articles.xml'
+      preLoaderRoute: typeof SitemapArticlesDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/staff': {
       id: '/staff'
       path: '/staff'
@@ -1122,6 +1199,13 @@ declare module '@tanstack/react-router' {
       path: '/banking'
       fullPath: '/admin/banking'
       preLoaderRoute: typeof AdminBankingRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/blog': {
+      id: '/admin/blog'
+      path: '/blog'
+      fullPath: '/admin/blog'
+      preLoaderRoute: typeof AdminBlogRouteImport
       parentRoute: typeof AdminRouteRoute
     }
     '/admin/consultants': {
@@ -1229,13 +1313,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AdminSettingsRouteImport
       parentRoute: typeof AdminRouteRoute
     }
-    '/admin/website': {
-      id: '/admin/website'
-      path: '/website'
-      fullPath: '/admin/website'
-      preLoaderRoute: typeof AdminWebsiteRouteImport
-      parentRoute: typeof AdminRouteRoute
-    }
     '/admin/students': {
       id: '/admin/students'
       path: '/students'
@@ -1256,6 +1333,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/admin/users-roles'
       preLoaderRoute: typeof AdminUsersRolesRouteImport
       parentRoute: typeof AdminRouteRoute
+    }
+    '/admin/website': {
+      id: '/admin/website'
+      path: '/website'
+      fullPath: '/admin/website'
+      preLoaderRoute: typeof AdminWebsiteRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
+    '/blog_/$slug': {
+      id: '/blog_/$slug'
+      path: '/blog/$slug'
+      fullPath: '/blog/$slug'
+      preLoaderRoute: typeof BlogSlugRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/staff/': {
       id: '/staff/'
@@ -1439,6 +1530,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StudentProfileRouteImport
       parentRoute: typeof StudentRouteRoute
     }
+    '/admin/blog_/edit': {
+      id: '/admin/blog_/edit'
+      path: '/blog/edit'
+      fullPath: '/admin/blog/edit'
+      preLoaderRoute: typeof AdminBlogEditRouteImport
+      parentRoute: typeof AdminRouteRoute
+    }
     '/staff/intake/$studentId': {
       id: '/staff/intake/$studentId'
       path: '/$studentId'
@@ -1462,6 +1560,7 @@ interface AdminRouteRouteChildren {
   AdminAppointmentsRoute: typeof AdminAppointmentsRoute
   AdminAuditLogsRoute: typeof AdminAuditLogsRoute
   AdminBankingRoute: typeof AdminBankingRoute
+  AdminBlogRoute: typeof AdminBlogRoute
   AdminConsultantsRoute: typeof AdminConsultantsRoute
   AdminDashboardRoute: typeof AdminDashboardRoute
   AdminDocumentsRoute: typeof AdminDocumentsRoute
@@ -1477,11 +1576,12 @@ interface AdminRouteRouteChildren {
   AdminReportsRoute: typeof AdminReportsRoute
   AdminScholarshipsRoute: typeof AdminScholarshipsRoute
   AdminSettingsRoute: typeof AdminSettingsRoute
-  AdminWebsiteRoute: typeof AdminWebsiteRoute
   AdminStudentsRoute: typeof AdminStudentsRoute
   AdminUniversitiesRoute: typeof AdminUniversitiesRoute
   AdminUsersRolesRoute: typeof AdminUsersRolesRoute
+  AdminWebsiteRoute: typeof AdminWebsiteRoute
   AdminIndexRoute: typeof AdminIndexRoute
+  AdminBlogEditRoute: typeof AdminBlogEditRoute
 }
 
 const AdminRouteRouteChildren: AdminRouteRouteChildren = {
@@ -1490,6 +1590,7 @@ const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminAppointmentsRoute: AdminAppointmentsRoute,
   AdminAuditLogsRoute: AdminAuditLogsRoute,
   AdminBankingRoute: AdminBankingRoute,
+  AdminBlogRoute: AdminBlogRoute,
   AdminConsultantsRoute: AdminConsultantsRoute,
   AdminDashboardRoute: AdminDashboardRoute,
   AdminDocumentsRoute: AdminDocumentsRoute,
@@ -1505,11 +1606,12 @@ const AdminRouteRouteChildren: AdminRouteRouteChildren = {
   AdminReportsRoute: AdminReportsRoute,
   AdminScholarshipsRoute: AdminScholarshipsRoute,
   AdminSettingsRoute: AdminSettingsRoute,
-  AdminWebsiteRoute: AdminWebsiteRoute,
   AdminStudentsRoute: AdminStudentsRoute,
   AdminUniversitiesRoute: AdminUniversitiesRoute,
   AdminUsersRolesRoute: AdminUsersRolesRoute,
+  AdminWebsiteRoute: AdminWebsiteRoute,
   AdminIndexRoute: AdminIndexRoute,
+  AdminBlogEditRoute: AdminBlogEditRoute,
 }
 
 const AdminRouteRouteWithChildren = AdminRouteRoute._addFileChildren(
@@ -1618,6 +1720,7 @@ const rootRouteChildren: RootRouteChildren = {
   StaffRouteRoute: StaffRouteRouteWithChildren,
   StudentRouteRoute: StudentRouteRouteWithChildren,
   AboutRoute: AboutRoute,
+  BlogRoute: BlogRoute,
   ChangePasswordRoute: ChangePasswordRoute,
   ContactRoute: ContactRoute,
   DestinationsRoute: DestinationsRoute,
@@ -1630,10 +1733,12 @@ const rootRouteChildren: RootRouteChildren = {
   ServicesRoute: ServicesRoute,
   SignInRoute: SignInRoute,
   SignUpRoute: SignUpRoute,
+  SitemapArticlesDotxmlRoute: SitemapArticlesDotxmlRoute,
   StudentVisaRoute: StudentVisaRoute,
   SuccessStoriesRoute: SuccessStoriesRoute,
   TermsRoute: TermsRoute,
   UniversitiesRoute: UniversitiesRoute,
+  BlogSlugRoute: BlogSlugRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

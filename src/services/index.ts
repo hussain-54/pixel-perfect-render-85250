@@ -254,6 +254,23 @@ import {
   portalSaveCmsDraft,
 } from "@/server/portal-cms";
 import type { CmsAnnouncementInput } from "@/lib/cms-types";
+import {
+  portalDeleteBlogPost,
+  portalGetBlogDashboard,
+  portalGetBlogPost,
+  portalGetPublishedBlogPost,
+  portalListBlogPosts,
+  portalListBlogTaxonomy,
+  portalListPublishedBlogCategories,
+  portalListPublishedBlogPosts,
+  portalListPublishedBlogSitemapPaths,
+  portalSaveBlogAuthor,
+  portalSaveBlogCategory,
+  portalSaveBlogPost,
+  portalSaveBlogTag,
+  portalUploadBlogMedia,
+} from "@/server/portal-blog";
+import type { BlogPostWriteInput } from "@/lib/blog-types";
 
 async function withAuth<T>(fn: (opts: { headers?: HeadersInit }) => Promise<T>): Promise<T> {
   const headers = await getAuthRequestHeaders();
@@ -438,6 +455,65 @@ export const listCmsRevisions = (documentKey: string) =>
 
 export const restoreCmsRevision = (revisionId: string) =>
   withAuth((opts) => portalRestoreCmsRevision({ ...opts, data: { revisionId } }));
+
+/** Blog CMS — admin + public published readers. */
+export const getBlogDashboard = () => withAuth((opts) => portalGetBlogDashboard(opts));
+
+export const listBlogPosts = (data?: {
+  status?: string;
+  search?: string;
+  page?: number;
+  pageSize?: number;
+}) => withAuth((opts) => portalListBlogPosts({ ...opts, data: data ?? {} }));
+
+export const getBlogPost = (id: string) =>
+  withAuth((opts) => portalGetBlogPost({ ...opts, data: { id } }));
+
+export const saveBlogPost = (data: BlogPostWriteInput) =>
+  withAuth((opts) => portalSaveBlogPost({ ...opts, data }));
+
+export const deleteBlogPost = (id: string) =>
+  withAuth((opts) => portalDeleteBlogPost({ ...opts, data: { id } }));
+
+export const listBlogTaxonomy = () => withAuth((opts) => portalListBlogTaxonomy(opts));
+
+export const saveBlogAuthor = (data: {
+  id?: string;
+  displayName: string;
+  bio?: string;
+  active?: boolean;
+}) => withAuth((opts) => portalSaveBlogAuthor({ ...opts, data }));
+
+export const saveBlogCategory = (data: {
+  id?: string;
+  name: string;
+  slug?: string;
+  description?: string;
+}) => withAuth((opts) => portalSaveBlogCategory({ ...opts, data }));
+
+export const saveBlogTag = (data: { id?: string; name: string; slug?: string }) =>
+  withAuth((opts) => portalSaveBlogTag({ ...opts, data }));
+
+export const uploadBlogMedia = (data: {
+  fileName: string;
+  mimeType: string;
+  base64: string;
+  altText?: string;
+}) => withAuth((opts) => portalUploadBlogMedia({ ...opts, data }));
+
+export const listPublishedBlogPosts = (data?: {
+  page?: number;
+  pageSize?: number;
+  category?: string;
+  search?: string;
+}) => portalListPublishedBlogPosts({ data: data ?? {} });
+
+export const getPublishedBlogPost = (slug: string) =>
+  portalGetPublishedBlogPost({ data: { slug } });
+
+export const listPublishedBlogCategories = () => portalListPublishedBlogCategories();
+
+export const listPublishedBlogSitemapPaths = () => portalListPublishedBlogSitemapPaths();
 
 /** Firm consultant leaderboard — live aggregates only (no demo score invention). */
 export const getConsultantLeaderboard = (filters?: LeaderboardFilters) =>

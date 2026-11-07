@@ -17,6 +17,7 @@ export const SITE_OG_IMAGE = `${SITE_ORIGIN}${SITE_OG_IMAGE_PATH}`;
 export const PUBLIC_INDEXABLE_PATHS = [
   "/",
   "/about",
+  "/blog",
   "/contact",
   "/destinations",
   "/programs",
@@ -44,11 +45,28 @@ export type PageSeoInput = {
   description: string;
   /** When false, emit noindex and omit canonical (auth / portal). Default true. */
   indexable?: boolean;
+  /** Absolute or site-relative Open Graph / Twitter image. */
+  image?: string;
+  /** og:type — defaults to website. */
+  type?: "website" | "article";
 };
 
 /** Shared head fragment for public (and non-indexable) routes. */
-export function pageHead({ path, title, description, indexable = true }: PageSeoInput) {
+export function pageHead({
+  path,
+  title,
+  description,
+  indexable = true,
+  image,
+  type = "website",
+}: PageSeoInput) {
   const url = absoluteUrl(path);
+  const ogImage =
+    image && image.startsWith("http")
+      ? image
+      : image
+        ? absoluteUrl(image)
+        : SITE_OG_IMAGE;
   return {
     meta: [
       { title },
@@ -56,25 +74,41 @@ export function pageHead({ path, title, description, indexable = true }: PageSeo
       { name: "robots", content: indexable ? "index,follow" : "noindex,nofollow" },
       { property: "og:title", content: title },
       { property: "og:description", content: description },
-      { property: "og:type", content: "website" },
+      { property: "og:type", content: type },
       { property: "og:url", content: url },
-      { property: "og:image", content: SITE_OG_IMAGE },
+      { property: "og:image", content: ogImage },
       { property: "og:site_name", content: SITE_NAME },
       { name: "twitter:card", content: "summary_large_image" },
       { name: "twitter:title", content: title },
       { name: "twitter:description", content: description },
-      { name: "twitter:image", content: SITE_OG_IMAGE },
+      { name: "twitter:image", content: ogImage },
     ],
     links: indexable ? [{ rel: "canonical", href: url }] : [],
   };
 }
 
-/** XML sitemap body from the confirmed public route list. */
-export function buildSitemapXml(paths: readonly string[] = PUBLIC_INDEXABLE_PATHS): string {
-  const urls = paths
+/** XML sitemap body from the confirmed public route list (+ optional article paths). */
+export function buildSitemapXml(
+  paths: readonly string[] = PUBLIC_INDEXABLE_PATHS,
+  extraPaths: readonly string[] = [],
+): string {
+  const seen = new Set<string>();
+  const all = [...paths, ...extraPaths].filter((path) => {
+    if (seen.has(path)) return false;
+    seen.add(path);
+    return true;
+  });
+  const urls = all
     .map((path) => {
       const loc = absoluteUrl(path);
-      const priority = path === "/" ? "1.0" : path === "/contact" ? "0.9" : "0.7";
+      const priority =
+        path === "/"
+          ? "1.0"
+          : path === "/contact"
+            ? "0.9"
+            : path.startsWith("/blog/")
+              ? "0.6"
+              : "0.7";
       return `  <url>\n    <loc>${loc}</loc>\n    <changefreq>weekly</changefreq>\n    <priority>${priority}</priority>\n  </url>`;
     })
     .join("\n");

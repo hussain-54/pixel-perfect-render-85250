@@ -14,6 +14,7 @@ const EXPECTED_SIDEBAR = [
   "HR & Attendance",
   "Digital Marketing",
   "Website Management",
+  "Blog Management",
   "Orders / Sales / Purchase",
   "Reports",
   "Users & Roles",
