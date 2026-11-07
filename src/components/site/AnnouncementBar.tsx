@@ -50,13 +50,19 @@ export function AnnouncementBar({
   }, [active.length]);
 
   const visible = active.filter((a) => !dismissed[a.id]);
+  useEffect(() => {
+    if (!visible.length) return;
+    if (index >= visible.length) setIndex(0);
+  }, [visible.length, index]);
+
   if (!visible.length) return null;
-  const current = visible[index % visible.length] ?? visible[0]!;
+  const current = visible[Math.min(index, visible.length - 1)] ?? visible[0]!;
 
   const dismiss = () => {
     if (!current.dismissible) return;
     const next = { ...dismissed, [current.id]: true as const };
     setDismissed(next);
+    setIndex(0);
     try {
       sessionStorage.setItem(DISMISS_KEY, JSON.stringify(next));
     } catch {

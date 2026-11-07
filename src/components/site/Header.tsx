@@ -237,7 +237,12 @@ export function Header({ cmsHeader, cmsNav }: HeaderProps = {}) {
         )}
       </header>
 
-      <MobileNavDrawer id={mobileDrawerId} open={mobileOpen} onClose={() => setMobileOpen(false)} />
+      <MobileNavDrawer
+        id={mobileDrawerId}
+        open={mobileOpen}
+        onClose={() => setMobileOpen(false)}
+        cmsNav={cmsNav}
+      />
     </>
   );
 }

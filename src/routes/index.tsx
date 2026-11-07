@@ -48,8 +48,10 @@ export const Route = createFileRoute("/")({
 function Home() {
   const cms = usePublishedCms();
   const heroSection = cms.home.sections.find((s) => s.id === "hero" || s.type === "hero");
+  const sectionOf = (id: string) =>
+    cms.home.sections.find((s) => s.id === id || s.type === id);
   const sectionVisible = (id: string) => {
-    const found = cms.home.sections.find((s) => s.id === id || s.type === id);
+    const found = sectionOf(id);
     return found ? found.visible !== false : true;
   };
   const heroTitle = heroSection?.title || "Your Global Education Journey Starts Here.";
@@ -186,16 +188,21 @@ function Home() {
       ) : null}
 
       {/* European destinations — blue-hour card treatment */}
+      {sectionVisible("european_destinations") ? (
       <section className="section-y bg-surface">
         <div className="container-page">
           <SectionHead
-            eyebrow="European destinations"
-            title="Study in Europe with confidence"
-            body="Explore English-taught programmes, scholarships, and post-study pathways across key European destinations."
+            eyebrow={sectionOf("european_destinations")?.eyebrow || "European destinations"}
+            title={sectionOf("european_destinations")?.title || "Study in Europe with confidence"}
+            body={
+              sectionOf("european_destinations")?.body ||
+              "Explore English-taught programmes, scholarships, and post-study pathways across key European destinations."
+            }
             action={
               <Button asChild variant="outline">
                 <Link to="/destinations">
-                  All destinations <ArrowRight />
+                  {sectionOf("european_destinations")?.primaryCta?.label || "All destinations"}{" "}
+                  <ArrowRight />
                 </Link>
               </Button>
             }
@@ -207,8 +214,10 @@ function Home() {
           </div>
         </div>
       </section>
+      ) : null}
 
       {/* Why */}
+      {sectionVisible("why_us") ? (
       <section className="section-y bg-surface">
         <div className="container-page grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
           <img
@@ -221,8 +230,8 @@ function Home() {
           />
           <div>
             <SectionHead
-              eyebrow="Why Global Roots"
-              title="A consultancy built on trust and results"
+              eyebrow={sectionOf("why_us")?.eyebrow || "Why Global Roots"}
+              title={sectionOf("why_us")?.title || "A consultancy built on trust and results"}
             />
             <div className="grid gap-5 sm:grid-cols-2">
               {whyUs.map((w, i) => (
@@ -238,20 +247,22 @@ function Home() {
           </div>
         </div>
       </section>
+      ) : null}
 
       {/* Partnered universities carousel */}
-      <UniversityLogoCarousel />
+      {sectionVisible("partners") ? <UniversityLogoCarousel /> : null}
 
       {/* Programs */}
+      {sectionVisible("programs") ? (
       <section className="section-y bg-surface">
         <div className="container-page">
           <SectionHead
-            eyebrow="Popular programs"
-            title="Find the field that fits your future"
+            eyebrow={sectionOf("programs")?.eyebrow || "Popular programs"}
+            title={sectionOf("programs")?.title || "Find the field that fits your future"}
             action={
               <Button asChild variant="outline">
                 <Link to="/programs">
-                  All programs <ArrowRight />
+                  {sectionOf("programs")?.primaryCta?.label || "All programs"} <ArrowRight />
                 </Link>
               </Button>
             }
@@ -275,17 +286,22 @@ function Home() {
           </div>
         </div>
       </section>
+      ) : null}
 
       {/* Scholarships — editorial list, not identical card grid */}
+      {sectionVisible("scholarships") ? (
       <section className="container-page section-y">
         <SectionHead
-          eyebrow="Featured Scholarships"
-          title="Funding that makes it possible"
-          body="Sample funding highlights for exploration — confirm eligibility and deadlines with a consultant."
+          eyebrow={sectionOf("scholarships")?.eyebrow || "Featured Scholarships"}
+          title={sectionOf("scholarships")?.title || "Funding that makes it possible"}
+          body={
+            sectionOf("scholarships")?.body ||
+            "Sample funding highlights for exploration — confirm eligibility and deadlines with a consultant."
+          }
           action={
             <Button asChild variant="outline">
               <Link to="/scholarships">
-                All scholarships <ArrowRight />
+                {sectionOf("scholarships")?.primaryCta?.label || "All scholarships"} <ArrowRight />
               </Link>
             </Button>
           }
@@ -310,15 +326,18 @@ function Home() {
           ))}
         </ul>
       </section>
+      ) : null}
 
       {/* Services */}
+      {sectionVisible("services") ? (
       <section className="section-y bg-navy text-navy-foreground">
         <div className="container-page">
           <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
-            Our services
+            {sectionOf("services")?.eyebrow || "Our services"}
           </p>
           <h2 className="mt-2.5 max-w-2xl font-display text-2xl font-semibold text-navy-foreground md:text-3xl lg:text-[2.125rem]">
-            End-to-end support, from first idea to first lecture
+            {sectionOf("services")?.title ||
+              "End-to-end support, from first idea to first lecture"}
           </h2>
           <div className="mt-10 grid gap-px overflow-hidden rounded-lg bg-navy-foreground/10 sm:grid-cols-2 lg:grid-cols-4">
             {services.map((s, i) => (
@@ -333,17 +352,23 @@ function Home() {
           </div>
         </div>
       </section>
+      ) : null}
 
       {/* Visa */}
+      {sectionVisible("visa") ? (
       <section className="container-page section-y grid gap-10 lg:grid-cols-[1fr_1.15fr] lg:gap-14">
         <div>
           <SectionHead
-            eyebrow="Student visa support"
-            title="Embassy-ready files, every time"
-            body="Our visa officers handle the details that decide outcomes."
+            eyebrow={sectionOf("visa")?.eyebrow || "Student visa support"}
+            title={sectionOf("visa")?.title || "Embassy-ready files, every time"}
+            body={
+              sectionOf("visa")?.body || "Our visa officers handle the details that decide outcomes."
+            }
           />
           <Button asChild>
-            <Link to="/student-visa">Talk to a Visa Consultant</Link>
+            <Link to="/student-visa">
+              {sectionOf("visa")?.primaryCta?.label || "Talk to a Visa Consultant"}
+            </Link>
           </Button>
         </div>
         <ol className="space-y-0 divide-y border-y border-border">
@@ -360,11 +385,16 @@ function Home() {
           ))}
         </ol>
       </section>
+      ) : null}
 
       {/* How it works */}
+      {sectionVisible("how_it_works") ? (
       <section className="section-y bg-surface">
         <div className="container-page">
-          <SectionHead eyebrow="How it works" title="Four clear steps" />
+          <SectionHead
+            eyebrow={sectionOf("how_it_works")?.eyebrow || "How it works"}
+            title={sectionOf("how_it_works")?.title || "Four clear steps"}
+          />
           <div className="grid gap-8 md:grid-cols-4 md:gap-6">
             {howItWorks.map((h, i) => (
               <div key={h.title}>
@@ -379,12 +409,14 @@ function Home() {
           </div>
         </div>
       </section>
+      ) : null}
 
       {/* Stories */}
+      {sectionVisible("stories") ? (
       <section className="container-page section-y">
         <SectionHead
-          eyebrow="Success stories"
-          title="Students who made it"
+          eyebrow={sectionOf("stories")?.eyebrow || "Success stories"}
+          title={sectionOf("stories")?.title || "Students who made it"}
           action={
             <Button asChild variant="outline">
               <Link to="/success-stories">
@@ -410,10 +442,12 @@ function Home() {
           ))}
         </div>
       </section>
+      ) : null}
 
-      <GoogleReviewsSection />
+      {sectionVisible("reviews") ? <GoogleReviewsSection /> : null}
 
       {/* Resources + FAQ */}
+      {sectionVisible("faq") ? (
       <section className="section-y bg-surface">
         <div className="container-page grid gap-10 lg:grid-cols-2 lg:gap-14">
           <div>
@@ -438,7 +472,10 @@ function Home() {
             </ul>
           </div>
           <div>
-            <SectionHead eyebrow="FAQ" title="Questions students ask" />
+            <SectionHead
+              eyebrow={sectionOf("faq")?.eyebrow || "FAQ"}
+              title={sectionOf("faq")?.title || "Questions students ask"}
+            />
             <Accordion type="single" collapsible className="border-y border-border bg-background">
               {faqs.map((f, i) => (
                 <AccordionItem key={i} value={`f${i}`} className="border-border px-0">
@@ -454,10 +491,11 @@ function Home() {
           </div>
         </div>
       </section>
+      ) : null}
 
-      <OfficeLocationMap />
+      {sectionVisible("map") ? <OfficeLocationMap /> : null}
 
-      <CtaBand />
+      {sectionVisible("cta") ? <CtaBand /> : null}
     </SiteLayout>
   );
 }

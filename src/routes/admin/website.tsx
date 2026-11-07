@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -28,17 +28,25 @@ import {
 } from "@/services";
 import type { CmsAnnouncementInput, CmsFooterSettings, CmsHeaderSettings, CmsHomeSection, CmsNavSettings, CmsPageContent, CmsSeoSettings } from "@/lib/cms-types";
 import { DEFAULT_CMS_HEADER, DEFAULT_CMS_FOOTER, DEFAULT_CMS_HOME, DEFAULT_CMS_NAV, DEFAULT_CMS_SEO_GLOBAL } from "@/lib/cms-defaults";
+import { validateDocumentDraft } from "@/lib/cms-rules";
 import { cn } from "@/lib/utils";
 
 const TABS = [
   { id: "overview", label: "Overview" },
-  { id: "header", label: "Header & Navigation" },
-  { id: "homepage", label: "Homepage Builder" },
+  { id: "header", label: "Header & Nav" },
+  { id: "homepage", label: "Homepage" },
   { id: "footer", label: "Footer" },
-  { id: "announcements", label: "Announcement Bar" },
-  { id: "seo", label: "SEO Settings" },
-  { id: "publishing", label: "Drafts & Publishing" },
+  { id: "announcements", label: "Announcements" },
+  { id: "seo", label: "SEO" },
+  { id: "publishing", label: "Publish history" },
 ] as const;
+
+const TAB_TO_DOCUMENT: Partial<Record<(typeof TABS)[number]["id"], string>> = {
+  header: "site.header",
+  homepage: "page.home",
+  footer: "site.footer",
+  seo: "seo.global",
+};
 
 type TabId = (typeof TABS)[number]["id"];
 
@@ -64,11 +72,15 @@ function AdminWebsiteCms() {
   });
 
   return (
-    <div className="space-y-5">
-      <PageHeader
-        title="Website Management"
-        subtitle="Edit public website content, preview changes, and publish without a code deploy."
-      />
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <PageHeader title="Website" subtitle="Edit, save draft, then publish to the live site." />
+        <Button asChild size="sm" variant="outline" className="shrink-0">
+          <a href="/" target="_blank" rel="noreferrer">
+            Open live site
+          </a>
+        </Button>
+      </div>
       <AdminModuleSubnav
         items={TABS.map((t) => ({
           to: "/admin/website",
@@ -77,26 +89,22 @@ function AdminWebsiteCms() {
         }))}
       />
 
-      {overviewQ.isLoading ? <PageLoadState label="Loading website CMS…" /> : null}
+      {overviewQ.isLoading ? <PageLoadState label="Loading…" /> : null}
       {overviewQ.isError ? (
         <ErrorState
-          title="Could not load Website Management"
+          title="Could not load Website"
           body={portalErrorMessage(overviewQ.error)}
         />
       ) : null}
 
       {overviewQ.data && !overviewQ.data.schemaReady ? (
-        <Panel compact title="Migration required">
+        <Panel compact title="Setup required">
           <p className="text-sm text-muted-foreground">
-            {overviewQ.data.note ||
-              "Apply the website CMS migration on staging before editing live content."}
+            {overviewQ.data.note || "Apply the website CMS migration before editing."}
           </p>
-          <p className="mt-2 text-xs text-muted-foreground">
-            File: <code>supabase/migrations/20261108120000_website_cms_foundation.sql</code>
+          <p className="mt-1 text-xs text-muted-foreground">
+            <code>20261108120000_website_cms_foundation.sql</code>
           </p>
-          <Button asChild size="sm" variant="outline" className="mt-3">
-            <Link to="/">Open public homepage</Link>
-          </Button>
         </Panel>
       ) : null}
 
@@ -118,48 +126,70 @@ function AdminWebsiteCms() {
   );
 }
 
+function statusBadge(doc: { publishedVersion: number; hasUnpublishedChanges: boolean }) {
+  if (doc.publishedVersion <= 0) {
+    return (
+      <span className="rounded-md border border-border bg-muted/50 px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+        Not published
+      </span>
+    );
+  }
+  if (doc.hasUnpublishedChanges) {
+    return (
+      <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900">
+        Draft pending
+      </span>
+    );
+  }
+  return (
+    <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-900">
+      Published
+    </span>
+  );
+}
+
 function OverviewTab({
   data,
 }: {
   data: Awaited<ReturnType<typeof getCmsAdminOverview>>;
 }) {
+  const pending = data.documents.filter((d) => d.hasUnpublishedChanges).length;
   return (
     <div className="space-y-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="Documents" value={String(data.documents.length)} />
-        <StatCard
-          label="Unpublished drafts"
-          value={String(data.documents.filter((d) => d.hasUnpublishedChanges).length)}
-        />
-        <StatCard label="Published announcements" value={String(data.announcementCount.published)} />
-        <StatCard label="Media files" value={String(data.mediaCount)} />
+      <div className="grid gap-3 sm:grid-cols-3">
+        <StatCard label="Content areas" value={String(data.documents.length)} />
+        <StatCard label="Drafts pending publish" value={String(pending)} />
+        <StatCard label="Live announcements" value={String(data.announcementCount.published)} />
       </div>
-      <Panel compact title="Documents">
+      <Panel compact title="Status by area">
         <ul className="divide-y border-y border-border text-sm">
-          {data.documents.map((doc) => (
-            <li key={doc.documentKey} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
-              <div>
-                <p className="font-medium text-navy">{doc.title}</p>
-                <p className="text-xs text-muted-foreground">{doc.documentKey}</p>
-              </div>
-              <span
-                className={cn(
-                  "rounded-md border px-2 py-0.5 text-xs font-semibold",
-                  doc.publishedVersion > 0
-                    ? doc.hasUnpublishedChanges
-                      ? "border-amber-200 bg-amber-50 text-amber-900"
-                      : "border-emerald-200 bg-emerald-50 text-emerald-900"
-                    : "border-border bg-muted/50 text-muted-foreground",
-                )}
+          {data.documents.map((doc) => {
+            const tab =
+              (Object.entries(TAB_TO_DOCUMENT).find(([, key]) => key === doc.documentKey)?.[0] as
+                | TabId
+                | undefined) ??
+              (doc.documentKey === "site.nav" ? "header" : "overview");
+            return (
+              <li
+                key={doc.documentKey}
+                className="flex flex-wrap items-center justify-between gap-2 py-2"
               >
-                {doc.publishedVersion > 0
-                  ? doc.hasUnpublishedChanges
-                    ? "Draft changes"
-                    : "Published"
-                  : "Never published"}
-              </span>
-            </li>
-          ))}
+                <div className="min-w-0">
+                  <p className="font-medium text-navy">{doc.title}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  {statusBadge(doc)}
+                  {tab !== "overview" ? (
+                    <Button asChild size="sm" variant="ghost" className="h-8 px-2 text-xs">
+                      <Link to="/admin/website" search={{ tab }}>
+                        Edit
+                      </Link>
+                    </Button>
+                  ) : null}
+                </div>
+              </li>
+            );
+          })}
         </ul>
       </Panel>
     </div>
@@ -185,6 +215,7 @@ function DocumentEditorShell({
     save: () => void;
     publish: () => void;
     version: number;
+    dirty: boolean;
   }) => ReactNode;
 }) {
   const queryClient = useQueryClient();
@@ -194,24 +225,53 @@ function DocumentEditorShell({
     enabled,
     staleTime: 5_000,
   });
-  const [draft, setDraft] = useState<unknown>(null);
+  const [draft, setDraftState] = useState<unknown>(null);
+  const [baseline, setBaseline] = useState<string>("");
   const [feedback, setFeedback] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const busy = false;
 
   useEffect(() => {
-    if (docQ.data) setDraft(docQ.data.draft);
+    if (!docQ.data) return;
+    setDraftState(docQ.data.draft);
+    setBaseline(JSON.stringify(docQ.data.draft ?? null));
   }, [docQ.data]);
 
+  const dirty = useMemo(() => {
+    if (draft == null) return false;
+    return JSON.stringify(draft) !== baseline;
+  }, [draft, baseline]);
+
+  useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = "";
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  }, [dirty]);
+
+  const setDraft = (next: unknown) => {
+    setDraftState(next);
+    setFeedback(null);
+  };
+
   const saveM = useMutation({
-    mutationFn: () =>
-      saveCmsDraft({
+    mutationFn: () => {
+      const check = validateDocumentDraft(documentKey, draft);
+      if (!check.ok) throw new Error(check.message);
+      return saveCmsDraft({
         documentKey,
-        draft,
+        draft: check.value,
         expectedDraftVersion: docQ.data?.draftVersion,
-      }),
-    onSuccess: async () => {
+      });
+    },
+    onSuccess: async (res) => {
       setFeedback("Draft saved.");
       setError(null);
+      setBaseline(JSON.stringify(res.document.draft ?? draft));
+      setDraftState(res.document.draft);
       await queryClient.invalidateQueries({ queryKey: ["admin", "cms-document", documentKey] });
       await queryClient.invalidateQueries({ queryKey: ["admin", "cms-overview"] });
     },
@@ -223,9 +283,11 @@ function DocumentEditorShell({
 
   const publishM = useMutation({
     mutationFn: async () => {
+      const check = validateDocumentDraft(documentKey, draft);
+      if (!check.ok) throw new Error(check.message);
       const saved = await saveCmsDraft({
         documentKey,
-        draft,
+        draft: check.value,
         expectedDraftVersion: docQ.data?.draftVersion,
       });
       return publishCmsDocument({
@@ -233,9 +295,11 @@ function DocumentEditorShell({
         expectedDraftVersion: saved.document.draftVersion,
       });
     },
-    onSuccess: async () => {
-      setFeedback("Published. Public site will use this version.");
+    onSuccess: async (res) => {
+      setFeedback("Published to the live site.");
       setError(null);
+      setBaseline(JSON.stringify(res.document.published ?? res.document.draft ?? draft));
+      setDraftState(res.document.draft);
       await queryClient.invalidateQueries({ queryKey: ["admin", "cms-document", documentKey] });
       await queryClient.invalidateQueries({ queryKey: ["admin", "cms-overview"] });
       await queryClient.invalidateQueries({ queryKey: ["public", "cms-bundle"] });
@@ -246,10 +310,12 @@ function DocumentEditorShell({
     },
   });
 
+  const pending = saveM.isPending || publishM.isPending || busy;
+
   if (!enabled) {
     return (
       <Panel compact title={title}>
-        <p className="text-sm text-muted-foreground">CMS schema is not ready on this environment.</p>
+        <p className="text-sm text-muted-foreground">CMS schema is not ready.</p>
       </Panel>
     );
   }
@@ -260,11 +326,11 @@ function DocumentEditorShell({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-1 py-2 backdrop-blur-sm">
         <Button
           size="sm"
           variant="outline"
-          disabled={saveM.isPending || publishM.isPending}
+          disabled={pending || !dirty}
           onClick={() => saveM.mutate()}
         >
           {saveM.isPending ? "Saving…" : "Save Draft"}
@@ -272,16 +338,44 @@ function DocumentEditorShell({
         <Button
           size="sm"
           variant="navy"
-          disabled={saveM.isPending || publishM.isPending}
-          onClick={() => publishM.mutate()}
+          disabled={pending}
+          onClick={() => {
+            if (
+              !confirm(
+                dirty
+                  ? "Save draft and publish this content to the live website?"
+                  : "Publish the current draft to the live website?",
+              )
+            ) {
+              return;
+            }
+            publishM.mutate();
+          }}
         >
           {publishM.isPending ? "Publishing…" : "Publish"}
         </Button>
         <Button asChild size="sm" variant="ghost">
           <a href="/" target="_blank" rel="noreferrer">
-            Preview site
+            Open live site
           </a>
         </Button>
+        {dirty ? (
+          <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900">
+            Unsaved changes
+          </span>
+        ) : docQ.data?.hasUnpublishedChanges ? (
+          <span className="rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-900">
+            Draft pending publish
+          </span>
+        ) : docQ.data && docQ.data.publishedVersion > 0 ? (
+          <span className="rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-900">
+            In sync
+          </span>
+        ) : (
+          <span className="rounded-md border border-border bg-muted/50 px-2 py-0.5 text-xs font-semibold text-muted-foreground">
+            Not published
+          </span>
+        )}
       </div>
       {feedback ? <InlineFeedback kind="ok">{feedback}</InlineFeedback> : null}
       {error ? <InlineFeedback kind="err">{error}</InlineFeedback> : null}
@@ -295,6 +389,7 @@ function DocumentEditorShell({
         save: () => saveM.mutate(),
         publish: () => publishM.mutate(),
         version: docQ.data?.draftVersion ?? 1,
+        dirty,
       })}
     </div>
   );
@@ -451,8 +546,8 @@ function HeaderNavTab({ enabled }: { enabled: boolean }) {
                 ))}
               </ul>
               <p className="mt-2 text-xs text-muted-foreground">
-                Mega-menu column links still use the verified navigation content modules; labels and
-                order are CMS-controlled.
+                Labels, order and visibility apply on desktop and mobile. Mega-menu columns stay
+                brand-verified.
               </p>
             </Panel>
           );
@@ -479,23 +574,11 @@ function HomepageTab({ enabled }: { enabled: boolean }) {
             sections: page.sections.map((s) => (s.id === id ? { ...s, ...patch } : s)),
           });
         };
-        const move = (id: string, dir: -1 | 1) => {
-          const ordered = [...page.sections].sort((a, b) => a.sort - b.sort);
-          const index = ordered.findIndex((s) => s.id === id);
-          const target = index + dir;
-          if (index < 0 || target < 0 || target >= ordered.length) return;
-          const a = ordered[index]!;
-          const b = ordered[target]!;
-          const aSort = a.sort;
-          ordered[index] = { ...a, sort: b.sort };
-          ordered[target] = { ...b, sort: aSort };
-          setDraft({ ...page, sections: ordered });
-        };
         return (
           <div className="space-y-3">
-            <Panel compact title="Homepage SEO">
-              <div className="grid gap-3 sm:grid-cols-2">
-                <label className="text-sm sm:col-span-2">
+            <Panel compact title="SEO">
+              <div className="grid gap-3">
+                <label className="text-sm">
                   <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
                     Title
                   </span>
@@ -506,7 +589,7 @@ function HomepageTab({ enabled }: { enabled: boolean }) {
                     }
                   />
                 </label>
-                <label className="text-sm sm:col-span-2">
+                <label className="text-sm">
                   <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
                     Meta description
                   </span>
@@ -521,33 +604,30 @@ function HomepageTab({ enabled }: { enabled: boolean }) {
               </div>
             </Panel>
             <Panel compact title="Sections">
-              <ul className="space-y-3">
+              <p className="mb-3 text-xs text-muted-foreground">
+                Toggle visibility and edit headings. Publish to update the live homepage.
+              </p>
+              <ul className="space-y-2">
                 {page.sections.map((section) => (
                   <li key={section.id} className="rounded-md border border-border p-3">
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div>
-                        <p className="text-sm font-semibold text-navy">{section.title || section.id}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {section.type} · sort {section.sort}
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-semibold text-navy">
+                          {section.title || section.id}
+                        </p>
+                        <p className="text-[0.7rem] uppercase tracking-wide text-muted-foreground">
+                          {section.type}
                         </p>
                       </div>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <label className="flex items-center gap-2 text-xs">
-                          <Switch
-                            checked={section.visible}
-                            onCheckedChange={(v) => updateSection(section.id, { visible: v })}
-                          />
-                          Visible
-                        </label>
-                        <Button type="button" size="sm" variant="ghost" onClick={() => move(section.id, -1)}>
-                          Up
-                        </Button>
-                        <Button type="button" size="sm" variant="ghost" onClick={() => move(section.id, 1)}>
-                          Down
-                        </Button>
-                      </div>
+                      <label className="flex items-center gap-2 text-xs">
+                        <Switch
+                          checked={section.visible}
+                          onCheckedChange={(v) => updateSection(section.id, { visible: v })}
+                        />
+                        Visible
+                      </label>
                     </div>
-                    <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                    <div className="mt-2 grid gap-2 sm:grid-cols-2">
                       <Input
                         placeholder="Eyebrow"
                         value={section.eyebrow ?? ""}
@@ -852,19 +932,31 @@ function AnnouncementsTab({ enabled }: { enabled: boolean }) {
             />
           </label>
           <label className="text-sm">
-            <Label>Starts at (ISO optional)</Label>
+            <Label>Starts</Label>
             <Input
               className="mt-1"
-              value={form.startsAt ?? ""}
-              onChange={(e) => setForm({ ...form, startsAt: e.target.value || null })}
+              type="datetime-local"
+              value={form.startsAt ? form.startsAt.slice(0, 16) : ""}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  startsAt: e.target.value ? new Date(e.target.value).toISOString() : null,
+                })
+              }
             />
           </label>
           <label className="text-sm">
-            <Label>Ends at (ISO optional)</Label>
+            <Label>Ends</Label>
             <Input
               className="mt-1"
-              value={form.endsAt ?? ""}
-              onChange={(e) => setForm({ ...form, endsAt: e.target.value || null })}
+              type="datetime-local"
+              value={form.endsAt ? form.endsAt.slice(0, 16) : ""}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  endsAt: e.target.value ? new Date(e.target.value).toISOString() : null,
+                })
+              }
             />
           </label>
           <label className="text-sm">
@@ -881,8 +973,27 @@ function AnnouncementsTab({ enabled }: { enabled: boolean }) {
               <option value="archived">Archived</option>
             </select>
           </label>
-          <div className="flex items-center justify-between rounded-md border px-3 py-2">
-            <span className="text-sm">Dismissible</span>
+          <label className="text-sm">
+            <Label>Style</Label>
+            <select
+              className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 text-sm"
+              value={form.styleToken}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  styleToken: e.target.value as CmsAnnouncementInput["styleToken"],
+                })
+              }
+            >
+              <option value="navy">Navy</option>
+              <option value="royal">Royal</option>
+              <option value="bright">Bright</option>
+              <option value="muted">Muted</option>
+              <option value="danger">Alert</option>
+            </select>
+          </label>
+          <div className="flex items-center justify-between rounded-md border px-3 py-2 sm:col-span-2">
+            <span className="text-sm">Allow dismiss</span>
             <Switch
               checked={form.dismissible}
               onCheckedChange={(v) => setForm({ ...form, dismissible: v })}
@@ -961,18 +1072,26 @@ function PublishingTab({
     queryFn: () => listCmsRevisions(documentKey),
     enabled,
   });
+  const [restoreMsg, setRestoreMsg] = useState<string | null>(null);
+  const [restoreErr, setRestoreErr] = useState<string | null>(null);
   const restoreM = useMutation({
     mutationFn: (revisionId: string) => restoreCmsRevision(revisionId),
     onSuccess: () => {
+      setRestoreMsg("Restored into draft. Open the editor and publish when ready.");
+      setRestoreErr(null);
       void revQ.refetch();
       onChanged();
+    },
+    onError: (e) => {
+      setRestoreErr(portalErrorMessage(e, "Could not restore revision."));
+      setRestoreMsg(null);
     },
   });
 
   if (!enabled) {
     return (
-      <Panel compact title="Drafts & publishing">
-        <p className="text-sm text-muted-foreground">CMS schema is not ready on this environment.</p>
+      <Panel compact title="Publish history">
+        <p className="text-sm text-muted-foreground">CMS schema is not ready.</p>
       </Panel>
     );
   }
@@ -981,30 +1100,32 @@ function PublishingTab({
     <Panel compact title="Revision history">
       <label className="mb-3 block text-sm">
         <span className="mb-1 block text-xs font-semibold uppercase text-muted-foreground">
-          Document
+          Content area
         </span>
         <select
           className="flex h-10 w-full max-w-md rounded-md border border-input bg-background px-3 text-sm"
           value={documentKey}
           onChange={(e) => setDocumentKey(e.target.value)}
         >
-          <option value="site.header">site.header</option>
-          <option value="site.nav">site.nav</option>
-          <option value="site.footer">site.footer</option>
-          <option value="page.home">page.home</option>
-          <option value="seo.global">seo.global</option>
+          <option value="site.header">Header</option>
+          <option value="site.nav">Navigation</option>
+          <option value="site.footer">Footer</option>
+          <option value="page.home">Homepage</option>
+          <option value="seo.global">SEO</option>
         </select>
       </label>
-      {revQ.isLoading ? <PageLoadState label="Loading revisions…" /> : null}
+      {restoreMsg ? <InlineFeedback kind="ok">{restoreMsg}</InlineFeedback> : null}
+      {restoreErr ? <InlineFeedback kind="err">{restoreErr}</InlineFeedback> : null}
+      {revQ.isLoading ? <PageLoadState label="Loading…" /> : null}
       <ul className="divide-y border-y border-border text-sm">
         {(revQ.data?.rows ?? []).map((row) => (
           <li key={String(row.id)} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
             <div>
               <p className="font-medium text-navy">
-                v{String(row.version)} · {String(row.kind)}
+                v{String(row.version)} · {String(row.kind) === "published" ? "Published" : "Draft"}
               </p>
               <p className="text-xs text-muted-foreground">
-                {row.created_at ? String(row.created_at) : ""}
+                {row.created_at ? String(row.created_at).replace("T", " ").slice(0, 19) : ""}
                 {row.note ? ` · ${String(row.note)}` : ""}
               </p>
             </div>
@@ -1013,12 +1134,12 @@ function PublishingTab({
               variant="outline"
               disabled={restoreM.isPending}
               onClick={() => {
-                if (confirm("Restore this revision into the draft? Publish separately when ready.")) {
+                if (confirm("Restore this version into the draft? You still need to Publish for the live site.")) {
                   restoreM.mutate(String(row.id));
                 }
               }}
             >
-              Restore to draft
+              Restore draft
             </Button>
           </li>
         ))}

@@ -216,6 +216,22 @@ export const DEFAULT_CMS_HOME: CmsPageContent = {
       primaryCta: { label: "Talk to a Visa Consultant", href: "/student-visa" },
     },
     {
+      id: "how_it_works",
+      type: "how_it_works",
+      visible: true,
+      sort: 105,
+      eyebrow: "How it works",
+      title: "Four clear steps",
+    },
+    {
+      id: "stories",
+      type: "stories",
+      visible: true,
+      sort: 108,
+      eyebrow: "Success stories",
+      title: "Students who made it",
+    },
+    {
       id: "reviews",
       type: "reviews",
       visible: true,

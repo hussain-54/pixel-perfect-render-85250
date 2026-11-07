@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { SocialLinks } from "@/components/site/SocialLinks";
 import { siteContact } from "@/data/contact";
 import { mainNavigation, megaMenus, type MegaMenuId } from "@/data/navigation";
+import type { CmsNavSettings } from "@/lib/cms-types";
 import { cn } from "@/lib/utils";
 
 const sectionLabels: Record<MegaMenuId, string[]> = {
@@ -23,10 +24,12 @@ export function MobileNavDrawer({
   open,
   onClose,
   id,
+  cmsNav,
 }: {
   open: boolean;
   onClose: () => void;
   id?: string;
+  cmsNav?: CmsNavSettings;
 }) {
   const [expanded, setExpanded] = useState<MegaMenuId | null>(null);
   const [q, setQ] = useState("");
@@ -35,6 +38,37 @@ export function MobileNavDrawer({
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
+
+  const navItems = (() => {
+    if (!cmsNav?.items?.length) return mainNavigation;
+    return cmsNav.items
+      .filter((item) => item.visible !== false)
+      .map((item) => {
+        const base = mainNavigation.find((m) => m.id === item.id);
+        if (item.type === "link" || base?.type === "link") {
+          const to =
+            item.href ||
+            (base && base.type === "link" ? base.to : "/") ||
+            "/";
+          return {
+            id: item.id,
+            label: item.label || base?.label || item.id,
+            type: "link" as const,
+            to: to as "/",
+          };
+        }
+        const megaId = (item.megaId || item.id) as MegaMenuId;
+        return {
+          id: megaId,
+          label: item.label || base?.label || item.id,
+          type: "mega" as const,
+        };
+      })
+      .filter((item) => {
+        if (item.type === "mega") return Boolean(megaMenus[item.id as MegaMenuId]);
+        return true;
+      });
+  })();
 
   useEffect(() => {
     if (!open) {
@@ -160,12 +194,12 @@ export function MobileNavDrawer({
             </div>
           </form>
 
-          {mainNavigation.map((item) => {
+          {navItems.map((item) => {
             if (item.type === "link") {
               return (
                 <Link
                   key={item.id}
-                  to={item.to}
+                  to={item.to as "/"}
                   onClick={onClose}
                   className="block rounded-md px-3 py-3 text-[0.95rem] font-semibold text-navy transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
@@ -174,10 +208,12 @@ export function MobileNavDrawer({
               );
             }
 
-            const isOpen = expanded === item.id;
-            const menu = megaMenus[item.id];
-            const allowed = sectionLabels[item.id];
-            const panelId = `mobile-submenu-${item.id}`;
+            const megaId = item.id as MegaMenuId;
+            const isOpen = expanded === megaId;
+            const menu = megaMenus[megaId];
+            const allowed = sectionLabels[megaId];
+            const panelId = `mobile-submenu-${megaId}`;
+            if (!menu || !allowed) return null;
 
             return (
               <div key={item.id} className="border-b border-border/70 last:border-0">
@@ -185,7 +221,7 @@ export function MobileNavDrawer({
                   type="button"
                   aria-expanded={isOpen}
                   aria-controls={panelId}
-                  onClick={() => setExpanded(isOpen ? null : item.id)}
+                  onClick={() => setExpanded(isOpen ? null : megaId)}
                   className={cn(
                     "flex w-full items-center justify-between gap-3 rounded-md px-3 py-3 text-left text-[0.95rem] font-semibold text-navy transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
                     isOpen && "bg-accent/70 text-navy",
