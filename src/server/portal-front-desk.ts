@@ -334,8 +334,7 @@ async function loadFrontDeskIntakeStudentForCoordination(
       );
     }
     const viewerIsRegistrar =
-      Boolean(sessionUserId) &&
-      (student.registeredBy === sessionUserId || !student.registeredBy);
+      Boolean(sessionUserId) && (student.registeredBy === sessionUserId || !student.registeredBy);
     return { student, viewerIsRegistrar: viewerIsRegistrar || !sessionUserId };
   }
   if (/Not authorized|not authorized/i.test(String(error.message))) {
@@ -1217,9 +1216,7 @@ export const portalListFeeVerificationRequests = createServerFn({ method: "GET" 
       }
 
       const { normalizeRpcRowList } = await import("@/lib/fee-verification-workflow");
-      const {
-        countFeeVerificationNeedsCorrection,
-      } = await import("@/lib/front-desk-coordination");
+      const { countFeeVerificationNeedsCorrection } = await import("@/lib/front-desk-coordination");
       const rows = normalizeRpcRowList(rpcData).map(mapFeeVerificationRow);
       const openCount = rows.filter((r) => r.status === "open").length;
       const awaitingFinanceCount = rows.filter((r) => r.status === "in_progress").length;

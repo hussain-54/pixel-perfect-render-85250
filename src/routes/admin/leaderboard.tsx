@@ -48,8 +48,7 @@ function AdminLeaderboard() {
 
   const payload = boardQ.data;
   const rows = payload?.rows ?? [];
-  const metricUnavailable =
-    payload?.metricAvailability[metric] === "unavailable";
+  const metricUnavailable = payload?.metricAvailability[metric] === "unavailable";
 
   return (
     <div className="space-y-4">
@@ -139,7 +138,10 @@ function AdminLeaderboard() {
             </thead>
             <tbody>
               {rows.map((c, i) => (
-                <tr key={c.consultantId} className={i === 0 && c.value != null ? "bg-accent/60" : undefined}>
+                <tr
+                  key={c.consultantId}
+                  className={i === 0 && c.value != null ? "bg-accent/60" : undefined}
+                >
                   <td className="font-display text-lg font-semibold text-navy">
                     {c.rank != null ? c.rank : "—"}
                   </td>

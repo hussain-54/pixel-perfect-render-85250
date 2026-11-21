@@ -128,7 +128,8 @@
     oklch(0.22 0.075 258 / 0.18) 100%
   );
   --gradient-card: linear-gradient(180deg, transparent 40%, oklch(0.22 0.075 258 / 0.82) 100%);
-  --shadow-soft: 0 1px 2px oklch(0.22 0.075 258 / 0.03), 0 6px 20px -10px oklch(0.22 0.075 258 / 0.1);
+  --shadow-soft:
+    0 1px 2px oklch(0.22 0.075 258 / 0.03), 0 6px 20px -10px oklch(0.22 0.075 258 / 0.1);
   --ease-premium: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
@@ -273,6 +274,28 @@
   .animate-uni-marquee-ltr,
   .animate-uni-marquee-rtl {
     animation: none !important;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Controlled portal / UI motion budget (150–250ms) when motion is allowed */
+@media (prefers-reduced-motion: no-preference) {
+  .gr-motion-fast {
+    transition-duration: 150ms;
+  }
+  .gr-motion {
+    transition-duration: 200ms;
+  }
+  .gr-motion-slow {
+    transition-duration: 250ms;
   }
 }
 

@@ -18,6 +18,10 @@ export const CMS_DOCUMENT_KEYS = [
 
 export type CmsDocumentKey = (typeof CMS_DOCUMENT_KEYS)[number];
 
+/** JSON-safe CMS payloads for server function wire transport. */
+export type CmsJsonValue =
+  string | number | boolean | null | CmsJsonValue[] | { [key: string]: CmsJsonValue };
+
 export type CmsLink = {
   label: string;
   href: string;
@@ -131,12 +135,7 @@ export type CmsPageContent = {
 };
 
 export type CmsAnnouncementType =
-  | "general"
-  | "important"
-  | "admission_deadline"
-  | "new_service"
-  | "event"
-  | "promotional";
+  "general" | "important" | "admission_deadline" | "new_service" | "event" | "promotional";
 
 export type CmsAnnouncementStyle = "navy" | "royal" | "bright" | "muted" | "danger";
 
@@ -169,11 +168,37 @@ export type CmsPublicAnnouncement = {
   sortOrder: number;
 };
 
+export type CmsAnnouncementAdminRow = {
+  id: string;
+  internalTitle: string;
+  body: string;
+  announcementType: string;
+  ctaLabel: string | null;
+  ctaHref: string | null;
+  styleToken: string;
+  dismissible: boolean;
+  status: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  sortOrder: number;
+  updatedAt: string | null;
+};
+
+export type CmsRevisionAdminRow = {
+  id: string;
+  document_key?: string;
+  version?: number;
+  kind?: string;
+  note?: string | null;
+  created_at?: string;
+  created_by?: string | null;
+};
+
 export type CmsDocumentAdminView = {
   documentKey: CmsDocumentKey | string;
   title: string;
-  draft: unknown;
-  published: unknown | null;
+  draft: CmsJsonValue;
+  published: CmsJsonValue | null;
   draftVersion: number;
   publishedVersion: number;
   publishedAt: string | null;

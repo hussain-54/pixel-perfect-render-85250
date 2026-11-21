@@ -26,9 +26,7 @@ function withFrontDeskCell(
   );
 }
 
-function session(
-  businessRole: NonNullable<TrustedSession["businessRole"]> | null,
-): TrustedSession {
+function session(businessRole: NonNullable<TrustedSession["businessRole"]> | null): TrustedSession {
   return {
     email: "fd@example.com",
     source: "demo",

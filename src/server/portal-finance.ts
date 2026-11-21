@@ -13,7 +13,10 @@ import {
   resolveBusinessRoleFromTrustedAppRole,
   type BusinessRole,
 } from "@/lib/business-permissions";
-import { canVerifyUniversityFeePayment } from "@/lib/university-fee-auth";
+import {
+  assertUniversityFeeVerifyTransition,
+  canVerifyUniversityFeePayment,
+} from "@/lib/university-fee-auth";
 import { nextJourneyStageIfAdvanced } from "@/lib/journey-stage";
 import type { JourneyStage, UniversityFeeKindDb, UniversityFeeStatusDb } from "@/types/database";
 import {
@@ -281,6 +284,18 @@ export const portalVerifyUniversityFeePayment = createServerFn({ method: "POST" 
       if (loadErr) throw new Error(loadErr.message);
       if (!existing) throw new AuthError("Fee obligation not found.", 404);
       await assertStudentVisibleDb(client, session, existing.student_id);
+
+      try {
+        assertUniversityFeeVerifyTransition({
+          current: existing.status as UniversityFeeStatusDb,
+          action: data.action,
+        });
+      } catch (transitionErr) {
+        throw new AuthError(
+          transitionErr instanceof Error ? transitionErr.message : "Invalid fee status transition.",
+          400,
+        );
+      }
 
       const next: UniversityFeeStatusDb =
         data.action === "verify" ? "verified" : data.action === "waive" ? "waived" : "rejected";

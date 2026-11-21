@@ -56,7 +56,7 @@ function AdminNotifications() {
       {notifQ.isLoading ? (
         <LoadingRows />
       ) : notifQ.isError ? (
-        <ErrorState body={portalErrorMessage(notifQ.error)} />
+        <ErrorState body={portalErrorMessage(notifQ.error)} onRetry={() => void notifQ.refetch()} />
       ) : !notifQ.data?.length ? (
         <EmptyState title="No notifications" />
       ) : (

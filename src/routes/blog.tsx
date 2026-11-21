@@ -38,8 +38,8 @@ function BlogIndexPage() {
       listPublishedBlogPosts({
         page,
         pageSize: 9,
-        category: category || undefined,
-        search: q || undefined,
+        ...(category ? { category } : {}),
+        ...(q ? { search: q } : {}),
       }),
   });
 

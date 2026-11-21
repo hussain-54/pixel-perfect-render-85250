@@ -16,7 +16,10 @@ export function OfficeLocationMap({ className, variant = "section" }: OfficeLoca
 
   return (
     <section
-      className={cn(compact ? "border-t border-border bg-surface" : "section-y bg-surface", className)}
+      className={cn(
+        compact ? "border-t border-border bg-surface" : "section-y bg-surface",
+        className,
+      )}
       aria-labelledby="office-location-heading"
     >
       <div className={cn("container-page", compact && "py-10 md:py-12")}>

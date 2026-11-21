@@ -26,8 +26,22 @@ import {
   saveCmsAnnouncement,
   saveCmsDraft,
 } from "@/services";
-import type { CmsAnnouncementInput, CmsFooterSettings, CmsHeaderSettings, CmsHomeSection, CmsNavSettings, CmsPageContent, CmsSeoSettings } from "@/lib/cms-types";
-import { DEFAULT_CMS_HEADER, DEFAULT_CMS_FOOTER, DEFAULT_CMS_HOME, DEFAULT_CMS_NAV, DEFAULT_CMS_SEO_GLOBAL } from "@/lib/cms-defaults";
+import type {
+  CmsAnnouncementInput,
+  CmsFooterSettings,
+  CmsHeaderSettings,
+  CmsHomeSection,
+  CmsNavSettings,
+  CmsPageContent,
+  CmsSeoSettings,
+} from "@/lib/cms-types";
+import {
+  DEFAULT_CMS_HEADER,
+  DEFAULT_CMS_FOOTER,
+  DEFAULT_CMS_HOME,
+  DEFAULT_CMS_NAV,
+  DEFAULT_CMS_SEO_GLOBAL,
+} from "@/lib/cms-defaults";
 import { validateDocumentDraft } from "@/lib/cms-rules";
 import { cn } from "@/lib/utils";
 
@@ -89,12 +103,13 @@ function AdminWebsiteCms() {
         }))}
       />
 
-      {overviewQ.isLoading ? <PageLoadState label="Loading…" /> : null}
+      {overviewQ.isLoading ? (
+        <PageLoadState title="Website" subtitle="Loading…">
+          <p className="text-sm text-muted-foreground">Please wait…</p>
+        </PageLoadState>
+      ) : null}
       {overviewQ.isError ? (
-        <ErrorState
-          title="Could not load Website"
-          body={portalErrorMessage(overviewQ.error)}
-        />
+        <ErrorState body={portalErrorMessage(overviewQ.error, "Could not load Website.")} />
       ) : null}
 
       {overviewQ.data && !overviewQ.data.schemaReady ? (
@@ -119,7 +134,9 @@ function AdminWebsiteCms() {
       {tab === "publishing" ? (
         <PublishingTab
           enabled={Boolean(overviewQ.data?.schemaReady)}
-          onChanged={() => void queryClient.invalidateQueries({ queryKey: ["admin", "cms-overview"] })}
+          onChanged={() =>
+            void queryClient.invalidateQueries({ queryKey: ["admin", "cms-overview"] })
+          }
         />
       ) : null}
     </div>
@@ -148,11 +165,7 @@ function statusBadge(doc: { publishedVersion: number; hasUnpublishedChanges: boo
   );
 }
 
-function OverviewTab({
-  data,
-}: {
-  data: Awaited<ReturnType<typeof getCmsAdminOverview>>;
-}) {
+function OverviewTab({ data }: { data: Awaited<ReturnType<typeof getCmsAdminOverview>> }) {
   const pending = data.documents.filter((d) => d.hasUnpublishedChanges).length;
   return (
     <div className="space-y-4">
@@ -166,9 +179,7 @@ function OverviewTab({
           {data.documents.map((doc) => {
             const tab =
               (Object.entries(TAB_TO_DOCUMENT).find(([, key]) => key === doc.documentKey)?.[0] as
-                | TabId
-                | undefined) ??
-              (doc.documentKey === "site.nav" ? "header" : "overview");
+                TabId | undefined) ?? (doc.documentKey === "site.nav" ? "header" : "overview");
             return (
               <li
                 key={doc.documentKey}
@@ -264,7 +275,9 @@ function DocumentEditorShell({
       return saveCmsDraft({
         documentKey,
         draft: check.value,
-        expectedDraftVersion: docQ.data?.draftVersion,
+        ...(docQ.data?.draftVersion != null
+          ? { expectedDraftVersion: docQ.data.draftVersion }
+          : {}),
       });
     },
     onSuccess: async (res) => {
@@ -288,7 +301,9 @@ function DocumentEditorShell({
       const saved = await saveCmsDraft({
         documentKey,
         draft: check.value,
-        expectedDraftVersion: docQ.data?.draftVersion,
+        ...(docQ.data?.draftVersion != null
+          ? { expectedDraftVersion: docQ.data.draftVersion }
+          : {}),
       });
       return publishCmsDocument({
         documentKey,
@@ -319,9 +334,15 @@ function DocumentEditorShell({
       </Panel>
     );
   }
-  if (docQ.isLoading || draft == null) return <PageLoadState label={`Loading ${title}…`} />;
+  if (docQ.isLoading || draft == null) {
+    return (
+      <PageLoadState title={title} subtitle="Loading…">
+        <p className="text-sm text-muted-foreground">Please wait…</p>
+      </PageLoadState>
+    );
+  }
   if (docQ.isError) {
-    return <ErrorState title={`Could not load ${title}`} body={portalErrorMessage(docQ.error)} />;
+    return <ErrorState body={portalErrorMessage(docQ.error, `Could not load ${title}.`)} />;
   }
 
   return (
@@ -455,7 +476,9 @@ function HeaderNavTab({ enabled }: { enabled: boolean }) {
                 <div className="flex items-center justify-between rounded-md border px-3 py-2 sm:col-span-2">
                   <div>
                     <p className="text-sm font-medium text-navy">Sticky header</p>
-                    <p className="text-xs text-muted-foreground">Keeps the header visible while scrolling</p>
+                    <p className="text-xs text-muted-foreground">
+                      Keeps the header visible while scrolling
+                    </p>
                   </div>
                   <Switch
                     checked={header.sticky}
@@ -465,7 +488,9 @@ function HeaderNavTab({ enabled }: { enabled: boolean }) {
                 <div className="flex items-center justify-between rounded-md border px-3 py-2 sm:col-span-2">
                   <div>
                     <p className="text-sm font-medium text-navy">Utility bar</p>
-                    <p className="text-xs text-muted-foreground">Phone / email strip above the main nav</p>
+                    <p className="text-xs text-muted-foreground">
+                      Phone / email strip above the main nav
+                    </p>
                   </div>
                   <Switch
                     checked={header.showUtilityBar}
@@ -535,10 +560,20 @@ function HeaderNavTab({ enabled }: { enabled: boolean }) {
                         />
                         Visible
                       </label>
-                      <Button type="button" size="sm" variant="ghost" onClick={() => move(index, -1)}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => move(index, -1)}
+                      >
                         Up
                       </Button>
-                      <Button type="button" size="sm" variant="ghost" onClick={() => move(index, 1)}>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => move(index, 1)}
+                      >
                         Down
                       </Button>
                     </div>
@@ -869,7 +904,9 @@ function AnnouncementsTab({ enabled }: { enabled: boolean }) {
   if (!enabled) {
     return (
       <Panel compact title="Announcements">
-        <p className="text-sm text-muted-foreground">CMS schema is not ready on this environment.</p>
+        <p className="text-sm text-muted-foreground">
+          CMS schema is not ready on this environment.
+        </p>
       </Panel>
     );
   }
@@ -1001,7 +1038,12 @@ function AnnouncementsTab({ enabled }: { enabled: boolean }) {
           </div>
         </div>
         <div className="mt-3 flex flex-wrap gap-2">
-          <Button size="sm" variant="navy" disabled={saveM.isPending} onClick={() => saveM.mutate()}>
+          <Button
+            size="sm"
+            variant="navy"
+            disabled={saveM.isPending}
+            onClick={() => saveM.mutate()}
+          >
             {saveM.isPending ? "Saving…" : form.id ? "Update announcement" : "Save announcement"}
           </Button>
           {form.id ? (
@@ -1015,15 +1057,21 @@ function AnnouncementsTab({ enabled }: { enabled: boolean }) {
       </Panel>
 
       <Panel compact title="All announcements">
-        {listQ.isLoading ? <PageLoadState label="Loading announcements…" /> : null}
+        {listQ.isLoading ? (
+          <PageLoadState title="Announcements" subtitle="Loading…">
+            <p className="text-sm text-muted-foreground">Please wait…</p>
+          </PageLoadState>
+        ) : null}
         {listQ.isError ? (
-          <ErrorState title="Could not load announcements" body={portalErrorMessage(listQ.error)} />
+          <ErrorState body={portalErrorMessage(listQ.error, "Could not load announcements.")} />
         ) : null}
         <ul className="divide-y border-y border-border text-sm">
           {(listQ.data?.rows ?? []).map((row) => (
             <li key={row.id} className="flex flex-wrap items-start justify-between gap-2 py-2.5">
               <div className="min-w-0">
-                <p className="font-medium text-navy">{row.internalTitle || row.body.slice(0, 60)}</p>
+                <p className="font-medium text-navy">
+                  {row.internalTitle || row.body.slice(0, 60)}
+                </p>
                 <p className="text-xs text-muted-foreground">
                   {row.status} · {row.announcementType}
                 </p>
@@ -1037,7 +1085,8 @@ function AnnouncementsTab({ enabled }: { enabled: boolean }) {
                     id: row.id,
                     internalTitle: row.internalTitle,
                     body: row.body,
-                    announcementType: row.announcementType as CmsAnnouncementInput["announcementType"],
+                    announcementType:
+                      row.announcementType as CmsAnnouncementInput["announcementType"],
                     ctaLabel: row.ctaLabel,
                     ctaHref: row.ctaHref,
                     styleToken: row.styleToken as CmsAnnouncementInput["styleToken"],
@@ -1059,13 +1108,7 @@ function AnnouncementsTab({ enabled }: { enabled: boolean }) {
   );
 }
 
-function PublishingTab({
-  enabled,
-  onChanged,
-}: {
-  enabled: boolean;
-  onChanged: () => void;
-}) {
+function PublishingTab({ enabled, onChanged }: { enabled: boolean; onChanged: () => void }) {
   const [documentKey, setDocumentKey] = useState("page.home");
   const revQ = useQuery({
     queryKey: ["admin", "cms-revisions", documentKey],
@@ -1116,10 +1159,17 @@ function PublishingTab({
       </label>
       {restoreMsg ? <InlineFeedback kind="ok">{restoreMsg}</InlineFeedback> : null}
       {restoreErr ? <InlineFeedback kind="err">{restoreErr}</InlineFeedback> : null}
-      {revQ.isLoading ? <PageLoadState label="Loading…" /> : null}
+      {revQ.isLoading ? (
+        <PageLoadState title="Revision history" subtitle="Loading…">
+          <p className="text-sm text-muted-foreground">Please wait…</p>
+        </PageLoadState>
+      ) : null}
       <ul className="divide-y border-y border-border text-sm">
         {(revQ.data?.rows ?? []).map((row) => (
-          <li key={String(row.id)} className="flex flex-wrap items-center justify-between gap-2 py-2.5">
+          <li
+            key={String(row.id)}
+            className="flex flex-wrap items-center justify-between gap-2 py-2.5"
+          >
             <div>
               <p className="font-medium text-navy">
                 v{String(row.version)} · {String(row.kind) === "published" ? "Published" : "Draft"}
@@ -1134,7 +1184,11 @@ function PublishingTab({
               variant="outline"
               disabled={restoreM.isPending}
               onClick={() => {
-                if (confirm("Restore this version into the draft? You still need to Publish for the live site.")) {
+                if (
+                  confirm(
+                    "Restore this version into the draft? You still need to Publish for the live site.",
+                  )
+                ) {
                   restoreM.mutate(String(row.id));
                 }
               }}

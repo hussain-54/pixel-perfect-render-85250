@@ -100,13 +100,7 @@ export type NewApplicationInput = {
 };
 
 export type ProfileTabId =
-  | "assessment"
-  | "overview"
-  | "academic"
-  | "documents"
-  | "applications"
-  | "offers-visa"
-  | "notes";
+  "assessment" | "overview" | "academic" | "documents" | "applications" | "offers-visa" | "notes";
 
 /** Named profile tabs from wireframe page 4 (7 total). */
 export const STUDENT_PROFILE_TABS: { id: ProfileTabId; label: string }[] = [

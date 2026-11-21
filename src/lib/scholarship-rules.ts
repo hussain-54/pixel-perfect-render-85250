@@ -24,15 +24,11 @@ export type ScholarshipWriteInput = {
   status?: ScholarshipStatus | string;
 };
 
-export function canViewScholarshipStaff(input: {
-  appRole: AppRole;
-}): boolean {
+export function canViewScholarshipStaff(input: { appRole: AppRole }): boolean {
   return rolesAtLeastAdmin(input.appRole) || input.appRole === "consultant";
 }
 
-export function canMutateScholarshipStaff(input: {
-  appRole: AppRole;
-}): boolean {
+export function canMutateScholarshipStaff(input: { appRole: AppRole }): boolean {
   // Matrix edit is enforced via requireModulePermission(admissions, 2) on server.
   return rolesAtLeastAdmin(input.appRole) || input.appRole === "consultant";
 }
@@ -132,6 +128,9 @@ export function resolveScholarshipPage(filters: ScholarshipListFilters): {
   offset: number;
 } {
   const page = Math.max(1, Math.floor(filters.page ?? 1));
-  const pageSize = Math.min(100, Math.max(1, Math.floor(filters.pageSize ?? SCHOLARSHIP_PAGE_SIZE)));
+  const pageSize = Math.min(
+    100,
+    Math.max(1, Math.floor(filters.pageSize ?? SCHOLARSHIP_PAGE_SIZE)),
+  );
   return { page, pageSize, offset: (page - 1) * pageSize };
 }

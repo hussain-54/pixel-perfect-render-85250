@@ -45,9 +45,9 @@ function Page() {
           <h2 className="font-display text-xl font-semibold text-navy">Information we collect</h2>
           <p>
             When you use the consultation form or create an account, you may provide details such as
-            your name, email address, phone number, preferred study destination, and a short message.
-            We also receive standard technical data that your browser sends (for example IP address
-            and device type) when you visit the site.
+            your name, email address, phone number, preferred study destination, and a short
+            message. We also receive standard technical data that your browser sends (for example IP
+            address and device type) when you visit the site.
           </p>
         </div>
 
@@ -72,9 +72,10 @@ function Page() {
         <div className="space-y-2">
           <h2 className="font-display text-xl font-semibold text-navy">Retention and security</h2>
           <p>
-            We keep personal information only as long as needed for the purposes above or as required
-            by applicable law. [Owner: state retention periods.] We apply reasonable technical and
-            organisational measures to protect data; no method of transmission is completely secure.
+            We keep personal information only as long as needed for the purposes above or as
+            required by applicable law. [Owner: state retention periods.] We apply reasonable
+            technical and organisational measures to protect data; no method of transmission is
+            completely secure.
           </p>
         </div>
 

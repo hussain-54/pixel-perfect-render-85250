@@ -14,7 +14,8 @@ function env() {
     process.env["SUPABASE_URL"]?.trim() ||
     "";
   const key =
-    (typeof import.meta !== "undefined" && import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()) ||
+    (typeof import.meta !== "undefined" &&
+      import.meta.env?.VITE_SUPABASE_PUBLISHABLE_KEY?.trim()) ||
     process.env["VITE_SUPABASE_PUBLISHABLE_KEY"]?.trim() ||
     process.env["SUPABASE_ANON_KEY"]?.trim() ||
     "";
@@ -44,4 +45,3 @@ export function createServerSupabase(accessToken?: string): ServerSupabase | nul
     },
   });
 }
-

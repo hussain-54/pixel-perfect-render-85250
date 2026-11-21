@@ -58,9 +58,7 @@ export function mapOrganizationSettingsRow(
 
 export function validateOrganizationSettingsWrite(
   input: OrganizationSettingsInput,
-):
-  | { ok: true; normalized: NormalizedOrganizationSettings }
-  | { ok: false; error: string } {
+): { ok: true; normalized: NormalizedOrganizationSettings } | { ok: false; error: string } {
   const consultancyName = input.consultancyName?.trim() ?? "";
   const supportEmail = input.supportEmail?.trim() ?? "";
   const portalFooterNote = input.portalFooterNote?.trim() ?? "";

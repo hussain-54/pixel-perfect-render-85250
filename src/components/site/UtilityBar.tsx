@@ -27,7 +27,10 @@ export function UtilityBar({ className }: { className?: string }) {
                 <Phone className="h-3.5 w-3.5 shrink-0 text-bright" aria-hidden />
                 <span>{siteContact.phone.display}</span>
               </a>
-              <span className="hidden h-3 w-px shrink-0 bg-navy-foreground/20 sm:block" aria-hidden />
+              <span
+                className="hidden h-3 w-px shrink-0 bg-navy-foreground/20 sm:block"
+                aria-hidden
+              />
             </>
           ) : null}
           <a

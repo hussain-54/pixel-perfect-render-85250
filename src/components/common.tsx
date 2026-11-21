@@ -188,9 +188,7 @@ export function StatCard({
     <>
       <div className="flex items-start justify-between gap-2 text-navy/70">
         <span className="text-xs font-semibold leading-snug tracking-wide">{label}</span>
-        {icon ? (
-          <span className={cn("shrink-0 [&_svg]:size-4", tint.icon)}>{icon}</span>
-        ) : null}
+        {icon ? <span className={cn("shrink-0 [&_svg]:size-4", tint.icon)}>{icon}</span> : null}
       </div>
       <div className="mt-1.5 font-display text-xl font-semibold leading-none tabular-nums text-navy sm:text-[1.375rem]">
         {value}
@@ -209,8 +207,7 @@ export function StatCard({
         tint.hover,
         "hover:shadow-sm",
       ),
-    selected &&
-      (variant === "card" ? tint.selected : "border-b-royal bg-navy/[0.04]"),
+    selected && (variant === "card" ? tint.selected : "border-b-royal bg-navy/[0.04]"),
   );
 
   if (onClick) {

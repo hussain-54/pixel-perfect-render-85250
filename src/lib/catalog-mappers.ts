@@ -17,16 +17,9 @@ export type CatalogProgramView = {
   tuitionFee: string;
 };
 
-export function mapUniversityWithPrograms(
-  uni: UniversityRow,
-  programs: ProgramRow[],
-): University {
+export function mapUniversityWithPrograms(uni: UniversityRow, programs: ProgramRow[]): University {
   const levels = [
-    ...new Set(
-      programs
-        .map((p) => p.level?.trim())
-        .filter((x): x is string => Boolean(x)),
-    ),
+    ...new Set(programs.map((p) => p.level?.trim()).filter((x): x is string => Boolean(x))),
   ].sort((a, b) => a.localeCompare(b));
   const programNames = programs.map((p) => p.name).filter(Boolean);
   return {

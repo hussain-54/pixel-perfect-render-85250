@@ -51,7 +51,8 @@ export function validateUniversityWrite(
 ): { ok: true; normalized: NormalizedUniversityWrite } | { ok: false; error: string } {
   const name = input.name?.trim() ?? "";
   const country = input.country?.trim() ?? "";
-  if (name.length < 2) return { ok: false, error: "University name is required (min 2 characters)." };
+  if (name.length < 2)
+    return { ok: false, error: "University name is required (min 2 characters)." };
   if (name.length > 200) return { ok: false, error: "University name is too long." };
   if (country.length < 2) return { ok: false, error: "Country is required." };
   if (country.length > 100) return { ok: false, error: "Country is too long." };

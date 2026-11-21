@@ -1,8 +1,5 @@
 import { describe, expect, it } from "vitest";
-import {
-  ADMIN_AUDIT_LOG_LIMIT,
-  mapPortalAuditEventToAdminLog,
-} from "./admin-audit-log";
+import { ADMIN_AUDIT_LOG_LIMIT, mapPortalAuditEventToAdminLog } from "./admin-audit-log";
 import type { PortalAuditEvent } from "@/types/activity-ops";
 
 const sample = (partial: Partial<PortalAuditEvent> = {}): PortalAuditEvent => ({

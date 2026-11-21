@@ -20,11 +20,7 @@ export const STUDENT_SEARCH_COLUMNS = "id, case_id, full_name, phone, destinatio
 
 export function studentSearchOrClause(term: string): string {
   const quoted = `"%${term}%"`;
-  const parts = [
-    `full_name.ilike.${quoted}`,
-    `case_id.ilike.${quoted}`,
-    `phone.ilike.${quoted}`,
-  ];
+  const parts = [`full_name.ilike.${quoted}`, `case_id.ilike.${quoted}`, `phone.ilike.${quoted}`];
   if (UUID_RE.test(term)) parts.push(`id.eq.${term}`);
   return parts.join(",");
 }

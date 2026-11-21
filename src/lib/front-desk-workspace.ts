@@ -337,9 +337,7 @@ export function frontDeskIntakeFocusSearch(input: {
 }
 
 /** Attention kinds that support a Fix / correction CTA (distinct from Open). */
-export function frontDeskAttentionSupportsFix(
-  kind: FrontDeskAttentionItem["kind"],
-): boolean {
+export function frontDeskAttentionSupportsFix(kind: FrontDeskAttentionItem["kind"]): boolean {
   return kind === "fee_correction" || kind === "fee_rejected";
 }
 
@@ -354,12 +352,7 @@ export function frontDeskFeeFocusAnchorId(_input?: {
   return "fd-signup-fee-panel";
 }
 
-export type FrontDeskFeeWorkflowStepId =
-  | "voucher"
-  | "claim"
-  | "proof"
-  | "finance"
-  | "final";
+export type FrontDeskFeeWorkflowStepId = "voucher" | "claim" | "proof" | "finance" | "final";
 
 export type FrontDeskFeeWorkflowStep = {
   id: FrontDeskFeeWorkflowStepId;

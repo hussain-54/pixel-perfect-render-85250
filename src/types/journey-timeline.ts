@@ -1,13 +1,7 @@
 /** Chronological journey timeline derived from persisted workflow records. */
 
 export type TimelineItemStatus =
-  | "completed"
-  | "current"
-  | "pending"
-  | "claimed"
-  | "rejected"
-  | "returned"
-  | "overdue";
+  "completed" | "current" | "pending" | "claimed" | "rejected" | "returned" | "overdue";
 
 export type TimelineCategory =
   | "registration"

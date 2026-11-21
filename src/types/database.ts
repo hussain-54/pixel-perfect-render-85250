@@ -34,10 +34,7 @@ export type DocumentStatusDb = "pending_review" | "approved" | "rejected" | "nee
 export type DocumentReviewAction =
   "approved" | "rejected" | "needs_correction" | "reupload_requested";
 export type ScholarshipStatusDb = "draft" | "published" | "archived";
-export type ScholarshipFundingTypeDb =
-  | "fully_funded"
-  | "partial_funding"
-  | "tuition_waiver";
+export type ScholarshipFundingTypeDb = "fully_funded" | "partial_funding" | "tuition_waiver";
 export type OfferType = "conditional" | "unconditional";
 export type OfferStatus =
   "awaiting_student" | "conditions_pending" | "accepted" | "declined" | "expired";
@@ -1832,8 +1829,7 @@ export type TaskRow = Tables<"tasks">;
 export type AppointmentRow = Tables<"appointments">;
 export type SignupFeePaymentRow = Tables<"signup_fee_payments">;
 export type CounsellingAgreementRow = Tables<"counselling_agreements">;
-export type CounsellingFeeVerificationRequestRow =
-  Tables<"counselling_fee_verification_requests">;
+export type CounsellingFeeVerificationRequestRow = Tables<"counselling_fee_verification_requests">;
 export type AdmissionHandoverRow = Tables<"admission_handovers">;
 export type UniversityFeeObligationRow = Tables<"university_fee_obligations">;
 export type InternalNoteRow = Tables<"internal_notes">;

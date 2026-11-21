@@ -646,8 +646,8 @@ export function AdminAccountManagement({ focus = "all" }: { focus?: AccountManag
                       <span className="font-medium text-foreground">
                         {deleteTarget?.fullName || "this user"}
                       </span>{" "}
-                      (<span className="font-medium text-foreground">{deleteTarget?.email}</span>
-                      . This may be irreversible.
+                      (<span className="font-medium text-foreground">{deleteTarget?.email}</span>.
+                      This may be irreversible.
                     </p>
                     <p>
                       Student CRM rows, applications, fees, documents, and audit history are not
@@ -656,7 +656,9 @@ export function AdminAccountManagement({ focus = "all" }: { focus?: AccountManag
                       blocked.
                     </p>
                     <div>
-                      <Label htmlFor="delete-confirm-email">Type the user&apos;s email to confirm</Label>
+                      <Label htmlFor="delete-confirm-email">
+                        Type the user&apos;s email to confirm
+                      </Label>
                       <Input
                         id="delete-confirm-email"
                         className="mt-1.5"

@@ -4,11 +4,7 @@
  * Production: public.audit_events + write_audit_event() + reject_audit_mutation triggers.
  */
 import { auditLogs, applications, documents, students } from "@/data/mock";
-import type {
-  ActivityTone,
-  AuditActionType,
-  PortalAuditEvent,
-} from "@/types/activity-ops";
+import type { ActivityTone, AuditActionType, PortalAuditEvent } from "@/types/activity-ops";
 
 const store: PortalAuditEvent[] = [];
 let seeded = false;
@@ -98,8 +94,7 @@ export type AppendAuditInput = {
 };
 
 function insertEvent(input: AppendAuditInput): PortalAuditEvent {
-  const id =
-    input.id ?? `al-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  const id = input.id ?? `al-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
   if (store.some((e) => e.id === id)) {
     throw new Error("Audit event id already exists (append-only).");
   }
@@ -167,7 +162,7 @@ function ensureAuditSeeded() {
 
   const legacySnapshot = auditLogs.map((row) => ({ ...row }));
   for (const row of legacySnapshot) {
-    const createdAt = `${row.date}T${(row.time.length === 5 ? `${row.time}:00` : row.time)}.000Z`;
+    const createdAt = `${row.date}T${row.time.length === 5 ? `${row.time}:00` : row.time}.000Z`;
     const app = applications.find((a) => a.id === row.entityId);
     const doc = documents.find((d) => d.id === row.entityId);
     const st = students.find((s) => s.caseId === row.entityId || s.id === row.entityId);
@@ -216,7 +211,11 @@ function ensureAuditSeeded() {
 
   for (const app of applications) {
     if (!app.appliedOn || app.appliedOn === "—" || app.appliedOn === "-") continue;
-    if (app.status !== "Submitted" && app.status !== "Offer Received" && app.status !== "Rejected") {
+    if (
+      app.status !== "Submitted" &&
+      app.status !== "Offer Received" &&
+      app.status !== "Rejected"
+    ) {
       continue;
     }
     const st = students.find((s) => s.id === app.studentId);

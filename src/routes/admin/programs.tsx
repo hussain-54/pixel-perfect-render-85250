@@ -202,9 +202,7 @@ function AdminPrograms() {
                 <Button
                   size="sm"
                   variant="navy"
-                  disabled={
-                    !form.universityId || !form.name.trim() || saveM.isPending
-                  }
+                  disabled={!form.universityId || !form.name.trim() || saveM.isPending}
                   onClick={() => {
                     setMsg(null);
                     saveM.mutate();

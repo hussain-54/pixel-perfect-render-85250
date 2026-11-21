@@ -20,11 +20,7 @@ function styleClasses(token: string) {
   }
 }
 
-export function AnnouncementBar({
-  announcements,
-}: {
-  announcements: CmsPublicAnnouncement[];
-}) {
+export function AnnouncementBar({ announcements }: { announcements: CmsPublicAnnouncement[] }) {
   const active = useMemo(
     () => [...announcements].sort((a, b) => a.sortOrder - b.sortOrder),
     [announcements],
@@ -71,7 +67,12 @@ export function AnnouncementBar({
   };
 
   return (
-    <div className={cn("relative z-[60] px-4 py-2 text-center text-sm", styleClasses(current.styleToken))}>
+    <div
+      className={cn(
+        "relative z-[60] px-4 py-2 text-center text-sm",
+        styleClasses(current.styleToken),
+      )}
+    >
       <p className="mx-auto max-w-4xl pr-8">
         <span>{current.body}</span>
         {current.ctaLabel && current.ctaHref ? (

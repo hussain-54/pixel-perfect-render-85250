@@ -241,7 +241,7 @@ export function Header({ cmsHeader, cmsNav }: HeaderProps = {}) {
         id={mobileDrawerId}
         open={mobileOpen}
         onClose={() => setMobileOpen(false)}
-        cmsNav={cmsNav}
+        {...(cmsNav ? { cmsNav } : {})}
       />
     </>
   );

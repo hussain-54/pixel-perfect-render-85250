@@ -1,12 +1,7 @@
 ﻿import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import {
-  CheckCircle2,
-  Circle,
-  CircleDashed,
-  AlertCircle,
-} from "lucide-react";
+import { CheckCircle2, Circle, CircleDashed, AlertCircle } from "lucide-react";
 import {
   EmptyState,
   ErrorState,
@@ -297,7 +292,9 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
     onSuccess: async () => {
       const continueNext = saveContinueAfter;
       setSaveContinueAfter(false);
-      setSaveMsg(continueNext ? "Assessment saved. Continue with the next section." : "Assessment saved.");
+      setSaveMsg(
+        continueNext ? "Assessment saved. Continue with the next section." : "Assessment saved.",
+      );
       setFieldErrors({});
       await invalidateProfile();
       if (continueNext) {
@@ -960,9 +957,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                 >
                   <summary className="cursor-pointer font-medium text-navy">
                     Fee request: {lifecycleSnap.feeRequest.status.replaceAll("_", " ")}
-                    {lifecycleSnap.feeRequest.status === "cancelled"
-                      ? " — correction needed"
-                      : ""}
+                    {lifecycleSnap.feeRequest.status === "cancelled" ? " — correction needed" : ""}
                   </summary>
                   <p className="mt-1">{lifecycleSnap.feeRequest.summary || "—"}</p>
                   {lifecycleSnap.feeRequest.status === "cancelled" ? (
@@ -1086,7 +1081,11 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                       incompleteAnchors.has("assess-section-academic") ? "true" : undefined
                     }
                   >
-                    <Field label="Last qualification" optional hint="Highest completed qualification">
+                    <Field
+                      label="Last qualification"
+                      optional
+                      hint="Highest completed qualification"
+                    >
                       <CatalogOrCustom
                         value={form.lastQualification}
                         other={qualificationOther}
@@ -1271,7 +1270,9 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                             <div key={item.id} className="border-b border-border pb-3">
                               <p className="font-semibold text-navy">{item.universityName}</p>
                               <p className="text-sm text-muted-foreground">{item.programName}</p>
-                              <p className="mt-2 text-xs text-navy">{item.suitabilityNote || "—"}</p>
+                              <p className="mt-2 text-xs text-navy">
+                                {item.suitabilityNote || "—"}
+                              </p>
                             </div>
                           ))}
                         </div>
@@ -1496,9 +1497,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                               type="button"
                               size="sm"
                               variant={consentChoice === true ? "navy" : "outline"}
-                              className={cn(
-                                consentChoice === true && "ring-2 ring-navy/20",
-                              )}
+                              className={cn(consentChoice === true && "ring-2 ring-navy/20")}
                               disabled={lifecycleBusy}
                               onClick={() => {
                                 setConsentChoice(true);
@@ -1526,7 +1525,9 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                             </Button>
                           </div>
                           {consentChoice === null ? (
-                            <p className="mt-1.5 text-xs text-amber-800">Required — select Yes or No</p>
+                            <p className="mt-1.5 text-xs text-amber-800">
+                              Required — select Yes or No
+                            </p>
                           ) : null}
                         </div>
                         <Field label="Session note" optional>
@@ -1705,7 +1706,9 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
                     Workflow actions
                   </Button>
                   {assessmentDirty ? (
-                    <InlineFeedback kind="warn">You have unsaved assessment changes.</InlineFeedback>
+                    <InlineFeedback kind="warn">
+                      You have unsaved assessment changes.
+                    </InlineFeedback>
                   ) : null}
                   {saveMsg ? (
                     <InlineFeedback

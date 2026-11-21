@@ -29,7 +29,10 @@ function AdminAuditLogs() {
       ) : auditQ.isError ? (
         <ErrorState body={portalErrorMessage(auditQ.error)} />
       ) : !auditQ.data?.length ? (
-        <EmptyState title="No audit events" body="No activity events are visible for this account." />
+        <EmptyState
+          title="No audit events"
+          body="No activity events are visible for this account."
+        />
       ) : (
         <TableWrap>
           <thead>

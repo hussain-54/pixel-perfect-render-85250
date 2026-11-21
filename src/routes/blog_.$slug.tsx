@@ -98,7 +98,7 @@ function BlogArticlePage() {
       listPublishedBlogPosts({
         page: 1,
         pageSize: 4,
-        category: article.categorySlug || undefined,
+        ...(article.categorySlug ? { category: article.categorySlug } : {}),
       }),
   });
 
@@ -112,7 +112,7 @@ function BlogArticlePage() {
             Home
           </Link>
           <span className="mx-1.5">/</span>
-          <Link to="/blog" className="hover:text-royal">
+          <Link to="/blog" search={{ category: "", q: "", page: 1 }} className="hover:text-royal">
             Blog
           </Link>
           <span className="mx-1.5">/</span>
@@ -235,7 +235,11 @@ function BlogArticlePage() {
           >
             <Link2 className="h-4 w-4" />
           </button>
-          <Link to="/blog" className="ml-auto text-sm font-semibold text-royal hover:underline">
+          <Link
+            to="/blog"
+            search={{ category: "", q: "", page: 1 }}
+            className="ml-auto text-sm font-semibold text-royal hover:underline"
+          >
             ← Back to blog
           </Link>
         </div>

@@ -62,11 +62,7 @@ export function pageHead({
 }: PageSeoInput) {
   const url = absoluteUrl(path);
   const ogImage =
-    image && image.startsWith("http")
-      ? image
-      : image
-        ? absoluteUrl(image)
-        : SITE_OG_IMAGE;
+    image && image.startsWith("http") ? image : image ? absoluteUrl(image) : SITE_OG_IMAGE;
   return {
     meta: [
       { title },

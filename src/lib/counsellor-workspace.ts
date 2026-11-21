@@ -478,7 +478,8 @@ export function studentMatchesKpiFilter(
     const hand = (snap.handoverStatus ?? "").toLowerCase();
     return fee === "open" || fee === "in_progress" || hand === "submitted";
   }
-  if (filter === "action_required") return studentNeedsCounsellorAction(snap as CounsellorWorkbenchStudentSnap);
+  if (filter === "action_required")
+    return studentNeedsCounsellorAction(snap as CounsellorWorkbenchStudentSnap);
   if (filter === "apps_in_progress") return false; // apps live on applications route, not student snaps
   return true;
 }
@@ -497,7 +498,11 @@ export function attentionMatchesKpiFilter(
   }
   if (filter === "consent_recorded") return false;
   if (filter === "awaiting_response") {
-    return item.kind === "fee" || item.kind === "handover" || /admission|front desk|accounts/i.test(item.title);
+    return (
+      item.kind === "fee" ||
+      item.kind === "handover" ||
+      /admission|front desk|accounts/i.test(item.title)
+    );
   }
   if (filter === "action_required") return true;
   return true;

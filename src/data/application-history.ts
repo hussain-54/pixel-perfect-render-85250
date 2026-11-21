@@ -12,8 +12,7 @@ export function appendStageHistory(row: ApplicationStageHistoryRecord) {
     actorId: row.changedById,
     actorName: row.changedByName,
     action: `Moved stage to "${row.toStage}"`,
-    actionType:
-      row.toStage === "Submitted" ? "application_submitted" : "application_stage_changed",
+    actionType: row.toStage === "Submitted" ? "application_submitted" : "application_stage_changed",
     outcome: row.toStage,
     entityType: "Application",
     entityId: row.applicationId,

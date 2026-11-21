@@ -72,10 +72,7 @@ function SignInPage() {
     return Object.keys(next).length === 0;
   }
 
-  function resolveDestination(
-    role: AppRole,
-    preferred?: PortalHome,
-  ): PortalHome {
+  function resolveDestination(role: AppRole, preferred?: PortalHome): PortalHome {
     if (redirectTo) {
       if (redirectTo.startsWith("/student") && roleCanAccessPortal(role, "student")) {
         return redirectTo as PortalHome;

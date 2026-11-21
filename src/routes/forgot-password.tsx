@@ -61,7 +61,8 @@ function ForgotPasswordPage() {
       footer={
         <p className="text-center text-sm text-muted-foreground">
           <Link
-            to="/sign-in" search={{}}
+            to="/sign-in"
+            search={{}}
             className="font-semibold text-royal transition-colors hover:text-navy"
           >
             ← Back to Sign In
@@ -80,7 +81,9 @@ function ForgotPasswordPage() {
             Check your email for instructions to reset your password.
           </p>
           <Button asChild variant="outline" className="mt-6 h-11 w-full font-semibold">
-            <Link to="/sign-in" search={{}}>Back to Sign In</Link>
+            <Link to="/sign-in" search={{}}>
+              Back to Sign In
+            </Link>
           </Button>
         </div>
       ) : (

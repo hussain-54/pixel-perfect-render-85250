@@ -135,20 +135,16 @@ describe("leaderboard rules", () => {
   });
 
   it("authorizes firm-wide leaderboard for admin/manager only", () => {
-    expect(
-      canViewConsultantLeaderboard({ appRole: "admin", businessRole: "admin" }),
-    ).toBe(true);
-    expect(
-      canViewConsultantLeaderboard({ appRole: "consultant", businessRole: "manager" }),
-    ).toBe(true);
+    expect(canViewConsultantLeaderboard({ appRole: "admin", businessRole: "admin" })).toBe(true);
+    expect(canViewConsultantLeaderboard({ appRole: "consultant", businessRole: "manager" })).toBe(
+      true,
+    );
     expect(
       canViewConsultantLeaderboard({
         appRole: "consultant",
         businessRole: "counsellor_consultant",
       }),
     ).toBe(false);
-    expect(
-      canViewConsultantLeaderboard({ appRole: "student", businessRole: null }),
-    ).toBe(false);
+    expect(canViewConsultantLeaderboard({ appRole: "student", businessRole: null })).toBe(false);
   });
 });

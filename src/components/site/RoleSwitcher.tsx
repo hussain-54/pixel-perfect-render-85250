@@ -34,11 +34,13 @@ export function RoleSwitcher({ current, light = false }: { current: string; ligh
           <Link to="/">Public website</Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
-          <Link to="/sign-in" search={{}}>Sign in with another demo account</Link>
+          <Link to="/sign-in" search={{}}>
+            Sign in with another demo account
+          </Link>
         </DropdownMenuItem>
         <p className="px-2 py-1.5 text-[0.7rem] leading-snug text-muted-foreground">
-          Portal URLs are role-guarded. Use ayesha@, consultant@, or admin@ demo accounts.
-          Admission Team uses a live staff account only.
+          Portal URLs are role-guarded. Use ayesha@, consultant@, or admin@ demo accounts. Admission
+          Team uses a live staff account only.
         </p>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -4,13 +4,14 @@
 
 export const WRITE_AUDIT_EVENT_FN = "write_audit_event";
 
-export const WRITE_AUDIT_GRANTS_MIGRATION =
-  "20261017100000_write_audit_event_execute_grants.sql";
+export const WRITE_AUDIT_GRANTS_MIGRATION = "20261017100000_write_audit_event_execute_grants.sql";
 
 export const WRITE_AUDIT_FN_EXECUTE_ROLES = ["authenticated"] as const;
 export const WRITE_AUDIT_FN_REVOKED_ROLES = ["public", "anon"] as const;
 
-export function assertWriteAuditGrantsSql(sql: string): { ok: true } | { ok: false; error: string } {
+export function assertWriteAuditGrantsSql(
+  sql: string,
+): { ok: true } | { ok: false; error: string } {
   const normalized = sql.toLowerCase();
   if (!normalized.includes("write_audit_event")) {
     return { ok: false, error: "Must target write_audit_event." };

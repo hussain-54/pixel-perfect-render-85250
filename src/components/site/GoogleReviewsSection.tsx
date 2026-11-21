@@ -32,7 +32,10 @@ export function GoogleReviewsSection() {
                 <Star key={i} className="h-5 w-5 fill-current" />
               ))}
             </div>
-            <h3 id="google-reviews-heading" className="mt-3 font-display text-xl font-semibold text-navy">
+            <h3
+              id="google-reviews-heading"
+              className="mt-3 font-display text-xl font-semibold text-navy"
+            >
               Reviews on Google
             </h3>
             {hasVerifiedRating ? (

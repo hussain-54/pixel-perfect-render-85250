@@ -24,10 +24,7 @@ import {
   type BusinessRole,
 } from "@/lib/business-permissions";
 import { rolesAtLeastAdmin } from "@/lib/roles";
-import {
-  businessRoleFromSession,
-  requireModulePermission,
-} from "@/server/staff-access";
+import { businessRoleFromSession, requireModulePermission } from "@/server/staff-access";
 import { loadAuthorizationMatrix } from "@/server/permission-matrix-store";
 
 function toError(error: unknown): never {

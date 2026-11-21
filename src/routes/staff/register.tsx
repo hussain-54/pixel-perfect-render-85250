@@ -16,11 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from "@/components/ui/collapsible";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import {
   INTAKE_DESTINATIONS,
   INTAKE_FEE_PAYMENT_METHODS,
@@ -388,7 +384,10 @@ function FrontDeskRegisterPage() {
     if (form.feeAmount.trim()) {
       const amount = Number(form.feeAmount);
       if (!Number.isFinite(amount) || amount <= 0) {
-        failValidation("Signup fee amount must be a positive number, or leave it blank.", "signup_fee");
+        failValidation(
+          "Signup fee amount must be a positive number, or leave it blank.",
+          "signup_fee",
+        );
         return;
       }
     }
@@ -570,9 +569,7 @@ function FrontDeskRegisterPage() {
         </p>
         <p className="mt-1 text-sm text-navy">
           {progressPct}% ·{" "}
-          {remainingRequired === 0
-            ? "Ready"
-            : `${remainingRequired} required left`}
+          {remainingRequired === 0 ? "Ready" : `${remainingRequired} required left`}
         </p>
         <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-muted">
           <div
@@ -903,9 +900,7 @@ function FrontDeskRegisterPage() {
                     id="inquirySourceOther"
                     className="mt-1 h-9"
                     value={form.inquirySourceOther}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, inquirySourceOther: e.target.value }))
-                    }
+                    onChange={(e) => setForm((f) => ({ ...f, inquirySourceOther: e.target.value }))}
                     disabled={submitting}
                   />
                 </div>
@@ -926,9 +921,7 @@ function FrontDeskRegisterPage() {
                     className="mt-1.5"
                     rows={2}
                     value={form.registrationNotes}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, registrationNotes: e.target.value }))
-                    }
+                    onChange={(e) => setForm((f) => ({ ...f, registrationNotes: e.target.value }))}
                     disabled={submitting}
                   />
                 ) : null}
@@ -1019,9 +1012,7 @@ function FrontDeskRegisterPage() {
               id="counsellor"
               value={form.assignedConsultantId}
               options={counsellorOptions}
-              onChange={(assignedConsultantId) =>
-                setForm((f) => ({ ...f, assignedConsultantId }))
-              }
+              onChange={(assignedConsultantId) => setForm((f) => ({ ...f, assignedConsultantId }))}
               placeholder="Assign later…"
               disabled={submitting}
               allowClear

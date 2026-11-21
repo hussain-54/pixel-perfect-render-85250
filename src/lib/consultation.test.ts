@@ -92,9 +92,9 @@ describe("consultation submit UI (fail-closed)", () => {
   });
 
   it("maps thrown/internal server errors to a safe public message", () => {
-    expect(publicConsultationErrorMessage("503:permission denied for table consultation_requests")).toBe(
-      CONSULTATION_PERSISTENCE_ERROR,
-    );
+    expect(
+      publicConsultationErrorMessage("503:permission denied for table consultation_requests"),
+    ).toBe(CONSULTATION_PERSISTENCE_ERROR);
     expect(publicConsultationErrorMessage("42501: RLS")).toBe(CONSULTATION_PERSISTENCE_ERROR);
     expect(publicConsultationErrorMessage("400:Please enter your full name.")).toBe(
       "Please enter your full name.",

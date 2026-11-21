@@ -440,7 +440,7 @@ export const getCmsDocument = (documentKey: string) =>
 
 export const saveCmsDraft = (data: {
   documentKey: string;
-  draft: unknown;
+  draft: import("@/lib/cms-types").CmsJsonValue;
   expectedDraftVersion?: number;
 }) => withAuth((opts) => portalSaveCmsDraft({ ...opts, data }));
 

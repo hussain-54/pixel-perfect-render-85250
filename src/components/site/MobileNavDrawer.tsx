@@ -46,10 +46,7 @@ export function MobileNavDrawer({
       .map((item) => {
         const base = mainNavigation.find((m) => m.id === item.id);
         if (item.type === "link" || base?.type === "link") {
-          const to =
-            item.href ||
-            (base && base.type === "link" ? base.to : "/") ||
-            "/";
+          const to = item.href || (base && base.type === "link" ? base.to : "/") || "/";
           return {
             id: item.id,
             label: item.label || base?.label || item.id,
@@ -149,7 +146,7 @@ export function MobileNavDrawer({
 
       <div
         ref={panelRef}
-        className="absolute inset-y-0 right-0 flex w-full max-w-[min(100%,24rem)] flex-col border-l border-border bg-white animate-in slide-in-from-right duration-200"
+        className="absolute inset-y-0 right-0 flex w-full max-w-[min(100%,24rem)] flex-col border-l border-border bg-white animate-in slide-in-from-right duration-200 motion-reduce:animate-none motion-reduce:transition-none"
       >
         <div className="flex h-16 shrink-0 items-center justify-between border-b border-border px-4">
           <p id={titleId} className="text-sm font-semibold text-navy">
@@ -359,7 +356,8 @@ export function MobileNavDrawer({
 
           <div className="mt-3 border-t border-border pt-3">
             <Link
-              to="/sign-in" search={{}}
+              to="/sign-in"
+              search={{}}
               onClick={onClose}
               className="flex items-center justify-between rounded-md px-3 py-3 text-[0.95rem] font-semibold text-navy transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >

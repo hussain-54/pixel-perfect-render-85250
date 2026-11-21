@@ -31,10 +31,10 @@ export function serviceRoleProfileRoleUpdateDenied(input: {
 }
 
 /** Build the profile patch Front Desk provisioning may send via service role. */
-export function buildServiceRoleStudentProfilePatch(input: {
+export function buildServiceRoleStudentProfilePatch(input: { email: string; fullName: string }): {
   email: string;
-  fullName: string;
-}): { email: string; full_name: string } {
+  full_name: string;
+} {
   return {
     email: input.email.trim().toLowerCase(),
     full_name: input.fullName.trim() || input.email.trim().toLowerCase(),

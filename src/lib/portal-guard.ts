@@ -101,10 +101,15 @@ export function requirePortalAccess(portal: PortalKind) {
     }
 
     // Demo / cookie fallback only when no JWT session was established.
+    // Unsigned supabase cookie alone must not authorize portal routing (spoofable);
+    // live supabase sessions require a Bearer JWT path above (or Bearer on this call).
     if (!session) {
       try {
         const headers = await bearerHeaders();
         session = await getPortalSession(headers ? { headers } : undefined);
+        if (session?.source === "supabase" && !headers) {
+          session = null;
+        }
       } catch {
         session = null;
       }

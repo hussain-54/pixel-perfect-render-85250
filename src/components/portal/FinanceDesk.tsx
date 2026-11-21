@@ -41,6 +41,33 @@ type Props = {
   basePath: "/admin/banking" | "/staff/banking";
 };
 
+type EntryFormState = {
+  kind: string;
+  title: string;
+  date: string;
+  amount: string;
+  billId?: string;
+  fund?: string;
+  count?: string;
+  principal?: string;
+  interest?: string;
+  carrying?: string;
+  proceeds?: string;
+  withheld?: string;
+  net?: string;
+  number?: string;
+  parentId?: string;
+  reference?: string;
+  department?: string;
+};
+
+const emptyEntryForm = (kind: string): EntryFormState => ({
+  kind,
+  title: "",
+  date: new Date().toISOString().slice(0, 10),
+  amount: "",
+});
+
 export function FinanceDesk({ tab, onTabChange, staffShell = false, basePath }: Props) {
   const queryClient = useQueryClient();
   const deskQ = useQuery({
@@ -474,14 +501,10 @@ function EntryForm({
   onSubmit: (body: Parameters<typeof saveFinanceDeskEntry>[0]) => void;
 }) {
   const options = FINANCE_DESK_KIND_OPTIONS[tab] ?? ["capital"];
-  const [form, setForm] = useState<Record<string, string>>({
-    kind: options[0] ?? "capital",
-    title: "",
-    date: new Date().toISOString().slice(0, 10),
-    amount: "",
-  });
+  const [form, setForm] = useState<EntryFormState>(() => emptyEntryForm(options[0] ?? "capital"));
   const kind = form.kind || options[0] || "capital";
-  const set = (key: string, value: string) => setForm((prev) => ({ ...prev, [key]: value }));
+  const set = <K extends keyof EntryFormState>(key: K, value: EntryFormState[K]) =>
+    setForm((prev) => ({ ...prev, [key]: value }));
 
   const openPayOrders = useMemo(
     () =>
@@ -504,8 +527,8 @@ function EntryForm({
           const body: Parameters<typeof saveFinanceDeskEntry>[0] = {
             kind,
             title: form.title || "",
-            entryDate: form.date,
             amount: Number(form.amount || 0),
+            entryDate: form.date,
           };
           if (form.billId) body.billId = form.billId;
           if (form.fund) body.fund = form.fund;
@@ -521,12 +544,7 @@ function EntryForm({
           if (form.reference) body.reference = form.reference;
           if (form.department) body.department = form.department;
           onSubmit(body);
-          setForm({
-            kind: options[0] ?? "capital",
-            title: "",
-            date: new Date().toISOString().slice(0, 10),
-            amount: "",
-          });
+          setForm(emptyEntryForm(options[0] ?? "capital"));
         }}
       >
         <div className="space-y-1">

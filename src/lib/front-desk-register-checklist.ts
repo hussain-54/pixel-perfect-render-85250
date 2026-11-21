@@ -11,11 +11,7 @@ import {
 export type RegisterChecklistStatus = "complete" | "pending" | "optional";
 
 export type RegisterChecklistSectionId =
-  | "contact"
-  | "preferences"
-  | "signup_fee"
-  | "counsellor"
-  | "final";
+  "contact" | "preferences" | "signup_fee" | "counsellor" | "final";
 
 export type RegisterFormSnapshot = {
   fullName: string;
@@ -61,9 +57,7 @@ export function contactRequiredComplete(form: RegisterFormSnapshot): {
   const emailOk = isValidIntakeEmail(form.email);
   const phoneOk = isValidIntakePhone(form.phone);
   const whatsappOk =
-    form.whatsappSameAsPhone ||
-    !form.whatsapp.trim() ||
-    isValidIntakePhone(form.whatsapp);
+    form.whatsappSameAsPhone || !form.whatsapp.trim() || isValidIntakePhone(form.whatsapp);
   const cityOk = catalogOk(form.city, form.cityOther, false);
   // City is optional — only name/email/phone are required for section completeness.
   const required = [nameOk, emailOk, phoneOk && whatsappOk];
@@ -103,9 +97,7 @@ export function counsellorSectionStatus(form: RegisterFormSnapshot): RegisterChe
   return form.assignedConsultantId.trim() ? "complete" : "optional";
 }
 
-export function buildRegisterChecklist(
-  form: RegisterFormSnapshot,
-): RegisterChecklistSection[] {
+export function buildRegisterChecklist(form: RegisterFormSnapshot): RegisterChecklistSection[] {
   const contact = contactRequiredComplete(form);
   const prefs = preferencesRequiredComplete(form);
   const fee = signupFeeSectionStatus(form);
@@ -164,9 +156,5 @@ export function registerFormCanSubmit(form: RegisterFormSnapshot): boolean {
 export function countRequiredRemaining(form: RegisterFormSnapshot): number {
   const contact = contactRequiredComplete(form);
   const prefs = preferencesRequiredComplete(form);
-  return (
-    contact.total -
-    contact.complete +
-    (prefs.total - prefs.complete)
-  );
+  return contact.total - contact.complete + (prefs.total - prefs.complete);
 }

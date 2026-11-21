@@ -16,10 +16,7 @@ import {
   WORKSPACE_BRANDING_BY_BUSINESS_ROLE,
 } from "./workspace-branding";
 
-const EXPECTED_TITLES: Record<
-  Exclude<BusinessRole, "student_portal">,
-  string
-> = {
+const EXPECTED_TITLES: Record<Exclude<BusinessRole, "student_portal">, string> = {
   front_desk_student_affairs: "Front Desk & Student Affairs",
   counsellor_consultant: "Counselling & Student Guidance",
   admission_team: "Admissions & Application Management",

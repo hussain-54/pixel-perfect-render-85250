@@ -61,12 +61,12 @@ describe("mapVerifySignupFeeRpcError (pure — not a DB integration test)", () =
   });
 
   it("maps reconcile terminal-fee and authorization errors", () => {
-    expect(mapVerifySignupFeeRpcError("fee is not in a terminal verified/waived/rejected state").status).toBe(
-      400,
-    );
-    expect(mapVerifySignupFeeRpcError("not authorized to reconcile fee verification requests").status).toBe(
-      403,
-    );
+    expect(
+      mapVerifySignupFeeRpcError("fee is not in a terminal verified/waived/rejected state").status,
+    ).toBe(400);
+    expect(
+      mapVerifySignupFeeRpcError("not authorized to reconcile fee verification requests").status,
+    ).toBe(403);
   });
 
   it("does not forward raw unexpected SQL details", () => {

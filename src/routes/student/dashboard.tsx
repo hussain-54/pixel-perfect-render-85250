@@ -1,5 +1,6 @@
+import { useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Calendar, FileWarning, GraduationCap } from "lucide-react";
 import { JourneyTracker } from "@/components/JourneyTracker";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -14,6 +15,7 @@ import {
   EmptyState,
   ErrorState,
   LoadingRows,
+  portalErrorMessage,
 } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { useData } from "@/lib/useData";
@@ -38,6 +40,7 @@ import {
   getSignupFeeStatus,
   getNotifications,
   lookupConsultant,
+  claimOwnStudentRecord,
 } from "@/services";
 
 export const Route = createFileRoute("/student/dashboard")({
@@ -45,8 +48,20 @@ export const Route = createFileRoute("/student/dashboard")({
 });
 
 function StudentDashboard() {
+  const queryClient = useQueryClient();
+  const [claimMsg, setClaimMsg] = useState<string | null>(null);
   const studentQ = useData(["student", "current"], getCurrentStudent);
   const studentId = studentQ.data?.id;
+  const claimM = useMutation({
+    mutationFn: () => claimOwnStudentRecord(),
+    onSuccess: async () => {
+      setClaimMsg(null);
+      await queryClient.invalidateQueries({ queryKey: ["student", "current"] });
+    },
+    onError: (err) => {
+      setClaimMsg(portalErrorMessage(err));
+    },
+  });
 
   const sid = studentId ?? "";
   const apptsQ = useData(["student", sid, "appts"], () =>
@@ -93,7 +108,27 @@ function StudentDashboard() {
       <PageLoadState title="Student dashboard">
         <EmptyState
           title="Profile not found"
-          body="No student profile is linked to this account. Ask Front Desk to register you, or claim your record if you already have one."
+          body="No student profile is linked to this account. Ask Front Desk to register you, or try linking your record if Front Desk already created one with your email."
+          action={
+            <div className="flex flex-col items-center gap-2">
+              <Button
+                type="button"
+                size="sm"
+                disabled={claimM.isPending}
+                onClick={() => {
+                  setClaimMsg(null);
+                  claimM.mutate();
+                }}
+              >
+                {claimM.isPending ? "Linking…" : "Try link my record"}
+              </Button>
+              {claimMsg ? (
+                <p className="max-w-sm text-sm text-danger" role="alert">
+                  {claimMsg}
+                </p>
+              ) : null}
+            </div>
+          }
         />
       </PageLoadState>
     );

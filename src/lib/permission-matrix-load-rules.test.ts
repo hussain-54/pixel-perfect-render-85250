@@ -66,7 +66,18 @@ describe("authorization matrix fail-closed rules", () => {
 });
 
 describe("requireModulePermission unavailable fail-closed (demo path still works)", () => {
-  it("allows demo session with configured business role", async () => {
+  it("allows demo counsellor session with configured business role (non-admission)", async () => {
+    const session: TrustedSession = {
+      email: "a@example.com",
+      source: "demo",
+      userId: "u1",
+      role: "consultant",
+      businessRole: "counsellor_consultant",
+    };
+    await expect(requireModulePermission(session, "counselling", 2)).resolves.toBeUndefined();
+  });
+
+  it("rejects demo Admission Team (live Supabase required)", async () => {
     const session: TrustedSession = {
       email: "a@example.com",
       source: "demo",
@@ -74,7 +85,9 @@ describe("requireModulePermission unavailable fail-closed (demo path still works
       role: "consultant",
       businessRole: "admission_team",
     };
-    await expect(requireModulePermission(session, "admissions", 2)).resolves.toBeUndefined();
+    await expect(requireModulePermission(session, "admissions", 2)).rejects.toThrow(
+      /live staff sign-in|Demo or mock Admission/i,
+    );
   });
 
   it("surfaces AuthError for unconfigured role on demo", async () => {

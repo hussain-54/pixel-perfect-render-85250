@@ -32,34 +32,51 @@ export function scholarshipsMutateFnAllowsBusinessRole(role: string | null | und
 /**
  * Static checks on migration SQL text (regression against accidental re-grant to anon).
  */
-export function assertScholarshipsMutateGrantsSql(sql: string): {
-  ok: true;
-} | {
-  ok: false;
-  error: string;
-} {
+export function assertScholarshipsMutateGrantsSql(sql: string):
+  | {
+      ok: true;
+    }
+  | {
+      ok: false;
+      error: string;
+    } {
   const normalized = sql.toLowerCase();
   if (!normalized.includes("can_mutate_scholarships_catalog")) {
     return { ok: false, error: "Migration must target can_mutate_scholarships_catalog." };
   }
-  if (!/revoke\s+all\s+on\s+function\s+public\.can_mutate_scholarships_catalog\s*\(\s*\)\s+from\s+public/.test(normalized)) {
+  if (
+    !/revoke\s+all\s+on\s+function\s+public\.can_mutate_scholarships_catalog\s*\(\s*\)\s+from\s+public/.test(
+      normalized,
+    )
+  ) {
     return { ok: false, error: "Must revoke ALL/EXECUTE from PUBLIC." };
   }
-  if (!/revoke\s+all\s+on\s+function\s+public\.can_mutate_scholarships_catalog\s*\(\s*\)\s+from\s+anon/.test(normalized)) {
+  if (
+    !/revoke\s+all\s+on\s+function\s+public\.can_mutate_scholarships_catalog\s*\(\s*\)\s+from\s+anon/.test(
+      normalized,
+    )
+  ) {
     return { ok: false, error: "Must revoke ALL/EXECUTE from anon." };
   }
-  if (!/grant\s+execute\s+on\s+function\s+public\.can_mutate_scholarships_catalog\s*\(\s*\)\s+to\s+authenticated/.test(normalized)) {
+  if (
+    !/grant\s+execute\s+on\s+function\s+public\.can_mutate_scholarships_catalog\s*\(\s*\)\s+to\s+authenticated/.test(
+      normalized,
+    )
+  ) {
     return { ok: false, error: "Must grant EXECUTE to authenticated." };
   }
   // Must not re-open anon after revoke.
-  const grantAnon = /grant\s+execute\s+on\s+function\s+public\.can_mutate_scholarships_catalog\s*\(\s*\)\s+to\s+anon/.test(
-    normalized,
-  );
+  const grantAnon =
+    /grant\s+execute\s+on\s+function\s+public\.can_mutate_scholarships_catalog\s*\(\s*\)\s+to\s+anon/.test(
+      normalized,
+    );
   if (grantAnon) {
     return { ok: false, error: "Must not GRANT EXECUTE to anon." };
   }
   // Do not rewrite function body / RLS in this grants-only migration.
-  if (/create\s+or\s+replace\s+function\s+public\.can_mutate_scholarships_catalog/.test(normalized)) {
+  if (
+    /create\s+or\s+replace\s+function\s+public\.can_mutate_scholarships_catalog/.test(normalized)
+  ) {
     return { ok: false, error: "Grants migration must not replace function body." };
   }
   if (/create\s+policy\s+scholarships_(insert|update)/.test(normalized)) {

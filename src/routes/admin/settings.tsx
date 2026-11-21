@@ -148,8 +148,8 @@ function AdminSettings() {
   const payload = settingsQ.data;
   const readOnlyHint = !canMutate
     ? payload?.schemaReady === false
-      ? payload.note ??
-        "Settings storage is not ready. An administrator must apply the organization_settings migration."
+      ? (payload.note ??
+        "Settings storage is not ready. An administrator must apply the organization_settings migration.")
       : "You can view these settings but do not have permission to change them."
     : null;
 

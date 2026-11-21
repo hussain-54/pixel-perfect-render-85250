@@ -278,6 +278,15 @@ export async function signInWithPassword(options: {
           data: { accessToken: data.session.access_token },
         });
         const role = established.role;
+        // Best-effort profile↔student link for students (same as sign-up path).
+        if (role === "student") {
+          try {
+            const { claimOwnStudentRecord } = await import("@/services");
+            await claimOwnStudentRecord();
+          } catch {
+            /* claim retries on first portalGetCurrentStudent */
+          }
+        }
         // Optional password change remains available in-portal; never block entry.
         return {
           ok: true,

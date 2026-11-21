@@ -83,7 +83,7 @@ export function resolveConsultationReference(preferred?: string | null): string 
  */
 export function publicConsultationErrorMessage(raw: unknown): string {
   if (typeof raw !== "string" || !raw.trim()) return CONSULTATION_PERSISTENCE_ERROR;
-  let msg = raw.trim().replace(/^\d{3}:\s*/, "");
+  const msg = raw.trim().replace(/^\d{3}:\s*/, "");
   if (
     /42501|PGRST|permission denied|row-level security|schema cache|does not exist|postgres|sqlstate|stack|supabase/i.test(
       msg,

@@ -1,7 +1,10 @@
 import { DEADLINE_ALERT_DAYS, DOCUMENT_EXPIRY_ALERT_DAYS, TASK_TIMEZONE } from "@/types/tasks-ops";
 
 /** Calendar day key (yyyy-mm-dd) in the portal timezone. */
-export function dayKeyInPortalTz(input: string | Date | null | undefined, timeZone = TASK_TIMEZONE): string | null {
+export function dayKeyInPortalTz(
+  input: string | Date | null | undefined,
+  timeZone = TASK_TIMEZONE,
+): string | null {
   if (!input) return null;
   const d = typeof input === "string" ? new Date(input) : input;
   if (Number.isNaN(d.getTime())) return null;
@@ -35,7 +38,10 @@ export function weekRangeKeys(timeZone = TASK_TIMEZONE): { start: string; end: s
   };
 }
 
-export function daysUntilDateKey(dateKey: string | null | undefined, timeZone = TASK_TIMEZONE): number | null {
+export function daysUntilDateKey(
+  dateKey: string | null | undefined,
+  timeZone = TASK_TIMEZONE,
+): number | null {
   if (!dateKey || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) return null;
   const today = todayKey(timeZone)!;
   const t0 = Date.parse(`${today}T12:00:00Z`);
@@ -44,7 +50,10 @@ export function daysUntilDateKey(dateKey: string | null | undefined, timeZone = 
   return Math.round((t1 - t0) / 86_400_000);
 }
 
-export function isWithinAlertWindow(dateKey: string | null | undefined, windowDays: number): boolean {
+export function isWithinAlertWindow(
+  dateKey: string | null | undefined,
+  windowDays: number,
+): boolean {
   const left = daysUntilDateKey(dateKey);
   return left !== null && left >= 0 && left <= windowDays;
 }

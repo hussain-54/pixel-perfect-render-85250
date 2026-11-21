@@ -16,15 +16,7 @@ export type IntakeFilterId =
   | "needs_attention";
 
 export type IntakeFilterTone =
-  | "slate"
-  | "blue"
-  | "purple"
-  | "amber"
-  | "orange"
-  | "yellow"
-  | "green"
-  | "teal"
-  | "red";
+  "slate" | "blue" | "purple" | "amber" | "orange" | "yellow" | "green" | "teal" | "red";
 
 export type IntakeFilterDefinition = {
   id: IntakeFilterId;
@@ -112,9 +104,10 @@ export function countIntakeStatusFilters(input: {
     intakeRows: input.rows as never,
     feeRequests: (input.feeRequests ?? []) as never,
   });
-  const counts = Object.fromEntries(
-    INTAKE_STATUS_FILTERS.map((f) => [f.id, 0]),
-  ) as Record<IntakeFilterId, number>;
+  const counts = Object.fromEntries(INTAKE_STATUS_FILTERS.map((f) => [f.id, 0])) as Record<
+    IntakeFilterId,
+    number
+  >;
 
   for (const row of input.rows) {
     for (const def of INTAKE_STATUS_FILTERS) {

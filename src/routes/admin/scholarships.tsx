@@ -18,11 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { ScholarshipListFilters } from "@/lib/scholarship-rules";
 import { validateScholarshipWrite } from "@/lib/scholarship-rules";
-import {
-  listScholarshipsAdmin,
-  setScholarshipStatus,
-  upsertScholarship,
-} from "@/services";
+import { listScholarshipsAdmin, setScholarshipStatus, upsertScholarship } from "@/services";
 import type { FundingType, Scholarship, ScholarshipStatus } from "@/types";
 
 export const Route = createFileRoute("/admin/scholarships")({
@@ -71,8 +67,7 @@ function AdminScholarships() {
     staleTime: 15_000,
   });
 
-  const invalidate = () =>
-    queryClient.invalidateQueries({ queryKey: ["admin", "scholarships"] });
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin", "scholarships"] });
 
   const saveM = useMutation({
     mutationFn: () => {
@@ -119,8 +114,7 @@ function AdminScholarships() {
   });
 
   const statusM = useMutation({
-    mutationFn: (input: { id: string; status: ScholarshipStatus }) =>
-      setScholarshipStatus(input),
+    mutationFn: (input: { id: string; status: ScholarshipStatus }) => setScholarshipStatus(input),
     onSuccess: async (_res, vars) => {
       setMsg(`Scholarship marked ${vars.status}.`);
       await invalidate();
@@ -189,7 +183,9 @@ function AdminScholarships() {
       ) : null}
 
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
-        <Panel title={data.canMutate ? "Create / update scholarship" : "Scholarship form (view only)"}>
+        <Panel
+          title={data.canMutate ? "Create / update scholarship" : "Scholarship form (view only)"}
+        >
           <div className="grid gap-2 text-sm sm:grid-cols-2">
             <Input
               className="sm:col-span-2"
@@ -226,9 +222,7 @@ function AdminScholarships() {
               className="h-9 rounded-md border border-border bg-background px-2"
               value={form.funding}
               disabled={!data.canMutate}
-              onChange={(e) =>
-                setForm((f) => ({ ...f, funding: e.target.value as FundingType }))
-              }
+              onChange={(e) => setForm((f) => ({ ...f, funding: e.target.value as FundingType }))}
             >
               <option value="Fully Funded">Fully Funded</option>
               <option value="Partial Funding">Partial Funding</option>
@@ -304,11 +298,7 @@ function AdminScholarships() {
                   Save scholarship
                 </Button>
                 {form.id ? (
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => setForm(emptyForm)}
-                  >
+                  <Button size="sm" variant="outline" onClick={() => setForm(emptyForm)}>
                     Clear form
                   </Button>
                 ) : null}
@@ -420,9 +410,7 @@ function AdminScholarships() {
                         disabled={statusM.isPending}
                         onClick={() => {
                           if (
-                            !window.confirm(
-                              `Archive “${s.name}”? It will leave the public site.`,
-                            )
+                            !window.confirm(`Archive “${s.name}”? It will leave the public site.`)
                           ) {
                             return;
                           }

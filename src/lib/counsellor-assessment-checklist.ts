@@ -6,11 +6,7 @@ import type { AssessmentSaveInput } from "@/types/student-profile";
 import { isEligibilityOutcome } from "@/lib/counsellor-handover-rules";
 
 export type AssessmentSectionStatus =
-  | "not_started"
-  | "in_progress"
-  | "completed"
-  | "needs_review"
-  | "optional";
+  "not_started" | "in_progress" | "completed" | "needs_review" | "optional";
 
 export type AssessmentChecklistSectionId =
   | "student_info"
@@ -54,12 +50,7 @@ function filled(value: string | number | null | undefined): boolean {
 }
 
 function academicStatus(form: AssessmentSaveInput): AssessmentSectionStatus {
-  const fields = [
-    form.lastQualification,
-    form.marksCgpa,
-    form.educationGap,
-    form.workExperience,
-  ];
+  const fields = [form.lastQualification, form.marksCgpa, form.educationGap, form.workExperience];
   const n = fields.filter((f) => filled(f)).length;
   if (n === 0) return "not_started";
   if (n >= 2) return "completed";

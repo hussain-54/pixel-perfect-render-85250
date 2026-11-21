@@ -743,10 +743,7 @@ async function loadAccountLinkCounts(
 ): Promise<AccountLinkCounts> {
   // Use only columns present in Database typings (avoid untyped migration-only fields).
   const [linkedStudent, assigned, apps, docs, audits] = await Promise.all([
-    admin
-      .from("students")
-      .select("id", { count: "exact", head: true })
-      .eq("profile_id", userId),
+    admin.from("students").select("id", { count: "exact", head: true }).eq("profile_id", userId),
     admin
       .from("students")
       .select("id", { count: "exact", head: true })
@@ -759,10 +756,7 @@ async function loadAccountLinkCounts(
       .from("document_versions")
       .select("id", { count: "exact", head: true })
       .eq("uploaded_by", userId),
-    admin
-      .from("audit_events")
-      .select("id", { count: "exact", head: true })
-      .eq("actor_id", userId),
+    admin.from("audit_events").select("id", { count: "exact", head: true }).eq("actor_id", userId),
   ]);
   for (const r of [linkedStudent, assigned, apps, docs, audits]) {
     if (r.error) {
@@ -973,10 +967,9 @@ export const portalDeleteAccount = createServerFn({ method: "POST" })
       }
       if (profile.role !== "student") {
         try {
-          await admin.from("consultants").upsert(
-            { id: profile.id, status: "inactive" },
-            { onConflict: "id" },
-          );
+          await admin
+            .from("consultants")
+            .upsert({ id: profile.id, status: "inactive" }, { onConflict: "id" });
         } catch {
           /* best-effort */
         }

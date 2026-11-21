@@ -340,7 +340,11 @@ export function BlogPostEditorPage({ postId }: { postId?: string }) {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <p className="text-xs font-medium text-muted-foreground">
-            <Link to="/admin/blog" className="hover:text-royal">
+            <Link
+              to="/admin/blog"
+              search={{ tab: "dashboard", q: "", page: 1 }}
+              className="hover:text-royal"
+            >
               Blog
             </Link>{" "}
             / Editor

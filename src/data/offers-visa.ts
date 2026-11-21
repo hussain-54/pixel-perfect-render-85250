@@ -261,4 +261,3 @@ export function appendOfferAudit(entry: OfferAuditEntry) {
   });
   return entry;
 }
-

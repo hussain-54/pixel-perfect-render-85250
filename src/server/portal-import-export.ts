@@ -6,11 +6,7 @@
  * Transaction note: row writes are best-effort per row (PostgREST), not a single DB transaction.
  */
 import { createServerFn } from "@tanstack/react-start";
-import {
-  AuthError,
-  requireRoles,
-  requireTrustedSession,
-} from "@/server/portal-auth";
+import { AuthError, requireRoles, requireTrustedSession } from "@/server/portal-auth";
 import {
   businessRoleFromSession,
   denyFrontDeskConsultantWorkflows,
@@ -535,12 +531,8 @@ async function commitCatalogImportCore(input: {
 
 export const portalCommitCatalogImport = createServerFn({ method: "POST" })
   .validator(
-    (data: {
-      entity: string;
-      csvText: string;
-      duplicatePolicy: string;
-      confirmed: boolean;
-    }) => data,
+    (data: { entity: string; csvText: string; duplicatePolicy: string; confirmed: boolean }) =>
+      data,
   )
   .handler(async ({ data }): Promise<CatalogImportCommitResult> => {
     try {

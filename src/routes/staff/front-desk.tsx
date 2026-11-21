@@ -235,7 +235,12 @@ function FrontDeskDashboardPage() {
       return items.filter((i) => i.kind === "fee_correction" || i.kind === "fee_rejected");
     }
     // KPI filters that are list-oriented still show actionable attention for those students.
-    if (kpiFilter === "assigned" || kpiFilter === "unpaid" || kpiFilter === "verified" || kpiFilter === "portal_link") {
+    if (
+      kpiFilter === "assigned" ||
+      kpiFilter === "unpaid" ||
+      kpiFilter === "verified" ||
+      kpiFilter === "portal_link"
+    ) {
       return [];
     }
     return items;
@@ -552,9 +557,9 @@ function FrontDeskDashboardPage() {
                         // Open lands on the record (assign focus only when that is the issue).
                         const openSearch =
                           item.kind === "unassigned"
-                            ? ({ focus: "assign" as const })
+                            ? { focus: "assign" as const }
                             : item.requestId
-                              ? ({ requestId: item.requestId })
+                              ? { requestId: item.requestId }
                               : {};
                         const showFix = frontDeskAttentionSupportsFix(item.kind);
                         return (
@@ -1041,10 +1046,7 @@ function FrontDeskDashboardPage() {
                 </Button>
               </div>
             ) : !(notifQ.data ?? []).length ? (
-              <EmptyState
-                title="No notifications"
-                body="No alerts."
-              />
+              <EmptyState title="No notifications" body="No alerts." />
             ) : (
               <ul className="space-y-2">
                 {(notifQ.data ?? []).map((n) => (

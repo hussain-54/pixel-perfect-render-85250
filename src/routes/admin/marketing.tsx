@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   EmptyState,
@@ -32,6 +32,8 @@ export const Route = createFileRoute("/admin/marketing")({
 /** Shared marketing workspace — also mounted at `/staff/marketing` for specialty desks. */
 export function MarketingModulePage() {
   const queryClient = useQueryClient();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const leadsHref = pathname.startsWith("/staff") ? "/staff/leads" : "/admin/leads";
   const [includeArchived, setIncludeArchived] = useState(false);
   const overviewQ = useQuery({
     queryKey: ["admin", "marketing-overview", includeArchived],
@@ -289,7 +291,7 @@ export function MarketingModulePage() {
             </Button>
             <p className="text-xs text-muted-foreground">
               Original source is preserved. History is written before changes. Convert via{" "}
-              <Link to="/admin/leads" className="font-semibold text-royal hover:underline">
+              <Link to={leadsHref} className="font-semibold text-royal hover:underline">
                 Leads
               </Link>{" "}
               with the same email — no duplicate CRM.

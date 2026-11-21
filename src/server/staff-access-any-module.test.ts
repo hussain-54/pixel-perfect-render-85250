@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { cloneDefaultPermissionMatrix, getPermissionLevelFromMatrix } from "@/lib/business-permissions";
+import {
+  cloneDefaultPermissionMatrix,
+  getPermissionLevelFromMatrix,
+} from "@/lib/business-permissions";
 import { AuthError } from "@/server/portal-auth";
 import { forbidAdmissionMockDataPlane } from "@/server/staff-access";
 

@@ -14,7 +14,10 @@ import {
   denyFrontDeskConsultantWorkflows,
   requireModulePermission,
 } from "@/server/staff-access";
-import { resolveBusinessRoleFromTrustedAppRole, type BusinessRole } from "@/lib/business-permissions";
+import {
+  resolveBusinessRoleFromTrustedAppRole,
+  type BusinessRole,
+} from "@/lib/business-permissions";
 import {
   attributeEventsToConsultants,
   buildLeaderboardRows,
@@ -104,9 +107,7 @@ function availabilityFromBundle(
   };
 }
 
-async function loadConsultants(
-  client: ServerSupabase,
-): Promise<LeaderboardConsultant[]> {
+async function loadConsultants(client: ServerSupabase): Promise<LeaderboardConsultant[]> {
   const { listConsultants } = await import("@/services/db");
   const desks = await listConsultants(client);
   if (!desks.length) return [];
@@ -149,39 +150,31 @@ async function loadMetricBundle(
     };
   }
 
-  const [
-    studentsRes,
-    completedRes,
-    appointmentsRes,
-    applicationsRes,
-    offersRes,
-    visasRes,
-  ] = await Promise.all([
-    client
-      .from("students")
-      .select("assigned_consultant_id")
-      .is("archived_at", null)
-      .in("assigned_consultant_id", consultantIds),
-    client
-      .from("students")
-      .select("assigned_consultant_id")
-      .is("archived_at", null)
-      .eq("journey_stage", "completed")
-      .in("assigned_consultant_id", consultantIds),
-    client
-      .from("appointments")
-      .select("consultant_id,scheduled_at,status")
-      .eq("status", "completed")
-      .in("consultant_id", consultantIds),
-    client
-      .from("applications")
-      .select("owned_by_consultant_id,stage,submitted_at,created_at")
-      .in("owned_by_consultant_id", consultantIds),
-    client.from("offers").select("id,application_id,student_id,offer_date,created_at"),
-    client
-      .from("visa_milestones")
-      .select("id,student_id,application_id,filed_at,created_at"),
-  ]);
+  const [studentsRes, completedRes, appointmentsRes, applicationsRes, offersRes, visasRes] =
+    await Promise.all([
+      client
+        .from("students")
+        .select("assigned_consultant_id")
+        .is("archived_at", null)
+        .in("assigned_consultant_id", consultantIds),
+      client
+        .from("students")
+        .select("assigned_consultant_id")
+        .is("archived_at", null)
+        .eq("journey_stage", "completed")
+        .in("assigned_consultant_id", consultantIds),
+      client
+        .from("appointments")
+        .select("consultant_id,scheduled_at,status")
+        .eq("status", "completed")
+        .in("consultant_id", consultantIds),
+      client
+        .from("applications")
+        .select("owned_by_consultant_id,stage,submitted_at,created_at")
+        .in("owned_by_consultant_id", consultantIds),
+      client.from("offers").select("id,application_id,student_id,offer_date,created_at"),
+      client.from("visa_milestones").select("id,student_id,application_id,filed_at,created_at"),
+    ]);
 
   if (!studentsRes.error) {
     bundle.students = countByConsultantId(
@@ -238,12 +231,12 @@ async function loadMetricBundle(
     const [appOwnerRes, studentOwnerRes] = await Promise.all([
       appIdList.length
         ? client.from("applications").select("id,owned_by_consultant_id").in("id", appIdList)
-        : Promise.resolve({ data: [] as { id: string; owned_by_consultant_id: string | null }[], error: null }),
+        : Promise.resolve({
+            data: [] as { id: string; owned_by_consultant_id: string | null }[],
+            error: null,
+          }),
       studentIdList.length
-        ? client
-            .from("students")
-            .select("id,assigned_consultant_id")
-            .in("id", studentIdList)
+        ? client.from("students").select("id,assigned_consultant_id").in("id", studentIdList)
         : Promise.resolve({
             data: [] as { id: string; assigned_consultant_id: string | null }[],
             error: null,
@@ -251,9 +244,7 @@ async function loadMetricBundle(
     ]);
 
     if (!appOwnerRes.error) {
-      appOwner = new Map(
-        (appOwnerRes.data ?? []).map((r) => [r.id, r.owned_by_consultant_id]),
-      );
+      appOwner = new Map((appOwnerRes.data ?? []).map((r) => [r.id, r.owned_by_consultant_id]));
     }
     if (!studentOwnerRes.error) {
       studentOwner = new Map(
@@ -353,10 +344,7 @@ export const portalGetConsultantLeaderboard = createServerFn({ method: "GET" })
       try {
         consultants = await loadConsultants(client);
       } catch (e) {
-        throw new AuthError(
-          e instanceof Error ? e.message : "Could not load consultants.",
-          500,
-        );
+        throw new AuthError(e instanceof Error ? e.message : "Could not load consultants.", 500);
       }
 
       if (!consultants.length) {

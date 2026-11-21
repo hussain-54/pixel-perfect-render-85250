@@ -138,8 +138,13 @@ export function DocumentSecurePreview({
       </div>
       {expiresAt ? (
         <p className="text-xs text-muted-foreground">
-          Access expires {new Date(expiresAt).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}.
-          Path metadata only — no public document URL.
+          Access expires{" "}
+          {new Date(expiresAt).toLocaleTimeString("en-GB", {
+            hour: "2-digit",
+            minute: "2-digit",
+            second: "2-digit",
+          })}
+          . Path metadata only — no public document URL.
         </p>
       ) : null}
     </div>

@@ -5,12 +5,7 @@
 import { toExcelCsv } from "./export-formats";
 import { sanitizeSpreadsheetCell } from "./report-rules";
 
-export type CrmExportEntity =
-  | "students"
-  | "leads"
-  | "applications"
-  | "universities"
-  | "programs";
+export type CrmExportEntity = "students" | "leads" | "applications" | "universities" | "programs";
 
 export type CatalogImportEntity = "universities" | "programs";
 
@@ -104,7 +99,13 @@ export function validateImportFileMeta(input: {
     };
   }
   const t = (input.type ?? "").toLowerCase();
-  if (t && t !== "text/csv" && t !== "application/vnd.ms-excel" && t !== "application/csv" && t !== "text/plain") {
+  if (
+    t &&
+    t !== "text/csv" &&
+    t !== "application/vnd.ms-excel" &&
+    t !== "application/csv" &&
+    t !== "text/plain"
+  ) {
     return { ok: false, error: "File type must be CSV (text/csv)." };
   }
   return { ok: true };
@@ -156,14 +157,16 @@ function headerIndex(header: string[], aliases: string[]): number {
   return -1;
 }
 
-function parseCsvTable(text: string): {
-  ok: true;
-  header: string[];
-  lines: string[];
-} | {
-  ok: false;
-  error: string;
-} {
+function parseCsvTable(text: string):
+  | {
+      ok: true;
+      header: string[];
+      lines: string[];
+    }
+  | {
+      ok: false;
+      error: string;
+    } {
   const raw = text.replace(/^\uFEFF/, "");
   if (raw.length > MAX_IMPORT_BYTES) {
     return { ok: false, error: `CSV exceeds ${Math.floor(MAX_IMPORT_BYTES / 1024)} KB limit.` };
@@ -189,15 +192,17 @@ function optionalUrl(value: string | null): string | null | "invalid" {
 }
 
 /** Parse + per-row validate universities CSV (no DB). */
-export function previewUniversityImportCsv(text: string): {
-  ok: true;
-  headers: string[];
-  rows: CatalogImportPreviewRow[];
-  summary: { ok: number; error: number };
-} | {
-  ok: false;
-  error: string;
-} {
+export function previewUniversityImportCsv(text: string):
+  | {
+      ok: true;
+      headers: string[];
+      rows: CatalogImportPreviewRow[];
+      summary: { ok: number; error: number };
+    }
+  | {
+      ok: false;
+      error: string;
+    } {
   const table = parseCsvTable(text);
   if (!table.ok) return table;
   const { header, lines } = table;
@@ -270,23 +275,21 @@ export function previewUniversityImportCsv(text: string): {
 }
 
 /** Parse + per-row validate programs CSV (no DB). */
-export function previewProgramImportCsv(text: string): {
-  ok: true;
-  headers: string[];
-  rows: CatalogImportPreviewRow[];
-  summary: { ok: number; error: number };
-} | {
-  ok: false;
-  error: string;
-} {
+export function previewProgramImportCsv(text: string):
+  | {
+      ok: true;
+      headers: string[];
+      rows: CatalogImportPreviewRow[];
+      summary: { ok: number; error: number };
+    }
+  | {
+      ok: false;
+      error: string;
+    } {
   const table = parseCsvTable(text);
   if (!table.ok) return table;
   const { header, lines } = table;
-  const uniNameIdx = headerIndex(header, [
-    "university_name",
-    "university",
-    "uni_name",
-  ]);
+  const uniNameIdx = headerIndex(header, ["university_name", "university", "uni_name"]);
   const uniCountryIdx = headerIndex(header, ["university_country", "country"]);
   const nameIdx = headerIndex(header, ["name", "program", "program_name"]);
   if (uniNameIdx < 0 || uniCountryIdx < 0 || nameIdx < 0) {
@@ -327,7 +330,14 @@ export function previewProgramImportCsv(text: string): {
         line,
         status: "error",
         error: "university_name, university_country and name are required",
-        cells: [universityName, universityCountry, name, level ?? "", duration ?? "", tuitionFee ?? ""],
+        cells: [
+          universityName,
+          universityCountry,
+          name,
+          level ?? "",
+          duration ?? "",
+          tuitionFee ?? "",
+        ],
       });
       continue;
     }
@@ -337,7 +347,14 @@ export function previewProgramImportCsv(text: string): {
         line,
         status: "error",
         error: "name is too long",
-        cells: [universityName, universityCountry, name, level ?? "", duration ?? "", tuitionFee ?? ""],
+        cells: [
+          universityName,
+          universityCountry,
+          name,
+          level ?? "",
+          duration ?? "",
+          tuitionFee ?? "",
+        ],
       });
       continue;
     }
@@ -345,7 +362,14 @@ export function previewProgramImportCsv(text: string): {
     rows.push({
       line,
       status: "ok",
-      cells: [universityName, universityCountry, name, level ?? "", duration ?? "", tuitionFee ?? ""],
+      cells: [
+        universityName,
+        universityCountry,
+        name,
+        level ?? "",
+        duration ?? "",
+        tuitionFee ?? "",
+      ],
       program: {
         universityName,
         universityCountry,
@@ -366,13 +390,15 @@ export function previewProgramImportCsv(text: string): {
 }
 
 /** @deprecated Prefer previewUniversityImportCsv — kept for older call sites. */
-export function parseUniversityImportCsv(text: string): {
-  ok: true;
-  rows: UniversityImportRow[];
-} | {
-  ok: false;
-  error: string;
-} {
+export function parseUniversityImportCsv(text: string):
+  | {
+      ok: true;
+      rows: UniversityImportRow[];
+    }
+  | {
+      ok: false;
+      error: string;
+    } {
   const preview = previewUniversityImportCsv(text);
   if (!preview.ok) return preview;
   if (preview.summary.error > 0) {
@@ -384,9 +410,7 @@ export function parseUniversityImportCsv(text: string): {
   }
   return {
     ok: true,
-    rows: preview.rows
-      .filter((r) => r.status === "ok" && r.university)
-      .map((r) => r.university!),
+    rows: preview.rows.filter((r) => r.status === "ok" && r.university).map((r) => r.university!),
   };
 }
 

@@ -12,6 +12,8 @@ import {
   slugifyBlogTitle,
   validateBlogPostWrite,
 } from "@/lib/blog-rules";
+import { sanitizePlainText } from "@/lib/cms-rules";
+import { isAllowedWebsiteMediaMime, websiteMediaMimeRejectMessage } from "@/lib/website-media-mime";
 import type {
   BlogAuthor,
   BlogCategory,
@@ -42,6 +44,28 @@ function blogDb(client: unknown): BlogDb {
 
 const SCHEMA_NOTE =
   "Blog tables are not available yet. Apply migration 20261108140000_blog_platform_foundation.sql.";
+
+/**
+ * After harden migration 20261122120000, promote EXECUTE is service_role-only.
+ * Prefer admin client when configured; otherwise best-effort user client (pre-harden).
+ */
+async function promoteScheduledBlogPosts(userClient: BlogDb): Promise<void> {
+  try {
+    const { isAdminSupabaseConfigured, requireAdminSupabase } =
+      await import("@/server/supabase-admin");
+    if (isAdminSupabaseConfigured()) {
+      await blogDb(requireAdminSupabase()).rpc("promote_scheduled_blog_posts");
+      return;
+    }
+  } catch {
+    /* fall through to user client */
+  }
+  try {
+    await userClient.rpc("promote_scheduled_blog_posts");
+  } catch {
+    /* promote is best-effort; list/dashboard still proceed */
+  }
+}
 
 async function requireBlogAdmin() {
   const session = await requireTrustedSession();
@@ -98,7 +122,7 @@ export const portalGetBlogDashboard = createServerFn({ method: "GET" }).handler(
         };
       }
       const client = blogDb(requireAoSupabaseClient());
-      await client.rpc("promote_scheduled_blog_posts");
+      await promoteScheduledBlogPosts(client);
       const { data, error } = await client.from("blog_posts").select("status");
       if (error) {
         if (isMissingBlogRelation(error.message)) {
@@ -142,7 +166,7 @@ export const portalListBlogPosts = createServerFn({ method: "GET" })
       const session = await requireTrustedSession();
       if (!usesSupabaseDataPlane(session)) throw new AuthError("Live data plane required.", 400);
       const client = blogDb(requireAoSupabaseClient());
-      await client.rpc("promote_scheduled_blog_posts");
+      await promoteScheduledBlogPosts(client);
 
       const page = Math.max(1, data.page ?? 1);
       const pageSize = Math.min(50, Math.max(1, data.pageSize ?? 20));
@@ -525,9 +549,8 @@ export const portalUploadBlogMedia = createServerFn({ method: "POST" })
   .handler(async ({ data }) => {
     try {
       const session = await requireBlogAdmin();
-      const allowed = ["image/jpeg", "image/png", "image/webp", "image/gif"];
-      if (!allowed.includes(data.mimeType)) {
-        throw new AuthError("Only JPEG, PNG, WebP or GIF images are allowed.", 400);
+      if (!isAllowedWebsiteMediaMime(data.mimeType)) {
+        throw new AuthError(websiteMediaMimeRejectMessage(data.mimeType), 400);
       }
       const buf = Buffer.from(data.base64, "base64");
       if (buf.byteLength > 5_242_880) {
@@ -599,17 +622,21 @@ export const portalListPublishedBlogPosts = createServerFn({ method: "GET" })
         }
         const list = ((rows ?? []) as Record<string, unknown>[]).map((r) => ({
           id: String(r["id"]),
-          title: String(r["title"] ?? ""),
+          title: sanitizePlainText(String(r["title"] ?? ""), 300),
           slug: String(r["slug"] ?? ""),
-          excerpt: String(r["excerpt"] ?? ""),
+          excerpt: sanitizePlainText(String(r["excerpt"] ?? ""), 500),
           featuredImageUrl: (r["featured_image_url"] as string | null) ?? null,
-          featuredImageAlt: String(r["featured_image_alt"] ?? ""),
+          featuredImageAlt: sanitizePlainText(String(r["featured_image_alt"] ?? ""), 200),
           publishedAt: String(r["published_at"] ?? ""),
           readingTimeMinutes: Number(r["reading_time_minutes"] ?? 1),
           isFeatured: Boolean(r["is_featured"]),
-          categoryName: (r["category_name"] as string | null) ?? null,
+          categoryName: (r["category_name"] as string | null)
+            ? sanitizePlainText(String(r["category_name"]), 120)
+            : null,
           categorySlug: (r["category_slug"] as string | null) ?? null,
-          authorName: (r["author_name"] as string | null) ?? null,
+          authorName: (r["author_name"] as string | null)
+            ? sanitizePlainText(String(r["author_name"]), 120)
+            : null,
         }));
         const total = Number(
           ((rows as Record<string, unknown>[] | null)?.[0]?.["total_count"] as
@@ -636,25 +663,31 @@ export const portalGetPublishedBlogPost = createServerFn({ method: "GET" })
       const r = rows[0] as Record<string, unknown>;
       return {
         id: String(r["id"]),
-        title: String(r["title"] ?? ""),
+        title: sanitizePlainText(String(r["title"] ?? ""), 300),
         slug: String(r["slug"] ?? ""),
-        excerpt: String(r["excerpt"] ?? ""),
+        excerpt: sanitizePlainText(String(r["excerpt"] ?? ""), 500),
         contentHtml: sanitizeBlogHtml(String(r["content_html"] ?? "")),
         featuredImageUrl: (r["featured_image_url"] as string | null) ?? null,
-        featuredImageAlt: String(r["featured_image_alt"] ?? ""),
+        featuredImageAlt: sanitizePlainText(String(r["featured_image_alt"] ?? ""), 200),
         publishedAt: String(r["published_at"] ?? ""),
         readingTimeMinutes: Number(r["reading_time_minutes"] ?? 1),
         isFeatured: Boolean(r["is_featured"]),
-        categoryName: (r["category_name"] as string | null) ?? null,
+        categoryName: (r["category_name"] as string | null)
+          ? sanitizePlainText(String(r["category_name"]), 120)
+          : null,
         categorySlug: (r["category_slug"] as string | null) ?? null,
-        authorName: (r["author_name"] as string | null) ?? null,
-        authorBio: (r["author_bio"] as string | null) ?? null,
+        authorName: (r["author_name"] as string | null)
+          ? sanitizePlainText(String(r["author_name"]), 120)
+          : null,
+        authorBio: (r["author_bio"] as string | null)
+          ? sanitizePlainText(String(r["author_bio"]), 2000)
+          : null,
         authorAvatarUrl: (r["author_avatar_url"] as string | null) ?? null,
-        seoTitle: String(r["seo_title"] ?? ""),
-        seoDescription: String(r["seo_description"] ?? ""),
-        focusKeyword: String(r["focus_keyword"] ?? ""),
-        ogTitle: String(r["og_title"] ?? ""),
-        ogDescription: String(r["og_description"] ?? ""),
+        seoTitle: sanitizePlainText(String(r["seo_title"] ?? ""), 200),
+        seoDescription: sanitizePlainText(String(r["seo_description"] ?? ""), 500),
+        focusKeyword: sanitizePlainText(String(r["focus_keyword"] ?? ""), 100),
+        ogTitle: sanitizePlainText(String(r["og_title"] ?? ""), 200),
+        ogDescription: sanitizePlainText(String(r["og_description"] ?? ""), 500),
         ogImageUrl: (r["og_image_url"] as string | null) ?? null,
         canonicalPath: (r["canonical_path"] as string | null) ?? null,
         robotsIndex: r["robots_index"] !== false,

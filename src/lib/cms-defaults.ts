@@ -8,6 +8,7 @@ import { stats, trustSignals, whyUs } from "@/data/site";
 import type {
   CmsFooterSettings,
   CmsHeaderSettings,
+  CmsJsonValue,
   CmsNavSettings,
   CmsPageContent,
   CmsSeoSettings,
@@ -115,7 +116,9 @@ export const DEFAULT_CMS_HOME: CmsPageContent = {
   seo: {
     title: DEFAULT_CMS_SEO_GLOBAL.title,
     description: DEFAULT_CMS_SEO_GLOBAL.description,
-    ogImagePath: DEFAULT_CMS_SEO_GLOBAL.ogImagePath,
+    ...(DEFAULT_CMS_SEO_GLOBAL.ogImagePath
+      ? { ogImagePath: DEFAULT_CMS_SEO_GLOBAL.ogImagePath }
+      : {}),
     canonicalPath: "/",
   },
   sections: [
@@ -284,7 +287,7 @@ export const DEFAULT_CMS_PAGE_SHELL = (title: string, path: string): CmsPageCont
   ],
 });
 
-export function defaultPayloadForKey(key: string): unknown {
+export function defaultPayloadForKey(key: string): CmsJsonValue {
   switch (key) {
     case "site.header":
       return DEFAULT_CMS_HEADER;

@@ -33,10 +33,7 @@ export function mapConsultantDeskRow(
   },
 ): Consultant {
   const name =
-    ctx?.profile?.full_name?.trim() ||
-    row.desk?.trim() ||
-    row.department?.trim() ||
-    "Consultant";
+    ctx?.profile?.full_name?.trim() || row.desk?.trim() || row.department?.trim() || "Consultant";
   return {
     id: row.id,
     name,

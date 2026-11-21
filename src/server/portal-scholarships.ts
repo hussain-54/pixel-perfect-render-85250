@@ -3,17 +3,10 @@
  * Public list uses anon client + RLS published-only; staff uses JWT + matrix gates.
  */
 import { createServerFn } from "@tanstack/react-start";
-import {
-  AuthError,
-  requireRoles,
-  requireTrustedSession,
-} from "@/server/portal-auth";
+import { AuthError, requireRoles, requireTrustedSession } from "@/server/portal-auth";
 import { denyFrontDeskConsultantWorkflows, requireModulePermission } from "@/server/staff-access";
 import { createServerSupabase, type ServerSupabase } from "@/server/supabase";
-import {
-  isPubliclyVisibleScholarship,
-  mapScholarshipRow,
-} from "@/lib/scholarship-mappers";
+import { isPubliclyVisibleScholarship, mapScholarshipRow } from "@/lib/scholarship-mappers";
 import {
   resolveScholarshipPage,
   validateScholarshipWrite,
@@ -206,14 +199,8 @@ export const portalGetScholarship = createServerFn({ method: "GET" })
         .maybeSingle();
       if (error) throw new Error(error.message);
       if (!row) return null;
-      const names = await universityNames(
-        client,
-        row.university_id ? [row.university_id] : [],
-      );
-      return mapScholarshipRow(
-        row,
-        row.university_id ? names.get(row.university_id) : null,
-      );
+      const names = await universityNames(client, row.university_id ? [row.university_id] : []);
+      return mapScholarshipRow(row, row.university_id ? names.get(row.university_id) : null);
     } catch (error) {
       toError(error);
     }

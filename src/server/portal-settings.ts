@@ -3,11 +3,7 @@
  * Server enforces roles + settings matrix; RLS restricts mutate to is_admin().
  */
 import { createServerFn } from "@tanstack/react-start";
-import {
-  AuthError,
-  requireRoles,
-  requireTrustedSession,
-} from "@/server/portal-auth";
+import { AuthError, requireRoles, requireTrustedSession } from "@/server/portal-auth";
 import { denyFrontDeskConsultantWorkflows, requireModulePermission } from "@/server/staff-access";
 import {
   DEFAULT_ORGANIZATION_SETTINGS,
@@ -79,10 +75,7 @@ export const portalGetOrganizationSettings = createServerFn({ method: "GET" }).h
 
       const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
       if (!usesSupabaseDataPlane(session)) {
-        return unavailablePayload(
-          false,
-          "Organization settings require the live data plane.",
-        );
+        return unavailablePayload(false, "Organization settings require the live data plane.");
       }
 
       const client = requireAoSupabaseClient();
@@ -189,5 +182,4 @@ export const portalUpdateOrganizationSettings = createServerFn({ method: "POST" 
     } catch (error) {
       toError(error);
     }
-  },
-);
+  });

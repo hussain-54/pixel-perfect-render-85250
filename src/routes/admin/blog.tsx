@@ -82,7 +82,9 @@ function AdminBlogPage() {
             </a>
           </Button>
           <Button asChild size="sm" variant="navy">
-            <Link to="/admin/blog/edit">Create article</Link>
+            <Link to="/admin/blog/edit" search={{ id: "" }}>
+              Create article
+            </Link>
           </Button>
         </div>
       </div>

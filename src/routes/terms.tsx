@@ -26,7 +26,8 @@ function Page() {
         <p className="border border-border bg-surface px-4 py-3 text-navy">
           <strong className="font-semibold">Owner review required:</strong> confirm governing law,
           company legal entity name, fee/refund language, and any regulated-service disclaimers
-          before treating this page as final. This site does not invent certifications or guarantees.
+          before treating this page as final. This site does not invent certifications or
+          guarantees.
         </p>
 
         <div className="space-y-2">
@@ -51,7 +52,9 @@ function Page() {
         </div>
 
         <div className="space-y-2">
-          <h2 className="font-display text-xl font-semibold text-navy">No professional guarantee</h2>
+          <h2 className="font-display text-xl font-semibold text-navy">
+            No professional guarantee
+          </h2>
           <p>
             We do not guarantee university offers, scholarship awards, or visa outcomes. Decisions
             rest with institutions and government authorities. Information on this site is general

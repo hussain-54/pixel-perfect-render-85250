@@ -4,10 +4,7 @@
  * institution’s official domain). Missing marks use a text fallback card.
  */
 
-export type ExploreUniversityLogoStatus =
-  | "verified_local"
-  | "pending_review"
-  | "text_fallback";
+export type ExploreUniversityLogoStatus = "verified_local" | "pending_review" | "text_fallback";
 
 export type ExploreUniversity = {
   id: string;
@@ -524,11 +521,15 @@ export function exploreUniversitiesAwaitingLogos(): ExploreUniversity[] {
 }
 
 export function exploreUniversitiesWithVerifiedLogos(): ExploreUniversity[] {
-  return exploreUniversities.filter((u) => u.logoStatus === "verified_local" && Boolean(u.logoPath));
+  return exploreUniversities.filter(
+    (u) => u.logoStatus === "verified_local" && Boolean(u.logoPath),
+  );
 }
 
 /** Split into two interleaved rows for opposing marquee directions. */
-export function splitExploreUniversitiesForCarousel(list: readonly ExploreUniversity[] = exploreUniversities): {
+export function splitExploreUniversitiesForCarousel(
+  list: readonly ExploreUniversity[] = exploreUniversities,
+): {
   rowA: ExploreUniversity[];
   rowB: ExploreUniversity[];
 } {

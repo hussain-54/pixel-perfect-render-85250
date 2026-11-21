@@ -33,10 +33,14 @@ export function isEligibilityOutcome(value: string): value is EligibilityOutcome
  * Save validation — eligibility outcome is required; other fields may be empty
  * until the counsellor completes them (do not invent mandatory academic fields).
  */
-export function validateAssessmentForSave(input: Pick<AssessmentSaveInput, "eligibility" | "applicationTarget">): {
-  ok: true;
-  eligibility: EligibilityOutcome;
-} | { ok: false; message: string; missing: string[] } {
+export function validateAssessmentForSave(
+  input: Pick<AssessmentSaveInput, "eligibility" | "applicationTarget">,
+):
+  | {
+      ok: true;
+      eligibility: EligibilityOutcome;
+    }
+  | { ok: false; message: string; missing: string[] } {
   const missing: string[] = [];
   // Draft-friendly: blank eligibility becomes Pending Review (still a valid outcome).
   const raw = input.eligibility?.trim() ?? "";

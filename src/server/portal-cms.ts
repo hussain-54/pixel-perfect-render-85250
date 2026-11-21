@@ -3,11 +3,7 @@
  * Drafts never leave authenticated admin paths.
  */
 import { createServerFn } from "@tanstack/react-start";
-import {
-  AuthError,
-  requireRoles,
-  requireTrustedSession,
-} from "@/server/portal-auth";
+import { AuthError, requireRoles, requireTrustedSession } from "@/server/portal-auth";
 import { denyFrontDeskConsultantWorkflows, requireModulePermission } from "@/server/staff-access";
 import { defaultPayloadForKey } from "@/lib/cms-defaults";
 import {
@@ -18,9 +14,12 @@ import {
   validateDocumentDraft,
 } from "@/lib/cms-rules";
 import type {
+  CmsAnnouncementAdminRow,
   CmsAnnouncementInput,
   CmsDocumentAdminView,
+  CmsJsonValue,
   CmsPublicAnnouncement,
+  CmsRevisionAdminRow,
 } from "@/lib/cms-types";
 import { createServerSupabase } from "@/server/supabase";
 
@@ -34,6 +33,13 @@ function toError(error: unknown): never {
 const SCHEMA_NOTE =
   "Website CMS tables are not available yet. Apply migration 20261108120000_website_cms_foundation.sql (owner confirmation required).";
 
+/** CMS tables are forward-only migrations — not yet in generated Database types. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type CmsDb = any;
+function cmsDb(client: unknown): CmsDb {
+  return client as CmsDb;
+}
+
 async function requireCmsAdmin() {
   const session = await requireTrustedSession();
   requireRoles(session, ["admin", "super_admin"]);
@@ -45,7 +51,7 @@ async function requireCmsAdmin() {
 export type CmsPublicBundle = {
   source: "live" | "fallback";
   schemaReady: boolean;
-  documents: Record<string, unknown>;
+  documents: Record<string, CmsJsonValue>;
   announcements: CmsPublicAnnouncement[];
   note: string | null;
 };
@@ -61,30 +67,23 @@ export type CmsAdminOverview = {
 
 function mapAnnouncement(row: Record<string, unknown>): CmsPublicAnnouncement {
   return {
-    id: String(row.id),
-    body: String(row.body ?? ""),
-    announcementType: String(row.announcement_type ?? "general"),
-    ctaLabel: (row.cta_label as string | null) ?? null,
-    ctaHref: (row.cta_href as string | null) ?? null,
-    styleToken: String(row.style_token ?? "navy"),
-    position: String(row.display_position ?? row.position ?? "top"),
-    dismissible: Boolean(row.dismissible ?? true),
-    startsAt: (row.starts_at as string | null) ?? null,
-    endsAt: (row.ends_at as string | null) ?? null,
-    sortOrder: Number(row.sort_order ?? 0),
+    id: String(row["id"]),
+    body: String(row["body"] ?? ""),
+    announcementType: String(row["announcement_type"] ?? "general"),
+    ctaLabel: (row["cta_label"] as string | null) ?? null,
+    ctaHref: (row["cta_href"] as string | null) ?? null,
+    styleToken: String(row["style_token"] ?? "navy"),
+    position: String(row["display_position"] ?? row["position"] ?? "top"),
+    dismissible: Boolean(row["dismissible"] ?? true),
+    startsAt: (row["starts_at"] as string | null) ?? null,
+    endsAt: (row["ends_at"] as string | null) ?? null,
+    sortOrder: Number(row["sort_order"] ?? 0),
   };
 }
 
 function fallbackBundle(note: string | null): CmsPublicBundle {
-  const keys = [
-    "site.header",
-    "site.nav",
-    "site.footer",
-    "site.theme",
-    "page.home",
-    "seo.global",
-  ];
-  const documents: Record<string, unknown> = {};
+  const keys = ["site.header", "site.nav", "site.footer", "site.theme", "page.home", "seo.global"];
+  const documents: Record<string, CmsJsonValue> = {};
   for (const key of keys) documents[key] = defaultPayloadForKey(key);
   return {
     source: "fallback",
@@ -99,8 +98,9 @@ function fallbackBundle(note: string | null): CmsPublicBundle {
 export const portalGetPublishedCmsBundle = createServerFn({ method: "GET" }).handler(
   async (): Promise<CmsPublicBundle> => {
     try {
-      const client = createServerSupabase();
-      if (!client) return fallbackBundle("Supabase public client unavailable.");
+      const raw = createServerSupabase();
+      if (!raw) return fallbackBundle("Supabase public client unavailable.");
+      const client = cmsDb(raw);
 
       const [{ data: docs, error: docsErr }, { data: anns, error: annErr }] = await Promise.all([
         client.rpc("get_cms_public_documents", {
@@ -122,7 +122,7 @@ export const portalGetPublishedCmsBundle = createServerFn({ method: "GET" }).han
         return fallbackBundle(msg);
       }
 
-      const documents: Record<string, unknown> = {};
+      const documents: Record<string, CmsJsonValue> = {};
       for (const key of [
         "site.header",
         "site.nav",
@@ -137,7 +137,10 @@ export const portalGetPublishedCmsBundle = createServerFn({ method: "GET" }).han
         const key = String((row as { document_key: string }).document_key);
         const payload = (row as { payload: unknown }).payload;
         if (payload && typeof payload === "object") {
-          documents[key] = { ...(defaultPayloadForKey(key) as object), ...(payload as object) };
+          documents[key] = {
+            ...(defaultPayloadForKey(key) as Record<string, CmsJsonValue>),
+            ...(payload as Record<string, CmsJsonValue>),
+          };
         }
       }
 
@@ -145,7 +148,7 @@ export const portalGetPublishedCmsBundle = createServerFn({ method: "GET" }).han
         source: "live",
         schemaReady: true,
         documents,
-        announcements: (anns ?? []).map((r) => mapAnnouncement(r as Record<string, unknown>)),
+        announcements: (anns ?? []).map((r: Record<string, unknown>) => mapAnnouncement(r)),
         note: null,
       };
     } catch (error) {
@@ -172,7 +175,7 @@ export const portalGetCmsAdminOverview = createServerFn({ method: "GET" }).handl
           note: "Website CMS requires the live data plane.",
         };
       }
-      const client = requireAoSupabaseClient();
+      const client = cmsDb(requireAoSupabaseClient());
       const [
         { data: docs, error: docsErr },
         { data: anns, error: annErr },
@@ -204,12 +207,11 @@ export const portalGetCmsAdminOverview = createServerFn({ method: "GET" }).handl
         if (s === "draft" || s === "published" || s === "archived") announcementCount[s] += 1;
       }
 
-      const documents = (docs ?? []).map((row) => {
+      const documents = (docs ?? []).map((row: Record<string, unknown>) => {
         const parsed = parseCmsDocumentRow(row as Record<string, unknown>);
         const draftEmpty =
           !parsed.draft ||
-          (typeof parsed.draft === "object" &&
-            Object.keys(parsed.draft as object).length === 0);
+          (typeof parsed.draft === "object" && Object.keys(parsed.draft as object).length === 0);
         return {
           ...parsed,
           draft: draftEmpty ? defaultPayloadForKey(parsed.documentKey) : parsed.draft,
@@ -240,7 +242,7 @@ export const portalGetCmsDocument = createServerFn({ method: "GET" })
       if (!usesSupabaseDataPlane(session)) {
         throw new AuthError("Website CMS requires the live data plane.", 400);
       }
-      const client = requireAoSupabaseClient();
+      const client = cmsDb(requireAoSupabaseClient());
       const { data: row, error } = await client
         .from("cms_documents")
         .select("*")
@@ -265,7 +267,9 @@ export const portalGetCmsDocument = createServerFn({ method: "GET" })
   });
 
 export const portalSaveCmsDraft = createServerFn({ method: "POST" })
-  .validator((data: { documentKey: string; draft: unknown; expectedDraftVersion?: number }) => data)
+  .validator(
+    (data: { documentKey: string; draft: CmsJsonValue; expectedDraftVersion?: number }) => data,
+  )
   .handler(async ({ data }) => {
     try {
       const session = await requireCmsAdmin();
@@ -276,7 +280,7 @@ export const portalSaveCmsDraft = createServerFn({ method: "POST" })
       if (!usesSupabaseDataPlane(session)) {
         throw new AuthError("Website CMS requires the live data plane.", 400);
       }
-      const client = requireAoSupabaseClient();
+      const client = cmsDb(requireAoSupabaseClient());
 
       const { data: current, error: readErr } = await client
         .from("cms_documents")
@@ -289,7 +293,7 @@ export const portalSaveCmsDraft = createServerFn({ method: "POST" })
       }
       if (!current) throw new AuthError("CMS document not found.", 404);
 
-      const currentVersion = Number(current.draft_version ?? 1);
+      const currentVersion = Number((current as { draft_version?: number }).draft_version ?? 1);
       if (
         typeof data.expectedDraftVersion === "number" &&
         data.expectedDraftVersion !== currentVersion
@@ -333,7 +337,10 @@ export const portalSaveCmsDraft = createServerFn({ method: "POST" })
         /* audit best-effort */
       }
 
-      return { ok: true as const, document: parseCmsDocumentRow(updated as Record<string, unknown>) };
+      return {
+        ok: true as const,
+        document: parseCmsDocumentRow(updated as Record<string, unknown>),
+      };
     } catch (error) {
       toError(error);
     }
@@ -348,7 +355,7 @@ export const portalPublishCmsDocument = createServerFn({ method: "POST" })
       if (!usesSupabaseDataPlane(session)) {
         throw new AuthError("Website CMS requires the live data plane.", 400);
       }
-      const client = requireAoSupabaseClient();
+      const client = cmsDb(requireAoSupabaseClient());
       const { data: row, error: readErr } = await client
         .from("cms_documents")
         .select("*")
@@ -414,51 +421,56 @@ export const portalPublishCmsDocument = createServerFn({ method: "POST" })
         /* audit best-effort */
       }
 
-      return { ok: true as const, document: parseCmsDocumentRow(updated as Record<string, unknown>) };
+      return {
+        ok: true as const,
+        document: parseCmsDocumentRow(updated as Record<string, unknown>),
+      };
     } catch (error) {
       toError(error);
     }
   });
 
-export const portalListCmsAnnouncements = createServerFn({ method: "GET" }).handler(async () => {
-  try {
-    await requireCmsAdmin();
-    const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
-    const session = await requireTrustedSession();
-    if (!usesSupabaseDataPlane(session)) {
-      throw new AuthError("Website CMS requires the live data plane.", 400);
+export const portalListCmsAnnouncements = createServerFn({ method: "GET" }).handler(
+  async (): Promise<{ rows: CmsAnnouncementAdminRow[] }> => {
+    try {
+      await requireCmsAdmin();
+      const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
+      const session = await requireTrustedSession();
+      if (!usesSupabaseDataPlane(session)) {
+        throw new AuthError("Website CMS requires the live data plane.", 400);
+      }
+      const client = cmsDb(requireAoSupabaseClient());
+      const { data, error } = await client
+        .from("cms_announcements")
+        .select("*")
+        .order("sort_order", { ascending: true })
+        .order("created_at", { ascending: false });
+      if (error) {
+        if (isMissingCmsRelation(error.message)) throw new AuthError(SCHEMA_NOTE, 503);
+        throw new AuthError(error.message, 500);
+      }
+      return {
+        rows: (data ?? []).map((row: Record<string, unknown>) => ({
+          id: String(row["id"]),
+          internalTitle: String(row["internal_title"] ?? ""),
+          body: String(row["body"] ?? ""),
+          announcementType: String(row["announcement_type"] ?? "general"),
+          ctaLabel: (row["cta_label"] as string | null) ?? null,
+          ctaHref: (row["cta_href"] as string | null) ?? null,
+          styleToken: String(row["style_token"] ?? "navy"),
+          dismissible: Boolean(row["dismissible"]),
+          status: String(row["status"]),
+          startsAt: (row["starts_at"] as string | null) ?? null,
+          endsAt: (row["ends_at"] as string | null) ?? null,
+          sortOrder: Number(row["sort_order"] ?? 0),
+          updatedAt: (row["updated_at"] as string | null) ?? null,
+        })),
+      };
+    } catch (error) {
+      toError(error);
     }
-    const client = requireAoSupabaseClient();
-    const { data, error } = await client
-      .from("cms_announcements")
-      .select("*")
-      .order("sort_order", { ascending: true })
-      .order("created_at", { ascending: false });
-    if (error) {
-      if (isMissingCmsRelation(error.message)) throw new AuthError(SCHEMA_NOTE, 503);
-      throw new AuthError(error.message, 500);
-    }
-    return {
-      rows: (data ?? []).map((row) => ({
-        id: String(row.id),
-        internalTitle: String(row.internal_title ?? ""),
-        body: String(row.body ?? ""),
-        announcementType: String(row.announcement_type ?? "general"),
-        ctaLabel: (row.cta_label as string | null) ?? null,
-        ctaHref: (row.cta_href as string | null) ?? null,
-        styleToken: String(row.style_token ?? "navy"),
-        dismissible: Boolean(row.dismissible),
-        status: String(row.status),
-        startsAt: (row.starts_at as string | null) ?? null,
-        endsAt: (row.ends_at as string | null) ?? null,
-        sortOrder: Number(row.sort_order ?? 0),
-        updatedAt: (row.updated_at as string | null) ?? null,
-      })),
-    };
-  } catch (error) {
-    toError(error);
-  }
-});
+  },
+);
 
 export const portalSaveCmsAnnouncement = createServerFn({ method: "POST" })
   .validator((data: CmsAnnouncementInput) => data)
@@ -473,7 +485,7 @@ export const portalSaveCmsAnnouncement = createServerFn({ method: "POST" })
       if (!usesSupabaseDataPlane(session)) {
         throw new AuthError("Website CMS requires the live data plane.", 400);
       }
-      const client = requireAoSupabaseClient();
+      const client = cmsDb(requireAoSupabaseClient());
       const payload = {
         internal_title: sanitizePlainText(v.internalTitle, 160),
         body: sanitizePlainText(v.body, 500),
@@ -517,7 +529,7 @@ export const portalSaveCmsAnnouncement = createServerFn({ method: "POST" })
 
 export const portalListCmsRevisions = createServerFn({ method: "GET" })
   .validator((data: { documentKey: string }) => data)
-  .handler(async ({ data }) => {
+  .handler(async ({ data }): Promise<{ rows: CmsRevisionAdminRow[] }> => {
     try {
       await requireCmsAdmin();
       const { usesSupabaseDataPlane, requireAoSupabaseClient } = await import("@/server/ao-data");
@@ -525,7 +537,7 @@ export const portalListCmsRevisions = createServerFn({ method: "GET" })
       if (!usesSupabaseDataPlane(session)) {
         throw new AuthError("Website CMS requires the live data plane.", 400);
       }
-      const client = requireAoSupabaseClient();
+      const client = cmsDb(requireAoSupabaseClient());
       const { data: rows, error } = await client
         .from("cms_revisions")
         .select("id, document_key, version, kind, note, created_at, created_by")
@@ -536,7 +548,7 @@ export const portalListCmsRevisions = createServerFn({ method: "GET" })
         if (isMissingCmsRelation(error.message)) throw new AuthError(SCHEMA_NOTE, 503);
         throw new AuthError(error.message, 500);
       }
-      return { rows: rows ?? [] };
+      return { rows: (rows ?? []) as CmsRevisionAdminRow[] };
     } catch (error) {
       toError(error);
     }
@@ -551,7 +563,7 @@ export const portalRestoreCmsRevision = createServerFn({ method: "POST" })
       if (!usesSupabaseDataPlane(session)) {
         throw new AuthError("Website CMS requires the live data plane.", 400);
       }
-      const client = requireAoSupabaseClient();
+      const client = cmsDb(requireAoSupabaseClient());
       const { data: rev, error: revErr } = await client
         .from("cms_revisions")
         .select("*")
@@ -592,7 +604,10 @@ export const portalRestoreCmsRevision = createServerFn({ method: "POST" })
         created_by: session.userId ?? null,
       });
 
-      return { ok: true as const, document: parseCmsDocumentRow(updated as Record<string, unknown>) };
+      return {
+        ok: true as const,
+        document: parseCmsDocumentRow(updated as Record<string, unknown>),
+      };
     } catch (error) {
       toError(error);
     }

@@ -3,11 +3,7 @@
  * Public lists use anon + RLS. Staff lists/mutations use JWT + admissions matrix.
  */
 import { createServerFn } from "@tanstack/react-start";
-import {
-  AuthError,
-  requireRoles,
-  requireTrustedSession,
-} from "@/server/portal-auth";
+import { AuthError, requireRoles, requireTrustedSession } from "@/server/portal-auth";
 import { denyFrontDeskConsultantWorkflows, requireModulePermission } from "@/server/staff-access";
 import { createServerSupabase } from "@/server/supabase";
 import type { University } from "@/types";
@@ -72,11 +68,10 @@ async function loadUniversitiesWithPrograms(
   client: NonNullable<ReturnType<typeof createServerSupabase>>,
 ): Promise<University[]> {
   const { mapUniversityWithPrograms } = await import("@/lib/catalog-mappers");
-  const [{ data: unis, error: uniErr }, { data: programs, error: progErr }] =
-    await Promise.all([
-      client.from("universities").select("*").order("name", { ascending: true }).limit(500),
-      client.from("programs").select("*").order("name", { ascending: true }).limit(2000),
-    ]);
+  const [{ data: unis, error: uniErr }, { data: programs, error: progErr }] = await Promise.all([
+    client.from("universities").select("*").order("name", { ascending: true }).limit(500),
+    client.from("programs").select("*").order("name", { ascending: true }).limit(2000),
+  ]);
   if (uniErr) throw new Error(uniErr.message);
   if (progErr) throw new Error(progErr.message);
   const byUni = new Map<string, NonNullable<typeof programs>>();
@@ -88,10 +83,7 @@ async function loadUniversitiesWithPrograms(
   return (unis ?? []).map((u) => mapUniversityWithPrograms(u, byUni.get(u.id) ?? []));
 }
 
-function filterUniversitiesClient(
-  rows: University[],
-  filters: CatalogListFilters,
-): University[] {
+function filterUniversitiesClient(rows: University[], filters: CatalogListFilters): University[] {
   const q = filters.q?.trim().toLowerCase();
   const country = filters.country?.trim();
   const level = filters.level?.trim();
@@ -105,7 +97,10 @@ function filterUniversitiesClient(
   });
 }
 
-function paginateRows<T>(rows: T[], filters: CatalogListFilters): {
+function paginateRows<T>(
+  rows: T[],
+  filters: CatalogListFilters,
+): {
   rows: T[];
   total: number;
   page: number;
@@ -192,11 +187,12 @@ export const portalListPublishedPrograms = createServerFn({ method: "GET" })
         return { ...paginateRows(filtered, data), source: "demo", ...programFacets(demoRows) };
       }
 
-      const [{ data: unis, error: uniErr }, { data: programs, error: progErr }] =
-        await Promise.all([
+      const [{ data: unis, error: uniErr }, { data: programs, error: progErr }] = await Promise.all(
+        [
           client.from("universities").select("id,name").limit(500),
           client.from("programs").select("*").order("name", { ascending: true }).limit(2000),
-        ]);
+        ],
+      );
       if (uniErr || progErr) {
         const source = resolvePublicCatalogSource({ liveOk: false, allowDemo });
         const { page, pageSize } = resolveCatalogPage(data);
@@ -227,11 +223,7 @@ function filterProgramsClient(
   const level = filters.level?.trim();
   const universityId = filters.universityId?.trim();
   return rows.filter((p) => {
-    if (
-      q &&
-      !p.name.toLowerCase().includes(q) &&
-      !p.universityName.toLowerCase().includes(q)
-    ) {
+    if (q && !p.name.toLowerCase().includes(q) && !p.universityName.toLowerCase().includes(q)) {
       return false;
     }
     if (level && p.level !== level) return false;
@@ -391,11 +383,12 @@ export const portalListCatalogProgramsAdmin = createServerFn({ method: "GET" })
 
       const { mapProgramRow } = await import("@/lib/catalog-mappers");
       const client = requireAoSupabaseClient();
-      const [{ data: unis, error: uniErr }, { data: programs, error: progErr }] =
-        await Promise.all([
+      const [{ data: unis, error: uniErr }, { data: programs, error: progErr }] = await Promise.all(
+        [
           client.from("universities").select("id,name").limit(500),
           client.from("programs").select("*").order("name", { ascending: true }).limit(2000),
-        ]);
+        ],
+      );
       if (uniErr) throw new Error(uniErr.message);
       if (progErr) throw new Error(progErr.message);
       const nameById = new Map((unis ?? []).map((u) => [u.id, u.name]));

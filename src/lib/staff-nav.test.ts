@@ -39,4 +39,10 @@ describe("buildStaffNav", () => {
     expect(nav.some((i) => i.to === "/staff/dashboard")).toBe(true);
     expect(nav.some((i) => i.to === "/staff/leads")).toBe(false);
   });
+
+  it("exposes Leads for digital_manager specialty desk beside Marketing", () => {
+    const nav = buildStaffNav("digital_manager", cloneDefaultPermissionMatrix());
+    expect(nav.some((i) => i.to === "/staff/marketing")).toBe(true);
+    expect(nav.some((i) => i.to === "/staff/leads")).toBe(true);
+  });
 });

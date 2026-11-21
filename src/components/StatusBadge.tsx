@@ -86,9 +86,7 @@ export function formatStatusLabel(status: string): string {
   const t = (status ?? "").trim();
   if (!t) return t;
   if (t.includes("_") || t === t.toLowerCase()) {
-    return t
-      .replace(/_/g, " ")
-      .replace(/\b\w/g, (c) => c.toUpperCase());
+    return t.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
   }
   return t;
 }

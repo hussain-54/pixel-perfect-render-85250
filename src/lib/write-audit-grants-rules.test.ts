@@ -25,9 +25,7 @@ describe("write_audit_event grants contract", () => {
   });
 
   it("maps the live permission-denied failure for Front Desk staff messaging", () => {
-    const mapped = mapWriteAuditPermissionError(
-      "permission denied for function write_audit_event",
-    );
+    const mapped = mapWriteAuditPermissionError("permission denied for function write_audit_event");
     expect(mapped.isPermissionDenied).toBe(true);
     expect(mapped.staffMessage).toMatch(/Do not re-register/i);
     expect(mapped.staffMessage).toMatch(/20261017100000/);

@@ -36,9 +36,10 @@ export function activityForStudent<T>(
 }
 
 /** Map dashboard Approve/Reject onto the shared queue review actions. */
-export function dashboardReviewToQueueAction(
-  action: "Approved" | "Rejected",
-): { action: "approve" | "reject"; note?: string } {
+export function dashboardReviewToQueueAction(action: "Approved" | "Rejected"): {
+  action: "approve" | "reject";
+  note?: string;
+} {
   if (action === "Approved") return { action: "approve" };
   return { action: "reject", note: "Rejected during officer review." };
 }

@@ -414,17 +414,19 @@ export function PortalShell({ role, nav, children, barTitle, session }: PortalSh
           <div className="hidden shrink-0 xl:block">
             <Logo to={meta.home} />
           </div>
-          {showDemoSwitcher ? <RoleSwitcher current={meta.switcherLabel} /> : null}
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="hidden sm:inline-flex"
-            onClick={onSignOut}
-            disabled={signingOut}
-          >
-            Sign out
-          </Button>
+          <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+            {showDemoSwitcher ? <RoleSwitcher current={meta.switcherLabel} /> : null}
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="hidden sm:inline-flex"
+              onClick={onSignOut}
+              disabled={signingOut}
+            >
+              Sign out
+            </Button>
+          </div>
         </header>
         {showGlobalSearch && mobileSearchOpen ? (
           <div className="shrink-0 border-b border-border bg-white px-3 py-2 lg:hidden">

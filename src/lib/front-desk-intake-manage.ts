@@ -51,13 +51,12 @@ export function emailChangeAllowedForIntake(input: {
 
 export function validateArchiveReason(reason: string): { ok: true } | { ok: false; error: string } {
   const t = reason.trim();
-  if (t.length < 3) return { ok: false, error: "An archive reason is required (at least 3 characters)." };
+  if (t.length < 3)
+    return { ok: false, error: "An archive reason is required (at least 3 characters)." };
   return { ok: true };
 }
 
-export function canRestoreArchivedRegistration(input: {
-  isAdmin: boolean;
-}): boolean {
+export function canRestoreArchivedRegistration(input: { isAdmin: boolean }): boolean {
   return input.isAdmin;
 }
 

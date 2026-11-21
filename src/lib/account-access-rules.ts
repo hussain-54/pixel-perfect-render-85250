@@ -50,7 +50,12 @@ export function validateAccountAccessAction(
     return { ok: false, error: "Account id is required.", status: 400, code: "missing_target" };
   }
   if (!actorId) {
-    return { ok: false, error: "Administrator session is required.", status: 403, code: "no_actor" };
+    return {
+      ok: false,
+      error: "Administrator session is required.",
+      status: 403,
+      code: "no_actor",
+    };
   }
 
   if (targetId === actorId) {

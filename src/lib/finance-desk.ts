@@ -72,6 +72,51 @@ export type FinanceDeskBill = {
   status: string;
 };
 
+/** JSON `detail` on finance_desk_entries — known keys only (no index signature). */
+export type FinanceDeskEntryDetail = {
+  billId?: string;
+  fund?: string;
+  number?: string;
+  reference?: string;
+  department?: string;
+  count?: number;
+  principal?: number;
+  interest?: number;
+  carrying?: number;
+  proceeds?: number;
+  withheld?: number;
+  net?: number;
+  external?: boolean;
+  state?: string;
+  parentTitle?: string;
+  reverses?: string;
+  reason?: string;
+};
+
+export function parseFinanceDeskEntryDetail(raw: unknown): FinanceDeskEntryDetail {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+  const src = raw as Record<string, unknown>;
+  const detail: FinanceDeskEntryDetail = {};
+  if (typeof src["billId"] === "string") detail.billId = src["billId"];
+  if (typeof src["fund"] === "string") detail.fund = src["fund"];
+  if (typeof src["number"] === "string") detail.number = src["number"];
+  if (typeof src["reference"] === "string") detail.reference = src["reference"];
+  if (typeof src["department"] === "string") detail.department = src["department"];
+  if (typeof src["count"] === "number") detail.count = src["count"];
+  if (typeof src["principal"] === "number") detail.principal = src["principal"];
+  if (typeof src["interest"] === "number") detail.interest = src["interest"];
+  if (typeof src["carrying"] === "number") detail.carrying = src["carrying"];
+  if (typeof src["proceeds"] === "number") detail.proceeds = src["proceeds"];
+  if (typeof src["withheld"] === "number") detail.withheld = src["withheld"];
+  if (typeof src["net"] === "number") detail.net = src["net"];
+  if (typeof src["external"] === "boolean") detail.external = src["external"];
+  if (typeof src["state"] === "string") detail.state = src["state"];
+  if (typeof src["parentTitle"] === "string") detail.parentTitle = src["parentTitle"];
+  if (typeof src["reverses"] === "string") detail.reverses = src["reverses"];
+  if (typeof src["reason"] === "string") detail.reason = src["reason"];
+  return detail;
+}
+
 export type FinanceDeskEntry = {
   id: string;
   kind: string;
@@ -80,7 +125,7 @@ export type FinanceDeskEntry = {
   currency: string;
   status: FinanceDeskEntryStatus;
   entryDate: string;
-  detail: Record<string, string | number | boolean | null>;
+  detail: FinanceDeskEntryDetail;
   studentId: string | null;
   parentId: string | null;
   createdAt: string;

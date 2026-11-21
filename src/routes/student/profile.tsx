@@ -5,6 +5,7 @@ import {
   PageHeader,
   PageLoadState,
   Panel,
+  EmptyState,
   ErrorState,
   LoadingRows,
   portalErrorMessage,
@@ -76,10 +77,20 @@ function StudentProfile() {
       </PageLoadState>
     );
   }
-  if (studentQ.isError || !studentQ.data) {
+  if (studentQ.isError) {
     return (
-      <PageLoadState title="Profile">
-        <ErrorState />
+      <PageLoadState title="Profile" subtitle="Contact and study preferences.">
+        <ErrorState body="Could not load your profile." onRetry={() => void studentQ.refetch()} />
+      </PageLoadState>
+    );
+  }
+  if (!studentQ.data) {
+    return (
+      <PageLoadState title="Profile" subtitle="Contact and study preferences.">
+        <EmptyState
+          title="Profile not found"
+          body="No student profile is linked yet. Open the dashboard and use “Try link my record”, or ask Front Desk to register you."
+        />
       </PageLoadState>
     );
   }

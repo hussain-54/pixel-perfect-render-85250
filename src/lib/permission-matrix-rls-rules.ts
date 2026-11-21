@@ -12,9 +12,7 @@ export function assertBusinessModulePermissionsSelectSql(
   if (!normalized.includes("business_module_permissions")) {
     return { ok: false, error: "Must target business_module_permissions." };
   }
-  if (
-    !/create\s+policy\s+business_module_permissions_select_authenticated/.test(normalized)
-  ) {
+  if (!/create\s+policy\s+business_module_permissions_select_authenticated/.test(normalized)) {
     return { ok: false, error: "Must create select_authenticated policy." };
   }
   if (!/for\s+select/.test(normalized) || !/to\s+authenticated/.test(normalized)) {

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { createFileRoute, useRouterState } from "@tanstack/react-router";
+import { createFileRoute, Link, useRouterState } from "@tanstack/react-router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   EmptyState,
@@ -354,18 +354,14 @@ export function FinanceModulePage(props?: {
     (/403|permission/i.test(portalErrorMessage(feesQ.error)) ||
       portalErrorMessage(feesQ.error).includes("403"));
 
-  const financeTitle =
-    onStaffDesk && !canVerifySignup
-      ? "Fees & Payments"
-      : onStaffDesk
-        ? "Accounts & Finance"
-        : "Finance — fees & verification";
+  const financeTitle = "Fees & Payments";
+  const bankingHref = onStaffDesk ? "/staff/banking" : "/admin/banking";
   const financeSubtitle =
     onStaffDesk && !canVerifySignup
-      ? "University / application fee obligations for Admission. Signup/intake verification stays with Accounts."
+      ? "University / application fee obligations for Admission. Signup/intake verification stays with Accounts. Office ledger is under Banking & Finance."
       : onStaffDesk
-        ? "Signup fee proofs and university fee ledgers. Verify only through the trusted Accounts RPC — claimed is never verified."
-        : "Admin view of signup-fee payment proofs and university fee ledgers. Verify only through the trusted Accounts RPC — claimed is never verified.";
+        ? "Signup fee proofs and university fee ledgers. Verify only through the trusted Accounts RPC — claimed is never verified. Office ledger is under Banking & Finance."
+        : "Signup-fee payment proofs and university fee ledgers. Verify only through the trusted Accounts RPC — claimed is never verified. Office ledger is under Banking & Finance.";
   const signupAccountsOnly =
     onStaffDesk && !canVerifySignup && ledgerTab === "signup" && signupQ.isError;
 
@@ -420,7 +416,16 @@ export function FinanceModulePage(props?: {
         compact
         title={financeTitle}
         subtitle={financeSubtitle}
-        actions={<LiveBadge status={liveStatus} lastSync={lastSync} />}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <Button type="button" size="sm" variant="outline" asChild>
+              <Link to={bankingHref} search={{ tab: "statements" }}>
+                Open Banking & Finance
+              </Link>
+            </Button>
+            <LiveBadge status={liveStatus} lastSync={lastSync} />
+          </div>
+        }
       />
 
       {onStaffDesk && !canVerifySignup ? (

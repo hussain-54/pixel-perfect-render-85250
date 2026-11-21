@@ -10,5 +10,5 @@ export const Route = createFileRoute("/admin/blog_/edit")({
 
 function AdminBlogEditorRoute() {
   const { id } = Route.useSearch();
-  return <BlogPostEditorPage postId={id || undefined} />;
+  return <BlogPostEditorPage {...(id ? { postId: id } : {})} />;
 }

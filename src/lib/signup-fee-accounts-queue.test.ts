@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { canVerifySignupFeeAction } from "@/lib/staff-business-access";
-import { FEE_VERIFIER_QUEUE_STATUSES, studentHasOpenFeeQueue } from "@/lib/r1-fee-verifier-select-rules";
+import {
+  FEE_VERIFIER_QUEUE_STATUSES,
+  studentHasOpenFeeQueue,
+} from "@/lib/r1-fee-verifier-select-rules";
 import { isSignupFeeVerified, canActivatePortalFromFeeStatus } from "@/lib/signup-fee-gate";
 
 describe("Accounts signup fee queue rules", () => {

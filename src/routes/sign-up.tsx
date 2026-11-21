@@ -99,7 +99,8 @@ function SignUpPage() {
         <p className="text-center text-sm text-muted-foreground">
           Already have an account?{" "}
           <Link
-            to="/sign-in" search={{}}
+            to="/sign-in"
+            search={{}}
             className="font-semibold text-royal transition-colors hover:text-navy"
           >
             Sign In

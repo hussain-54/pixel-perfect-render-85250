@@ -1542,7 +1542,9 @@ export async function buildStudentWorkspaceFromDb(
     canAddNote: canEdit || canOperateAdmissions,
     canCreateApplication: canEdit || canOperateAdmissions,
     canManageAdmissionHandover: canOperateAdmissions,
-    ...(isAdmissionDesk ? { workbenchKind: "admission" as const } : { workbenchKind: "counsellor" as const }),
+    ...(isAdmissionDesk
+      ? { workbenchKind: "admission" as const }
+      : { workbenchKind: "counsellor" as const }),
   };
 }
 

@@ -3,11 +3,7 @@
  * Runs on the server (scheduler + event hooks). Uses reminderRef idempotency.
  */
 import * as db from "@/data/mock";
-import {
-  appendTaskAudit,
-  automationMeta,
-  createSystemTaskIdempotent,
-} from "@/data/portal-tasks";
+import { appendTaskAudit, automationMeta, createSystemTaskIdempotent } from "@/data/portal-tasks";
 import { offerRecords } from "@/data/offers-visa";
 import { dayKeyInPortalTz, daysUntilDateKey } from "@/lib/task-time";
 import type { StudentDocument } from "@/types";
@@ -135,7 +131,11 @@ function scanApplicationDeadlines(byKind: Record<TaskAutomationKind, number>, er
 function scanOfferExpiries(byKind: Record<TaskAutomationKind, number>, errors: string[]) {
   for (const offer of offerRecords) {
     try {
-      if (offer.status === "accepted" || offer.status === "declined" || offer.status === "expired") {
+      if (
+        offer.status === "accepted" ||
+        offer.status === "declined" ||
+        offer.status === "expired"
+      ) {
         continue;
       }
       const key = dayKeyInPortalTz(offer.responseDeadline);
@@ -191,8 +191,7 @@ export function runTaskAutomationSweep(): TaskAutomationRunResult {
   scanOfferExpiries(byKind, errors);
   scanDocumentExpiries(byKind, errors);
 
-  const created =
-    byKind.application_deadline + byKind.offer_expiry + byKind.document_expiry;
+  const created = byKind.application_deadline + byKind.offer_expiry + byKind.document_expiry;
 
   const result: TaskAutomationRunResult = {
     ranAt: new Date().toISOString(),

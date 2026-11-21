@@ -13,9 +13,7 @@ import { canEditModule, getPermissionLevel } from "./business-permissions";
 import { assertModulePermission } from "@/server/staff-access";
 import { AuthError, type TrustedSession } from "@/server/portal-auth";
 
-function session(
-  businessRole: NonNullable<TrustedSession["businessRole"]>,
-): TrustedSession {
+function session(businessRole: NonNullable<TrustedSession["businessRole"]>): TrustedSession {
   return {
     email: "c@example.com",
     source: "demo",
@@ -40,7 +38,12 @@ describe("counsellor admission handover authorization", () => {
       ),
     ).not.toThrow();
     expect(() =>
-      assertModulePermission(session("counsellor_consultant"), "admissions", 2, "admission handover"),
+      assertModulePermission(
+        session("counsellor_consultant"),
+        "admissions",
+        2,
+        "admission handover",
+      ),
     ).toThrow(AuthError);
   });
 

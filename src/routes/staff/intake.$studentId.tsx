@@ -156,10 +156,10 @@ function FrontDeskIntakeRecordPage() {
       null;
     const needsFeeCorrection = Boolean(
       focusRequest &&
-        cancelledCoordinationNeedsCorrection({
-          status: focusRequest.status,
-          signupFeeStatus: focusRequest.signupFeeStatus,
-        }),
+      cancelledCoordinationNeedsCorrection({
+        status: focusRequest.status,
+        signupFeeStatus: focusRequest.signupFeeStatus,
+      }),
     );
     // Fix / focus=fee must open the voucher+proof form (not only the request table row).
     const preferred = frontDeskFeeFocusAnchorId({ needsFeeCorrection });
@@ -414,8 +414,7 @@ function FrontDeskIntakeRecordPage() {
   const viewerIsRegistrar = data.viewerIsRegistrar ?? true;
   const canEditRegistration = data.canEditRegistration ?? viewerIsRegistrar;
   const canAssignCounsellor =
-    data.canAssignCounsellor ??
-    (viewerIsRegistrar && student.assignmentStatus === "pending");
+    data.canAssignCounsellor ?? (viewerIsRegistrar && student.assignmentStatus === "pending");
   const canRecordSignupFee = data.canRecordSignupFee ?? true;
   const canIssueVoucher = canRecordSignupFee && !feeFinalized;
   const canSubmitProof =

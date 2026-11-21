@@ -16,11 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import type { CatalogListFilters } from "@/lib/catalog-rules";
 import { validateUniversityWrite } from "@/lib/catalog-rules";
-import {
-  deleteUniversity,
-  listCatalogUniversitiesAdmin,
-  upsertUniversity,
-} from "@/services";
+import { deleteUniversity, listCatalogUniversitiesAdmin, upsertUniversity } from "@/services";
 import type { University } from "@/types";
 
 export const Route = createFileRoute("/admin/universities")({
@@ -142,7 +138,9 @@ function AdminUniversities() {
       ) : null}
 
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
-        <Panel title={data.canMutate ? "Create / update university" : "University form (view only)"}>
+        <Panel
+          title={data.canMutate ? "Create / update university" : "University form (view only)"}
+        >
           <div className="grid gap-2 text-sm sm:grid-cols-2">
             <Input
               className="sm:col-span-2"

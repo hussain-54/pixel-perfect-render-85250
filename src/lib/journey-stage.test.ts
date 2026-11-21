@@ -10,7 +10,9 @@ describe("journey stage forward-only advances", () => {
 
   it("does not regress stages", () => {
     expect(nextJourneyStageIfAdvanced("offer_received", "application_submitted")).toBeNull();
-    expect(nextJourneyStageIfAdvanced("application_submitted", "university_shortlisting")).toBeNull();
+    expect(
+      nextJourneyStageIfAdvanced("application_submitted", "university_shortlisting"),
+    ).toBeNull();
   });
 
   it("advances to offer_received from application_submitted", () => {

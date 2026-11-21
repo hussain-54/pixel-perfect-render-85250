@@ -27,7 +27,9 @@ export function mapFundingTypeDb(value: string | null | undefined): FundingType 
   return "Partial Funding";
 }
 
-export function mapFundingTypeUi(value: string | null | undefined): ScholarshipFundingTypeDb | null {
+export function mapFundingTypeUi(
+  value: string | null | undefined,
+): ScholarshipFundingTypeDb | null {
   if (value === "Fully Funded" || value === "fully_funded") return "fully_funded";
   if (value === "Tuition Waiver" || value === "tuition_waiver") return "tuition_waiver";
   if (value === "Partial Funding" || value === "partial_funding") return "partial_funding";

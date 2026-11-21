@@ -72,8 +72,7 @@ export function resolveLeaderboardWindow(
 ): { start: string | null; end: string } {
   const end = dayKey(now);
   if (period === "all") return { start: null, end };
-  const days =
-    period === "week" ? 7 : period === "month" ? 30 : period === "quarter" ? 90 : 365;
+  const days = period === "week" ? 7 : period === "month" ? 30 : period === "quarter" ? 90 : 365;
   return { start: addUtcDays(end, -(days - 1)), end };
 }
 

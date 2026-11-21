@@ -39,8 +39,7 @@ export function usePublishedCms() {
     nav: {
       ...DEFAULT_CMS_NAV,
       ...((docs["site.nav"] as CmsNavSettings | undefined) ?? {}),
-      items:
-        (docs["site.nav"] as CmsNavSettings | undefined)?.items ?? DEFAULT_CMS_NAV.items,
+      items: (docs["site.nav"] as CmsNavSettings | undefined)?.items ?? DEFAULT_CMS_NAV.items,
     } as CmsNavSettings,
     footer: {
       ...DEFAULT_CMS_FOOTER,

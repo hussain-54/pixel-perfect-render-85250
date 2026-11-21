@@ -98,7 +98,10 @@ function AdminReports() {
   if (!data) {
     return (
       <PageLoadState title={reportsTitle} subtitle={reportsSubtitle}>
-        <EmptyState title="No report data" body="No aggregates were returned for this filter set." />
+        <EmptyState
+          title="No report data"
+          body="No aggregates were returned for this filter set."
+        />
       </PageLoadState>
     );
   }

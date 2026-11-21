@@ -3,7 +3,10 @@ import {
   canFullyApproveModule,
   resolveBusinessRoleFromTrustedAppRole,
 } from "./business-permissions";
-import { canVerifyUniversityFeePayment } from "./university-fee-auth";
+import {
+  assertUniversityFeeVerifyTransition,
+  canVerifyUniversityFeePayment,
+} from "./university-fee-auth";
 import type { UniversityFeeStatusDb } from "@/types/database";
 
 function isVerifiedUniversityFee(status: UniversityFeeStatusDb) {
@@ -15,6 +18,21 @@ describe("M2 university fee rules", () => {
     expect(isVerifiedUniversityFee("claimed")).toBe(false);
     expect(isVerifiedUniversityFee("due")).toBe(false);
     expect(isVerifiedUniversityFee("verified")).toBe(true);
+  });
+
+  it("requires claimed before verify/reject; allows waive from due", () => {
+    expect(() => assertUniversityFeeVerifyTransition({ current: "due", action: "verify" })).toThrow(
+      /must be claimed/i,
+    );
+    expect(() =>
+      assertUniversityFeeVerifyTransition({ current: "claimed", action: "verify" }),
+    ).not.toThrow();
+    expect(() =>
+      assertUniversityFeeVerifyTransition({ current: "due", action: "waive" }),
+    ).not.toThrow();
+    expect(() =>
+      assertUniversityFeeVerifyTransition({ current: "verified", action: "verify" }),
+    ).toThrow(/already finalized/i);
   });
 
   it("denies counsellor verification of university fees via matrix", () => {

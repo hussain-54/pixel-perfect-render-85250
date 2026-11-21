@@ -517,9 +517,7 @@ function StaffDashboard() {
             title={ADMISSION_METRIC_DEFINITIONS.overdueTasks}
             icon={<Clock3 />}
             tone="amber"
-            onClick={() =>
-              void router.navigate({ to: "/staff/tasks", search: { tab: "overdue" } })
-            }
+            onClick={() => void router.navigate({ to: "/staff/tasks", search: { tab: "overdue" } })}
           />
           <StatCard
             label="Rejected"
@@ -622,7 +620,11 @@ function StaffDashboard() {
               selected={kpiFilter === "follow_ups"}
               onClick={() => {
                 setKpiFilter("follow_ups");
-                void router.navigate({ to: "/staff/tasks" });
+                scrollToAttention();
+                void router.navigate({
+                  to: "/staff/students",
+                  search: { focus: "follow_ups" },
+                });
               }}
             />
             <StatCard
@@ -774,10 +776,7 @@ function StaffDashboard() {
               }
             >
               {(data.needsAttention ?? []).length === 0 ? (
-                <EmptyState
-                  title="Nothing needs attention"
-                  body="No open admission actions."
-                />
+                <EmptyState title="Nothing needs attention" body="No open admission actions." />
               ) : (
                 <ul className="divide-y divide-border">
                   {(data.needsAttention ?? []).map((item) => {
@@ -1064,10 +1063,7 @@ function StaffDashboard() {
             }
           >
             {(data.recentActivity ?? data.assignedOverview).length === 0 ? (
-              <EmptyState
-                title="No applications yet"
-                body="No applications yet."
-              />
+              <EmptyState title="No applications yet" body="No applications yet." />
             ) : (
               <TableWrap compact>
                 <thead>

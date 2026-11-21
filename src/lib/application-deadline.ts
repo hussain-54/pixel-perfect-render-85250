@@ -17,7 +17,10 @@ export function normalizeOptionalApplicationDeadline(
       message: "Deadline must be a valid date (YYYY-MM-DD).",
     };
   }
-  const [y, m, d] = t.split("-").map((n) => Number(n));
+  const parts = t.split("-");
+  const y = Number(parts[0]);
+  const m = Number(parts[1]);
+  const d = Number(parts[2]);
   const dt = new Date(Date.UTC(y, m - 1, d));
   if (
     Number.isNaN(dt.getTime()) ||

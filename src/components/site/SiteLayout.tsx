@@ -57,126 +57,126 @@ function Footer({ cmsFooter }: { cmsFooter?: CmsFooterSettings }) {
             )}
           </div>
         </div>
-        {columns.length > 0
-          ? columns.map((col) => (
-              <div key={col.id} className="lg:col-span-2">
-                <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
-                  {col.heading}
-                </p>
-                <ul className="mt-4 space-y-2.5 text-sm text-navy-foreground/75">
-                  {col.links.map((link) => (
-                    <li key={`${col.id}-${link.label}`}>
-                      {link.href.startsWith("/") ? (
-                        <Link
-                          to={link.href as "/about"}
-                          className="transition-colors hover:text-bright"
-                        >
-                          {link.label}
-                        </Link>
-                      ) : (
-                        <a
-                          href={link.href}
-                          className="transition-colors hover:text-bright"
-                          target={link.openInNewTab ? "_blank" : undefined}
-                          rel={link.openInNewTab ? "noopener noreferrer" : undefined}
-                        >
-                          {link.label}
-                        </a>
-                      )}
-                    </li>
-                  ))}
-                  {col.id === "study"
-                    ? topDestinations.slice(0, 5).map((d) => (
-                        <li key={d.name}>
-                          <Link
-                            to="/destinations"
-                            hash={d.name.toLowerCase().replace(/\s/g, "-")}
-                            className="transition-colors hover:text-bright"
-                          >
-                            Study in {d.name}
-                          </Link>
-                        </li>
-                      ))
-                    : null}
-                </ul>
-              </div>
-            ))
-          : (
-            <>
-              <div className="lg:col-span-2">
-                <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
-                  Study Abroad
-                </p>
-                <ul className="mt-4 space-y-2.5 text-sm text-navy-foreground/75">
-                  <li>
-                    <Link to="/destinations" className="transition-colors hover:text-bright">
-                      Destinations
-                    </Link>
-                  </li>
-                  {topDestinations.slice(0, 5).map((d) => (
-                    <li key={d.name}>
+        {columns.length > 0 ? (
+          columns.map((col) => (
+            <div key={col.id} className="lg:col-span-2">
+              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
+                {col.heading}
+              </p>
+              <ul className="mt-4 space-y-2.5 text-sm text-navy-foreground/75">
+                {col.links.map((link) => (
+                  <li key={`${col.id}-${link.label}`}>
+                    {link.href.startsWith("/") ? (
                       <Link
-                        to="/destinations"
-                        hash={d.name.toLowerCase().replace(/\s/g, "-")}
+                        to={link.href as "/about"}
                         className="transition-colors hover:text-bright"
                       >
-                        Study in {d.name}
+                        {link.label}
                       </Link>
-                    </li>
-                  ))}
-                  <li>
-                    <Link to="/scholarships" className="transition-colors hover:text-bright">
-                      Scholarships
+                    ) : (
+                      <a
+                        href={link.href}
+                        className="transition-colors hover:text-bright"
+                        target={link.openInNewTab ? "_blank" : undefined}
+                        rel={link.openInNewTab ? "noopener noreferrer" : undefined}
+                      >
+                        {link.label}
+                      </a>
+                    )}
+                  </li>
+                ))}
+                {col.id === "study"
+                  ? topDestinations.slice(0, 5).map((d) => (
+                      <li key={d.name}>
+                        <Link
+                          to="/destinations"
+                          hash={d.name.toLowerCase().replace(/\s/g, "-")}
+                          className="transition-colors hover:text-bright"
+                        >
+                          Study in {d.name}
+                        </Link>
+                      </li>
+                    ))
+                  : null}
+              </ul>
+            </div>
+          ))
+        ) : (
+          <>
+            <div className="lg:col-span-2">
+              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
+                Study Abroad
+              </p>
+              <ul className="mt-4 space-y-2.5 text-sm text-navy-foreground/75">
+                <li>
+                  <Link to="/destinations" className="transition-colors hover:text-bright">
+                    Destinations
+                  </Link>
+                </li>
+                {topDestinations.slice(0, 5).map((d) => (
+                  <li key={d.name}>
+                    <Link
+                      to="/destinations"
+                      hash={d.name.toLowerCase().replace(/\s/g, "-")}
+                      className="transition-colors hover:text-bright"
+                    >
+                      Study in {d.name}
                     </Link>
                   </li>
-                </ul>
-              </div>
-              <div className="lg:col-span-2">
-                <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
-                  Services
-                </p>
-                <ul className="mt-4 space-y-2.5 text-sm text-navy-foreground/75">
-                  <li>
-                    <Link to="/services" className="transition-colors hover:text-bright">
-                      All Services
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/student-visa" className="transition-colors hover:text-bright">
-                      Student Visa
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/contact" className="transition-colors hover:text-bright">
-                      Consultation
-                    </Link>
-                  </li>
-                </ul>
-              </div>
-              <div className="lg:col-span-2">
-                <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
-                  Company
-                </p>
-                <ul className="mt-4 space-y-2.5 text-sm text-navy-foreground/75">
-                  <li>
-                    <Link to="/about" className="transition-colors hover:text-bright">
-                      About Us
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/success-stories" className="transition-colors hover:text-bright">
-                      Success Stories
-                    </Link>
-                  </li>
-                  <li>
-                    <Link to="/resources" className="transition-colors hover:text-bright">
-                      Resources
-                    </Link>
-                  </li>
-                </ul>
-              </div>
-            </>
-          )}
+                ))}
+                <li>
+                  <Link to="/scholarships" className="transition-colors hover:text-bright">
+                    Scholarships
+                  </Link>
+                </li>
+              </ul>
+            </div>
+            <div className="lg:col-span-2">
+              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
+                Services
+              </p>
+              <ul className="mt-4 space-y-2.5 text-sm text-navy-foreground/75">
+                <li>
+                  <Link to="/services" className="transition-colors hover:text-bright">
+                    All Services
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/student-visa" className="transition-colors hover:text-bright">
+                    Student Visa
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/contact" className="transition-colors hover:text-bright">
+                    Consultation
+                  </Link>
+                </li>
+              </ul>
+            </div>
+            <div className="lg:col-span-2">
+              <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
+                Company
+              </p>
+              <ul className="mt-4 space-y-2.5 text-sm text-navy-foreground/75">
+                <li>
+                  <Link to="/about" className="transition-colors hover:text-bright">
+                    About Us
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/success-stories" className="transition-colors hover:text-bright">
+                    Success Stories
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/resources" className="transition-colors hover:text-bright">
+                    Resources
+                  </Link>
+                </li>
+              </ul>
+            </div>
+          </>
+        )}
         <div className="lg:col-span-2">
           <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
             {siteContact.location.label}
@@ -234,10 +234,7 @@ function Footer({ cmsFooter }: { cmsFooter?: CmsFooterSettings }) {
             ) : null}
             <li className="flex gap-2">
               <Mail className="mt-0.5 h-4 w-4 shrink-0 text-bright" aria-hidden />
-              <a
-                href={`mailto:${emailDisplay}`}
-                className="transition-colors hover:text-bright"
-              >
+              <a href={`mailto:${emailDisplay}`} className="transition-colors hover:text-bright">
                 {emailDisplay}
               </a>
             </li>

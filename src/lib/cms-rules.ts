@@ -11,12 +11,13 @@ import {
   type CmsHeaderSettings,
   type CmsHomeSection,
   type CmsNavSettings,
+  type CmsJsonValue,
   type CmsPageContent,
   type CmsSeoSettings,
 } from "@/lib/cms-types";
 
 const SAFE_HREF =
-  /^(https?:\/\/[^\s]+|\/[A-Za-z0-9\-._~:/?#\[\]@!$&'()*+,;=%]*|mailto:[^\s]+|tel:[^\s]+)$/;
+  /^(https?:\/\/[^\s]+|\/[A-Za-z0-9\-._~:/?#@[\]!$&'()*+,;=%]*|mailto:[^\s]+|tel:[^\s]+)$/;
 
 export function isCmsDocumentKey(value: string): value is CmsDocumentKey {
   return (CMS_DOCUMENT_KEYS as readonly string[]).includes(value);
@@ -156,7 +157,7 @@ export function validateSeoDraft(
 export function validateDocumentDraft(
   key: string,
   input: unknown,
-): { ok: true; value: unknown } | { ok: false; message: string } {
+): { ok: true; value: CmsJsonValue } | { ok: false; message: string } {
   switch (key) {
     case "site.header":
       return validateHeaderDraft(input);
@@ -210,17 +211,17 @@ export function documentsHaveUnpublishedChanges(draft: unknown, published: unkno
 }
 
 export function parseCmsDocumentRow(row: Record<string, unknown>) {
-  const draft = row.draft ?? {};
-  const published = row.published ?? null;
+  const draft = (row["draft"] ?? {}) as CmsJsonValue;
+  const published = row["published"] == null ? null : (row["published"] as CmsJsonValue);
   return {
-    documentKey: String(row.document_key),
-    title: String(row.title ?? row.document_key),
+    documentKey: String(row["document_key"]),
+    title: String(row["title"] ?? row["document_key"]),
     draft,
     published,
-    draftVersion: Number(row.draft_version ?? 1),
-    publishedVersion: Number(row.published_version ?? 0),
-    publishedAt: (row.published_at as string | null) ?? null,
-    updatedAt: (row.updated_at as string | null) ?? null,
+    draftVersion: Number(row["draft_version"] ?? 1),
+    publishedVersion: Number(row["published_version"] ?? 0),
+    publishedAt: (row["published_at"] as string | null) ?? null,
+    updatedAt: (row["updated_at"] as string | null) ?? null,
     hasUnpublishedChanges: documentsHaveUnpublishedChanges(draft, published),
   };
 }
@@ -238,11 +239,16 @@ export function isMissingCmsRelation(message: string): boolean {
 
 /** Strip script-like content from plain text fields (defence in depth). */
 export function sanitizePlainText(value: string, max = 2000): string {
-  return value
-    .replace(/<[^>]*>/g, "")
-    .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, "")
-    .trim()
-    .slice(0, max);
+  let out = value.replace(/<[^>]*>/g, "");
+  // Strip C0 controls except tab/LF/CR without a control-character regex (eslint).
+  out = Array.from(out)
+    .filter((ch) => {
+      const c = ch.charCodeAt(0);
+      if (c === 0x09 || c === 0x0a || c === 0x0d) return true;
+      return c >= 0x20;
+    })
+    .join("");
+  return out.trim().slice(0, max);
 }
 
 export { asObject };

@@ -2,13 +2,7 @@ import { useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { Upload, Download, FileSpreadsheet } from "lucide-react";
-import {
-  PageHeader,
-  Panel,
-  TableWrap,
-  EmptyState,
-  portalErrorMessage,
-} from "@/components/common";
+import { PageHeader, Panel, TableWrap, EmptyState, portalErrorMessage } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import {
   CATALOG_EXPORT_ENTITIES,
@@ -20,11 +14,7 @@ import {
   type CrmExportEntity,
   type DuplicatePolicy,
 } from "@/lib/crm-export";
-import {
-  commitCatalogImport,
-  exportCrmCsv,
-  previewCatalogImport,
-} from "@/services";
+import { commitCatalogImport, exportCrmCsv, previewCatalogImport } from "@/services";
 import { downloadBase64File } from "@/lib/export-formats";
 
 export const Route = createFileRoute("/admin/import-export")({
@@ -106,9 +96,7 @@ function AdminImportExport() {
     setErr(null);
   };
 
-  const otherExports = CRM_EXPORT_ENTITIES.filter(
-    (e) => e !== "universities" && e !== "programs",
-  );
+  const otherExports = CRM_EXPORT_ENTITIES.filter((e) => e !== "universities" && e !== "programs");
 
   return (
     <div>
@@ -136,8 +124,8 @@ function AdminImportExport() {
       <div className="grid gap-6 lg:grid-cols-2">
         <Panel title="Export catalog">
           <p className="text-sm text-muted-foreground">
-            Download UTF-8 CSV (Excel-safe BOM). Cells that look like formulas are escaped.
-            Empty catalogs still download a header-only file.
+            Download UTF-8 CSV (Excel-safe BOM). Cells that look like formulas are escaped. Empty
+            catalogs still download a header-only file.
           </p>
           <div className="mt-4 flex flex-wrap gap-2">
             {CATALOG_EXPORT_ENTITIES.map((entity) => (

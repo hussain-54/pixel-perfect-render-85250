@@ -33,10 +33,7 @@ export const DEADLINE_ALERT_DAYS = 7;
 export const DOCUMENT_EXPIRY_ALERT_DAYS = 90;
 
 export type TaskAutomationKind =
-  | "document_rejection"
-  | "application_deadline"
-  | "offer_expiry"
-  | "document_expiry";
+  "document_rejection" | "application_deadline" | "offer_expiry" | "document_expiry";
 
 export type PortalTaskRecord = {
   id: string;

@@ -6,6 +6,7 @@ import {
   ErrorState,
   LoadingRows,
   PageHeader,
+  PageLoadState,
   Panel,
   PermissionDenied,
   TableWrap,
@@ -266,13 +267,27 @@ function FrontDeskIntakeListContent() {
   const viewRow = viewingId ? rows.find((r) => r.id === viewingId) : null;
   const archiveRow = archiveId ? rows.find((r) => r.id === archiveId) : null;
 
-  if (listQ.isLoading) return <LoadingRows rows={6} />;
+  if (listQ.isLoading) {
+    return (
+      <PageLoadState title="My registrations" subtitle="Students you registered at Front Desk.">
+        <LoadingRows rows={6} />
+      </PageLoadState>
+    );
+  }
   if (listQ.isError) {
     const message = portalErrorMessage(listQ.error);
     if (/403|permission|not authorized/i.test(message)) {
-      return <PermissionDenied body={message} />;
+      return (
+        <PageLoadState title="My registrations">
+          <PermissionDenied body={message} />
+        </PageLoadState>
+      );
     }
-    return <ErrorState body={message} />;
+    return (
+      <PageLoadState title="My registrations">
+        <ErrorState body={message} onRetry={() => void listQ.refetch()} />
+      </PageLoadState>
+    );
   }
 
   function openCreateForm(studentId: string) {
@@ -584,10 +599,7 @@ function FrontDeskIntakeListContent() {
           }
         >
           {filtered.length === 0 ? (
-            <EmptyState
-              title="No records found"
-              body="Clear filters or register a student."
-            />
+            <EmptyState title="No records found" body="Clear filters or register a student." />
           ) : (
             <>
               <TableWrap>

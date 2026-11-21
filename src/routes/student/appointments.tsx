@@ -75,10 +75,29 @@ function StudentAppointments() {
       </PageLoadState>
     );
   }
-  if (studentQ.isError || !studentQ.data) {
+  if (studentQ.isError) {
     return (
-      <PageLoadState title="Appointments">
-        <ErrorState />
+      <PageLoadState
+        title="Appointments"
+        subtitle="Request a consultation slot. Times are stored in UTC."
+      >
+        <ErrorState
+          body="Could not load your student profile for appointments."
+          onRetry={() => void studentQ.refetch()}
+        />
+      </PageLoadState>
+    );
+  }
+  if (!studentQ.data) {
+    return (
+      <PageLoadState
+        title="Appointments"
+        subtitle="Request a consultation slot. Times are stored in UTC."
+      >
+        <EmptyState
+          title="Profile required"
+          body="Link your student record from the dashboard before booking appointments."
+        />
       </PageLoadState>
     );
   }

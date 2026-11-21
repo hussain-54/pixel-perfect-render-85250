@@ -39,9 +39,7 @@ describe("intake form options", () => {
     expect(intakeSeasonYearToDate("Summer", 2028)).toBe("2028-06-15");
     expect(formatIntakeLabel("Winter", 2027)).toBe("Winter 2027");
     expect(intakeSeasonYearToDate("", 2027)).toBeNull();
-    expect(intakeYearOptions(new Date("2026-10-17T00:00:00Z"))).toEqual([
-      2026, 2027, 2028, 2029,
-    ]);
+    expect(intakeYearOptions(new Date("2026-10-17T00:00:00Z"))).toEqual([2026, 2027, 2028, 2029]);
   });
 
   it("resolves Other custom values and validates contact fields", () => {

@@ -250,7 +250,14 @@ export function ConsultationForm() {
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="email">Email</Label>
-        <Input id="email" name="email" type="email" required autoComplete="email" className={field} />
+        <Input
+          id="email"
+          name="email"
+          type="email"
+          required
+          autoComplete="email"
+          className={field}
+        />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="phone">Phone</Label>

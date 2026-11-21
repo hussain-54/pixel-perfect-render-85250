@@ -9,10 +9,12 @@ import {
   computeBooks,
   isMissingFinanceDeskRelation,
   NON_POSTABLE_KINDS,
+  parseFinanceDeskEntryDetail,
   validateFinanceDeskWrite,
   type FinanceDeskAudit,
   type FinanceDeskBill,
   type FinanceDeskEntry,
+  type FinanceDeskEntryDetail,
   type FinanceDeskSnapshot,
 } from "@/lib/finance-desk";
 
@@ -49,11 +51,7 @@ function deskDb(client: unknown): AnyDb {
 }
 
 function mapEntry(row: Record<string, unknown>): FinanceDeskEntry {
-  const detailRaw = row["detail"];
-  const detail =
-    detailRaw && typeof detailRaw === "object" && !Array.isArray(detailRaw)
-      ? (detailRaw as Record<string, string | number | boolean | null>)
-      : {};
+  const detail = parseFinanceDeskEntryDetail(row["detail"]);
   return {
     id: String(row["id"]),
     kind: String(row["kind"] ?? ""),
@@ -300,7 +298,7 @@ export const portalSaveFinanceDeskEntry = createServerFn({ method: "POST" })
       title: string;
       amount?: number;
       entryDate?: string;
-      detail?: Record<string, string | number | boolean | null>;
+      detail?: FinanceDeskEntryDetail;
       studentId?: string | null;
       parentId?: string | null;
       billId?: string;
@@ -339,7 +337,7 @@ export const portalSaveFinanceDeskEntry = createServerFn({ method: "POST" })
         kind,
         title: data.title,
         amount,
-        entryDate: data.entryDate,
+        ...(data.entryDate !== undefined ? { entryDate: data.entryDate } : {}),
       });
       if (!validated.ok) throw new AuthError(validated.message, 400);
 
@@ -349,7 +347,7 @@ export const portalSaveFinanceDeskEntry = createServerFn({ method: "POST" })
       }
       const client = deskDb(requireAoSupabaseClient());
 
-      const detail: Record<string, string | number | boolean | null> = {
+      const detail: FinanceDeskEntryDetail = {
         ...(data.detail ?? {}),
       };
       if (data.billId) detail.billId = data.billId;
@@ -371,7 +369,7 @@ export const portalSaveFinanceDeskEntry = createServerFn({ method: "POST" })
       if ((kind === "payorder-clear" || kind === "payorder-cancel") && parentId) {
         const { data: parent, error: parentErr } = await client
           .from("finance_desk_entries")
-          .select("id, amount, status, kind, detail")
+          .select("id, amount, status, kind, detail, title")
           .eq("id", parentId)
           .maybeSingle();
         if (parentErr) throw new AuthError(parentErr.message, 500);
@@ -380,7 +378,7 @@ export const portalSaveFinanceDeskEntry = createServerFn({ method: "POST" })
         }
         amount = Number(parent.amount ?? 0);
         detail.state = kind === "payorder-clear" ? "cleared" : "cancelled";
-        detail.parentTitle = String((parent as { title?: string }).title ?? "");
+        detail.parentTitle = String((parent as { title?: string | null }).title ?? "");
       }
 
       const { data: row, error } = await client
@@ -454,12 +452,11 @@ export const portalPostFinanceDeskEntry = createServerFn({ method: "POST" })
         current.parent_id
       ) {
         const state = current.kind === "payorder-clear" ? "cleared" : "cancelled";
-        const parentDetail =
-          current.detail && typeof current.detail === "object" ? current.detail : {};
+        const parentDetail = parseFinanceDeskEntryDetail(current.detail);
         await client
           .from("finance_desk_entries")
           .update({
-            detail: { ...(parentDetail as object), state },
+            detail: { ...parentDetail, state },
           })
           .eq("id", current.parent_id);
         // Also update parent detail.state from parent's own detail
@@ -469,10 +466,7 @@ export const portalPostFinanceDeskEntry = createServerFn({ method: "POST" })
           .eq("id", current.parent_id)
           .maybeSingle();
         if (parent) {
-          const prev =
-            parent.detail && typeof parent.detail === "object"
-              ? (parent.detail as Record<string, unknown>)
-              : {};
+          const prev = parseFinanceDeskEntryDetail(parent.detail);
           await client
             .from("finance_desk_entries")
             .update({ detail: { ...prev, state } })

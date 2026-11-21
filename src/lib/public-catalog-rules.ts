@@ -4,10 +4,7 @@
  */
 import { resolveDemoAuthEnabled } from "@/lib/demo-auth";
 
-export function mayServePublicCatalogDemo(env: {
-  PROD?: boolean;
-  DEV?: boolean;
-}): boolean {
+export function mayServePublicCatalogDemo(env: { PROD?: boolean; DEV?: boolean }): boolean {
   return resolveDemoAuthEnabled(env);
 }
 

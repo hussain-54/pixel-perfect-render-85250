@@ -150,5 +150,21 @@ export function buildStaffNav(
       },
     ];
   }
-  return specialtyItems;
+
+  // Digital desks: expose Leads beside Marketing when matrix allows digital_marketing.
+  const withLeads = [...specialtyItems];
+  if (
+    canViewModuleInMatrix(matrix, businessRole, "digital_marketing") &&
+    !withLeads.some((i) => i.to === "/staff/leads")
+  ) {
+    const leadsItem: PortalNavItem = {
+      to: "/staff/leads",
+      label: "Leads",
+      icon: UserPlus,
+    };
+    const mIdx = withLeads.findIndex((i) => i.to === "/staff/marketing");
+    if (mIdx >= 0) withLeads.splice(mIdx + 1, 0, leadsItem);
+    else withLeads.push(leadsItem);
+  }
+  return withLeads;
 }

@@ -50,7 +50,12 @@ function toPublic(session: TrustedSession): PublicSession {
   };
 }
 
-/** Route-guard helper — httpOnly cookie; demo roles re-validated against DEMO_ACCOUNTS. */
+/**
+ * Route-guard helper — httpOnly cookie.
+ * Demo: role re-validated against DEMO_ACCOUNTS.
+ * Supabase: cookie is unsigned — never treat cookie.role as authz; live grants
+ * come only from Bearer JWT via establishSession / requireTrustedSession.
+ */
 export const getPortalSession = createServerFn({ method: "GET" }).handler(async () => {
   const cookie = readPortalSessionCookie();
   if (!cookie) return null;
@@ -79,17 +84,12 @@ export const getPortalSession = createServerFn({ method: "GET" }).handler(async 
     }
   }
 
-  const role = normalizeAppRole(cookie.role);
-  if (!role) return null;
-  return {
-    role,
-    email: cookie.email,
-    source: cookie.source,
-    ...(cookie.consultantId ? { consultantId: cookie.consultantId } : {}),
-    businessRole: cookie.businessRole
-      ? (normalizeTrustedBusinessRole(cookie.businessRole) ?? null)
-      : null,
-  } satisfies PublicSession;
+  // Unsigned supabase cookie must not authorize — callers use establishSession + Bearer.
+  if (cookie.source === "supabase") {
+    return null;
+  }
+
+  return null;
 });
 
 export const establishSession = createServerFn({ method: "POST" })
@@ -149,7 +149,7 @@ export const portalGetStudents = createServerFn({ method: "GET" }).handler(async
     requireRoles(session, ["consultant", "admin", "super_admin"]);
     denyFrontDeskConsultantWorkflows(session, "the consultant student directory");
     await requireModulePermission(session, "students", 1, "the consultant student directory");
-    // Supabase sessions must never receive mock CRM rows as a silent fallback.
+    // Live plane: fail-safe empty list (no mock rows). Prefer directory/profile endpoints for Supabase CRM.
     return crmListOrEmpty(session.source, filterStudentsForSession(session));
   } catch (error) {
     toError(error);
@@ -166,6 +166,7 @@ export const portalGetStudent = createServerFn({ method: "GET" })
         denyFrontDeskConsultantWorkflows(session, "student records");
         await requireModulePermission(session, "students", 1, "student records");
       }
+      // Live plane: fail-safe null — use portalGetCurrentStudent / AO directory for real rows.
       if (!isMockCrmAllowed(session.source)) {
         return crmRecordOrNull(session.source, null);
       }

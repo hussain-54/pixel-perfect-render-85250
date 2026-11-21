@@ -30,9 +30,7 @@ function Cell({
 }) {
   return (
     <div
-      className={
-        full ? "assessment-a4-cell col-span-2 px-2 py-1" : "assessment-a4-cell px-2 py-1"
-      }
+      className={full ? "assessment-a4-cell col-span-2 px-2 py-1" : "assessment-a4-cell px-2 py-1"}
       style={{ border: `1px solid ${BORDER}` }}
     >
       <div className="text-[9px] font-bold uppercase tracking-wide" style={{ color: NAVY }}>
@@ -85,10 +83,7 @@ export function CounsellingAssessmentFormA4({
           className="assessment-a4-idbox shrink-0 rounded border px-2.5 py-1.5 text-right"
           style={{ borderColor: BORDER, backgroundColor: WASH }}
         >
-          <div
-            className="text-[9px] font-semibold uppercase tracking-wide"
-            style={{ color: NAVY }}
-          >
+          <div className="text-[9px] font-semibold uppercase tracking-wide" style={{ color: NAVY }}>
             Case ID
           </div>
           <div className="text-[13px] font-bold" style={{ color: NAVY }}>
@@ -169,8 +164,8 @@ export function CounsellingAssessmentFormA4({
           className="assessment-a4-note rounded px-2 py-1 text-[9px] leading-snug"
           style={{ backgroundColor: WASH, color: NAVY }}
         >
-          CONFIDENTIAL — Authorised GlobalRoots staff only. Reflects the saved assessment. Signup-fee
-          verification is handled separately by Accounts.
+          CONFIDENTIAL — Authorised GlobalRoots staff only. Reflects the saved assessment.
+          Signup-fee verification is handled separately by Accounts.
         </p>
       </div>
 

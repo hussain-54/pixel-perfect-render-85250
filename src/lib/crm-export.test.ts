@@ -36,7 +36,7 @@ describe("CRM export / catalog import helpers", () => {
     expect(isFormulaInjectionRisk("-1+1")).toBe(true);
     expect(isFormulaInjectionRisk("@sum")).toBe(true);
     expect(isFormulaInjectionRisk("Normal University")).toBe(false);
-    expect(escapeCsvCell("=1+1")).toBe("\"'=1+1\"");
+    expect(escapeCsvCell("=1+1")).toBe('"\'=1+1"');
   });
 
   it("validates import file metadata", () => {

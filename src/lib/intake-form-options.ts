@@ -85,13 +85,7 @@ export const INTAKE_STUDY_LEVELS = [
   "Other",
 ] as const;
 
-export const INTAKE_SEASONS = [
-  "Winter",
-  "Summer",
-  "Spring",
-  "Autumn",
-  "Other",
-] as const;
+export const INTAKE_SEASONS = ["Winter", "Summer", "Spring", "Autumn", "Other"] as const;
 
 export type IntakeSeason = (typeof INTAKE_SEASONS)[number];
 

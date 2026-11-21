@@ -46,13 +46,7 @@ function UniversityMark({ university }: { university: ExploreUniversity }) {
   );
 }
 
-function MarqueeRow({
-  items,
-  paused,
-}: {
-  items: ExploreUniversity[];
-  paused: boolean;
-}) {
+function MarqueeRow({ items, paused }: { items: ExploreUniversity[]; paused: boolean }) {
   const track = useMemo(() => [...items, ...items], [items]);
 
   return (
@@ -172,8 +166,8 @@ export function UniversityLogoCarousel() {
                 Looking for the right partnered university?
               </h3>
               <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
-                Browse the full list of partnered universities, or book a free consultation and
-                we will shortlist options around your goals, budget, and destination.
+                Browse the full list of partnered universities, or book a free consultation and we
+                will shortlist options around your goals, budget, and destination.
               </p>
             </div>
             <div className="flex w-full flex-col gap-2 sm:w-auto sm:flex-row">

@@ -2,10 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { DocumentsQueue } from "@/components/portal/DocumentsQueue";
 import { enforceSpecialtyStaffModuleBeforeLoad } from "@/lib/staff-specialty-before-load";
 import { useCounsellorWorkbenchRealtime } from "@/lib/use-counsellor-workbench-realtime";
-import {
-  DOCUMENT_QUEUE_TABS,
-  type DocumentQueueTab,
-} from "@/types/documents-queue";
+import { DOCUMENT_QUEUE_TABS, type DocumentQueueTab } from "@/types/documents-queue";
 
 export type DocumentsSearch = {
   tab?: DocumentQueueTab;

@@ -12,12 +12,7 @@ import { useEffect, type ReactNode } from "react";
 
 import appCss from "../styles.css?url";
 import { reportRuntimeError } from "../lib/runtime-error-reporting";
-import {
-  SITE_DEFAULT_DESCRIPTION,
-  SITE_DEFAULT_TITLE,
-  SITE_NAME,
-  SITE_OG_IMAGE,
-} from "@/lib/seo";
+import { SITE_DEFAULT_DESCRIPTION, SITE_DEFAULT_TITLE, SITE_NAME, SITE_OG_IMAGE } from "@/lib/seo";
 
 function NotFoundComponent() {
   return (

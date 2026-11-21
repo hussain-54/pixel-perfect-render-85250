@@ -3,7 +3,13 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { SiteLayout, PageHero } from "@/components/site/SiteLayout";
 import { ScholarshipCard, CtaBand } from "@/components/site/blocks";
-import { FilterSelect, EmptyState, LoadingRows, ErrorState, portalErrorMessage } from "@/components/common";
+import {
+  FilterSelect,
+  EmptyState,
+  LoadingRows,
+  ErrorState,
+  portalErrorMessage,
+} from "@/components/common";
 import type { ScholarshipListFilters } from "@/lib/scholarship-rules";
 import { listPublishedScholarships } from "@/services";
 import { pageHead } from "@/lib/seo";

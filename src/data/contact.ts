@@ -10,14 +10,7 @@
 import type { AppPath } from "@/data/navigation";
 
 export type SocialChannelId =
-  | "facebook"
-  | "instagram"
-  | "youtube"
-  | "linkedin"
-  | "x"
-  | "snapchat"
-  | "tiktok"
-  | "whatsapp";
+  "facebook" | "instagram" | "youtube" | "linkedin" | "x" | "snapchat" | "tiktok" | "whatsapp";
 
 export type SocialLink = {
   id: SocialChannelId;
