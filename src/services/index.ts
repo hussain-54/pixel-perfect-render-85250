@@ -137,6 +137,12 @@ import {
   portalUpsertOpsSupplier,
 } from "@/server/portal-operations";
 import {
+  portalGetFinanceDesk,
+  portalPostFinanceDeskEntry,
+  portalReverseFinanceDeskEntry,
+  portalSaveFinanceDeskEntry,
+} from "@/server/portal-finance-desk";
+import {
   portalCreateAccount,
   portalDeleteAccount,
   portalListAccountOptions,
@@ -427,8 +433,7 @@ export const updateOrganizationSettings = (data: OrganizationSettingsInput) =>
 /** Public website CMS — published documents + active announcements (fallback-safe). */
 export const getPublishedCmsBundle = () => portalGetPublishedCmsBundle();
 
-export const getCmsAdminOverview = () =>
-  withAuth((opts) => portalGetCmsAdminOverview(opts));
+export const getCmsAdminOverview = () => withAuth((opts) => portalGetCmsAdminOverview(opts));
 
 export const getCmsDocument = (documentKey: string) =>
   withAuth((opts) => portalGetCmsDocument({ ...opts, data: { documentKey } }));
@@ -439,13 +444,10 @@ export const saveCmsDraft = (data: {
   expectedDraftVersion?: number;
 }) => withAuth((opts) => portalSaveCmsDraft({ ...opts, data }));
 
-export const publishCmsDocument = (data: {
-  documentKey: string;
-  expectedDraftVersion?: number;
-}) => withAuth((opts) => portalPublishCmsDocument({ ...opts, data }));
+export const publishCmsDocument = (data: { documentKey: string; expectedDraftVersion?: number }) =>
+  withAuth((opts) => portalPublishCmsDocument({ ...opts, data }));
 
-export const listCmsAnnouncements = () =>
-  withAuth((opts) => portalListCmsAnnouncements(opts));
+export const listCmsAnnouncements = () => withAuth((opts) => portalListCmsAnnouncements(opts));
 
 export const saveCmsAnnouncement = (data: CmsAnnouncementInput) =>
   withAuth((opts) => portalSaveCmsAnnouncement({ ...opts, data }));
@@ -986,6 +988,38 @@ export const listAttributionHistory = (consultationRequestId: string) =>
   withAuth((opts) => portalListAttributionHistory({ ...opts, data: { consultationRequestId } }));
 
 export const getOpsDashboard = () => withAuth((opts) => portalGetOpsDashboard(opts));
+
+/** Banking & Finance desk — office ledger + student fee balance overview. */
+export const getFinanceDesk = (data?: { staffShell?: boolean }) =>
+  withAuth((opts) => portalGetFinanceDesk({ ...opts, data: data ?? {} }));
+
+export const saveFinanceDeskEntry = (data: {
+  kind: string;
+  title: string;
+  amount?: number;
+  entryDate?: string;
+  detail?: Record<string, string | number | boolean | null>;
+  studentId?: string | null;
+  parentId?: string | null;
+  billId?: string;
+  principal?: number;
+  interest?: number;
+  carrying?: number;
+  proceeds?: number;
+  withheld?: number;
+  net?: number;
+  count?: number;
+  fund?: string;
+  number?: string;
+  reference?: string;
+  department?: string;
+}) => withAuth((opts) => portalSaveFinanceDeskEntry({ ...opts, data }));
+
+export const postFinanceDeskEntry = (id: string) =>
+  withAuth((opts) => portalPostFinanceDeskEntry({ ...opts, data: { id } }));
+
+export const reverseFinanceDeskEntry = (data: { id: string; reason: string }) =>
+  withAuth((opts) => portalReverseFinanceDeskEntry({ ...opts, data }));
 
 export const upsertOpsSupplier = (data: {
   id?: string;
