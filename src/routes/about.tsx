@@ -26,20 +26,22 @@ function Page() {
       />
       <section className="container-page section-y grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
         <div className="space-y-4 text-muted-foreground">
-          <h2 className="font-display text-2xl font-semibold text-navy md:text-3xl">Our mission</h2>
-          <p className="leading-relaxed">
+          <h2 className="font-display text-[1.65rem] font-semibold tracking-tight text-navy md:text-[1.85rem]">
+            Our mission
+          </h2>
+          <p className="text-sm leading-relaxed md:text-[0.95rem]">
             We believe every capable student deserves honest, expert guidance. Our consultants
             combine country-specific knowledge with a transparent process, so families always know
             where they stand.
           </p>
-          <p className="leading-relaxed">
+          <p className="text-sm leading-relaxed md:text-[0.95rem]">
             Today we represent more than 2,000 universities across 26+ countries. Global Roots
             Consultants is SECP Registered, with our office in Faisalabad.
           </p>
-          <div className="grid grid-cols-2 gap-5 pt-2">
+          <div className="grid grid-cols-2 gap-5 pt-2 sm:gap-6">
             {stats.map((s) => (
               <div key={s.label} className="border-l-2 border-royal pl-4">
-                <p className="font-display text-2xl font-semibold text-navy md:text-3xl">
+                <p className="font-display text-2xl font-semibold tabular-nums text-navy md:text-[1.85rem]">
                   {s.value}
                 </p>
                 <p className="mt-0.5 text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-muted-foreground">
@@ -55,13 +57,13 @@ function Page() {
           loading="lazy"
           width={1024}
           height={768}
-          className="aspect-[4/3] w-full rounded-lg object-cover"
+          className="aspect-[4/3] w-full rounded-lg object-cover shadow-soft"
         />
       </section>
       <section className="section-y bg-surface">
         <div className="container-page grid gap-8 sm:grid-cols-2 md:grid-cols-4 md:gap-6">
           {whyUs.map((w, i) => (
-            <div key={w.title} className="border-t border-royal/30 pt-4">
+            <div key={w.title} className="border-t border-royal/30 pt-4 gr-enter">
               <span className="text-[0.6875rem] font-semibold text-royal">0{i + 1}</span>
               <h3 className="mt-1.5 font-sans text-[0.95rem] font-semibold text-navy">{w.title}</h3>
               <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{w.body}</p>

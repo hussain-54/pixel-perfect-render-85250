@@ -13,7 +13,9 @@ import {
 import {
   PageHeader,
   PageLoadState,
+  PortalPage,
   StatCard,
+  StatGrid,
   Panel,
   LoadingRows,
   EmptyState,
@@ -105,10 +107,10 @@ function AdminDashboard() {
   const m = data.metrics;
 
   return (
-    <div>
+    <PortalPage>
       <PageHeader title={pageTitle} subtitle={pageSubtitle} />
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <StatGrid className="gr-enter xl:grid-cols-4">
         <StatCard label="Active students" value={m.activeStudents} icon={<Users />} />
         <StatCard
           label="Signup fees to verify"
@@ -152,10 +154,10 @@ function AdminDashboard() {
           hint={`Counselling queue: ${m.counsellingQueue} · Visa attention: ${m.visaCasesRequiringAttention}`}
           icon={<ListTodo />}
         />
-      </div>
+      </StatGrid>
 
-      <div className="mb-6 grid gap-6 lg:grid-cols-2">
-        <Panel title="Students by journey stage">
+      <div className="grid gap-4 lg:grid-cols-2 lg:gap-5">
+        <Panel title="Students by journey stage" enter>
           <ul className="space-y-2 text-sm">
             {JOURNEY_STAGE_ORDER.map((stage) => {
               const count = m.studentsByStage[stage] ?? 0;
@@ -195,6 +197,7 @@ function AdminDashboard() {
 
         <Panel
           title="Student journey search"
+          enter
           action={
             data.isSuperAdmin ? (
               <span className="text-xs text-muted-foreground">Super Admin session</span>
@@ -242,6 +245,6 @@ function AdminDashboard() {
           </p>
         </Panel>
       </div>
-    </div>
+    </PortalPage>
   );
 }

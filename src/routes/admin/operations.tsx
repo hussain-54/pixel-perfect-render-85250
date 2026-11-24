@@ -12,6 +12,7 @@ import {
   TableWrap,
   fmtDate,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -231,7 +232,7 @@ export function OperationsModulePage() {
   });
 
   return (
-    <div>
+    <PortalPage>
       <PageHeader
         title="Orders / Sales / Purchase"
         subtitle="Suppliers, purchases, stock, operational sales and expenses — separate from student fees."
@@ -475,29 +476,31 @@ export function OperationsModulePage() {
                     <td>
                       <StatusBadge status={p.status} />
                     </td>
-                    <td className="space-x-1">
-                      {data.canMutate && p.status === "draft" ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() =>
-                            statusM.mutate({ purchaseOrderId: p.id, status: "submitted" })
-                          }
-                        >
-                          Submit
-                        </Button>
-                      ) : null}
-                      {data.canMutate && p.status === "submitted" ? (
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() =>
-                            statusM.mutate({ purchaseOrderId: p.id, status: "approved" })
-                          }
-                        >
-                          Approve
-                        </Button>
-                      ) : null}
+                    <td>
+                      <div className="flex flex-wrap gap-1">
+                        {data.canMutate && p.status === "draft" ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              statusM.mutate({ purchaseOrderId: p.id, status: "submitted" })
+                            }
+                          >
+                            Submit
+                          </Button>
+                        ) : null}
+                        {data.canMutate && p.status === "submitted" ? (
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              statusM.mutate({ purchaseOrderId: p.id, status: "approved" })
+                            }
+                          >
+                            Approve
+                          </Button>
+                        ) : null}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -714,6 +717,6 @@ export function OperationsModulePage() {
           )}
         </Panel>
       </div>
-    </div>
+    </PortalPage>
   );
 }

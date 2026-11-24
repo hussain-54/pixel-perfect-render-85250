@@ -20,6 +20,7 @@ import {
   PageHeader,
   PageLoadState,
   Panel,
+  PortalPage,
   StatCard,
   LiveBadge,
   TableWrap,
@@ -327,7 +328,7 @@ function StaffDashboard() {
   }
 
   return (
-    <div className="space-y-4 md:space-y-5">
+    <PortalPage>
       <PageHeader
         compact
         title={`Good ${new Date().getHours() < 12 ? "morning" : new Date().getHours() < 17 ? "afternoon" : "evening"}, ${data.greetingName}`}
@@ -1552,6 +1553,6 @@ function StaffDashboard() {
           </div>
         </SheetContent>
       </Sheet>
-    </div>
+    </PortalPage>
   );
 }

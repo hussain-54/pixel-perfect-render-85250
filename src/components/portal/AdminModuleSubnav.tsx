@@ -30,7 +30,7 @@ export function AdminModuleSubnav({ items }: { items: AdminModuleSubnavItem[] })
   return (
     <nav
       aria-label="Module sections"
-      className="mb-6 flex flex-wrap gap-1.5 border-b border-border pb-3"
+      className="-mx-1 mb-5 flex flex-wrap gap-1 overflow-x-auto overscroll-x-contain border-b border-border px-1 pb-3"
     >
       {items.map((item) => {
         const search = item.tab ? `?tab=${encodeURIComponent(item.tab)}` : "";
@@ -44,10 +44,10 @@ export function AdminModuleSubnav({ items }: { items: AdminModuleSubnavItem[] })
             href={href}
             aria-current={active ? "page" : undefined}
             className={cn(
-              "min-h-9 rounded-md px-3 py-1.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal/40",
+              "inline-flex min-h-10 shrink-0 items-center rounded-md px-3 py-2 text-sm font-medium gr-motion-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal/40",
               active
-                ? "bg-navy text-white"
-                : "bg-muted/70 text-muted-foreground hover:bg-muted hover:text-foreground",
+                ? "bg-navy text-white shadow-sm"
+                : "bg-muted/60 text-muted-foreground hover:bg-muted hover:text-navy",
             )}
             onClick={(e) => {
               e.preventDefault();

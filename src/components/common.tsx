@@ -3,30 +3,50 @@ import { Inbox, AlertTriangle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { ActivityItem } from "@/types";
 
+/** Standard portal page column — consistent vertical rhythm. */
+export function PortalPage({ children, className }: { children: ReactNode; className?: string }) {
+  return <div className={cn("portal-stack", className)}>{children}</div>;
+}
+
+/** Filter / search / primary-action row for desks. */
+export function FilterToolbar({
+  children,
+  className,
+}: {
+  children: ReactNode;
+  className?: string;
+}) {
+  return <div className={cn("portal-toolbar", className)}>{children}</div>;
+}
+
 export function PageHeader({
   title,
   subtitle,
   actions,
   compact = false,
+  className,
 }: {
   title: string;
   subtitle?: string;
   actions?: ReactNode;
   /** Denser operational workspaces (staff desks). */
   compact?: boolean;
+  className?: string;
 }) {
   return (
     <div
       className={cn(
         "flex flex-col gap-2.5 sm:flex-row sm:items-end sm:justify-between",
-        compact ? "mb-4" : "mb-5 sm:mb-6",
+        /* Prefer portal-stack gap; keep light margin when used alone */
+        compact ? "mb-3" : "mb-4 sm:mb-5",
+        className,
       )}
     >
       <div className="min-w-0">
         <h1
           className={cn(
-            "font-display font-semibold text-navy",
-            compact ? "text-lg sm:text-xl" : "text-xl sm:text-2xl md:text-[1.75rem]",
+            "font-display font-semibold tracking-tight text-navy",
+            compact ? "text-lg sm:text-xl" : "text-xl sm:text-2xl md:text-[1.65rem]",
           )}
         >
           {title}
@@ -34,15 +54,15 @@ export function PageHeader({
         {subtitle ? (
           <p
             className={cn(
-              "mt-0.5 max-w-3xl leading-snug text-navy/70",
-              compact ? "text-xs sm:text-sm" : "text-sm leading-relaxed text-muted-foreground",
+              "mt-1 max-w-3xl text-muted-foreground",
+              compact ? "text-xs sm:text-sm leading-snug" : "text-sm leading-relaxed",
             )}
           >
             {subtitle}
           </p>
         ) : null}
       </div>
-      {actions ? <div className="flex flex-wrap gap-2">{actions}</div> : null}
+      {actions ? <div className="flex flex-wrap items-center gap-2">{actions}</div> : null}
     </div>
   );
 }
@@ -197,13 +217,13 @@ export function StatCard({
     </>
   );
   const shellClass = cn(
-    "flex h-full min-h-[5rem] flex-col text-left",
+    "flex h-full min-h-[5rem] flex-col text-left gr-motion",
     variant === "card"
-      ? cn("rounded-lg border p-3 shadow-soft", tint.shell)
+      ? cn("rounded-lg border p-3.5 shadow-soft", tint.shell)
       : "border-b border-border pb-3 pt-1",
     onClick &&
       cn(
-        "w-full cursor-pointer transition-[border-color,background-color,box-shadow] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal/40",
+        "w-full cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-royal/40",
         tint.hover,
         "hover:shadow-sm",
       ),
@@ -237,24 +257,29 @@ export function Panel({
   children,
   className,
   compact = false,
+  enter = false,
 }: {
   title?: string;
   action?: ReactNode;
   children: ReactNode;
   className?: string;
   compact?: boolean;
+  /** Subtle entrance — avoid on large table panels. */
+  enter?: boolean;
 }) {
   return (
-    <section className={cn("panel", className)}>
+    <section className={cn("panel", enter && "gr-enter", className)}>
       {title ? (
         <header
           className={cn(
-            "flex items-center justify-between border-b border-border",
+            "flex items-center justify-between gap-3 border-b border-border",
             compact ? "px-4 py-2.5" : "px-5 py-3.5",
           )}
         >
-          <h2 className="font-sans text-sm font-semibold tracking-normal text-navy">{title}</h2>
-          {action}
+          <h2 className="min-w-0 font-sans text-sm font-semibold tracking-normal text-navy">
+            {title}
+          </h2>
+          {action ? <div className="shrink-0">{action}</div> : null}
         </header>
       ) : null}
       <div className={cn(compact ? "p-4" : "p-5")}>{children}</div>
@@ -329,11 +354,15 @@ export function EmptyState({
   action?: ReactNode;
 }) {
   return (
-    <div className="flex flex-col items-center justify-center px-4 py-10 text-center sm:py-12">
-      <Inbox className="h-8 w-8 text-muted-foreground" aria-hidden />
-      <p className="mt-3 font-semibold text-navy">{title}</p>
-      {body ? <p className="mt-1 max-w-sm text-sm text-muted-foreground">{body}</p> : null}
-      {action ? <div className="mt-4">{action}</div> : null}
+    <div className="flex flex-col items-center justify-center px-4 py-10 text-center sm:py-14">
+      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+        <Inbox className="h-5 w-5 text-muted-foreground" aria-hidden />
+      </div>
+      <p className="mt-3.5 font-semibold text-navy">{title}</p>
+      {body ? (
+        <p className="mt-1.5 max-w-sm text-sm leading-relaxed text-muted-foreground">{body}</p>
+      ) : null}
+      {action ? <div className="mt-5">{action}</div> : null}
     </div>
   );
 }
@@ -396,7 +425,13 @@ export function portalErrorMessage(error: unknown, fallback = "Something went wr
   const m = error.message.match(/^(\d{3}):([\s\S]+)$/);
   if (m?.[1] === "403") return m[2]?.trim() || "You do not have permission to view this data.";
   if (m?.[1] === "401") return m[2]?.trim() || "Please sign in to continue.";
-  return m?.[2]?.trim() || error.message || fallback;
+  const raw = (m?.[2]?.trim() || error.message || fallback).trim();
+  // Keep desk alerts readable — hide Seroval / serialization dumps from operators.
+  if (/seroval caught an error|cannot be parsed\/serialized/i.test(raw)) {
+    return "This module could not load data from the server. Try again shortly, or check the live data plane.";
+  }
+  if (raw.length > 240) return `${raw.slice(0, 240).trimEnd()}…`;
+  return raw || fallback;
 }
 
 export function PermissionDenied({
@@ -413,25 +448,31 @@ export function PermissionDenied({
 
 export function LoadingRows({ rows = 4 }: { rows?: number }) {
   return (
-    <div className="space-y-3" aria-busy>
+    <div className="space-y-3" aria-busy aria-label="Loading">
       {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="h-10 animate-pulse rounded-md bg-muted" />
+        <div
+          key={i}
+          className="h-10 rounded-md bg-muted motion-safe:animate-pulse motion-reduce:opacity-70"
+        />
       ))}
     </div>
   );
 }
 
-/** Horizontal scroll container for tables on small screens — scroll inside, do not clip cells globally. */
+/** Horizontal scroll container for tables on small screens — scroll inside, do not clip cells globally.
+ * Pass thead/tbody (or rows) as children — do not nest another &lt;table&gt;. */
 export function TableWrap({
   children,
   compact = false,
+  className,
 }: {
   children: ReactNode;
   /** Narrower min-width for simpler tables on phones. */
   compact?: boolean;
+  className?: string;
 }) {
   return (
-    <div className="panel overflow-hidden">
+    <div className={cn("panel overflow-hidden", className)}>
       <div
         className="overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]"
         role="region"
@@ -442,8 +483,9 @@ export function TableWrap({
           className={cn(
             "w-full text-left text-sm",
             compact ? "min-w-[480px]" : "min-w-[640px] sm:min-w-[720px]",
-            "[&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-border [&_th]:bg-transparent [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-[0.6875rem] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.1em] [&_th]:text-muted-foreground sm:[&_th]:px-4",
+            "[&_th]:whitespace-nowrap [&_th]:border-b [&_th]:border-border [&_th]:bg-muted/40 [&_th]:px-3 [&_th]:py-2.5 [&_th]:text-[0.6875rem] [&_th]:font-semibold [&_th]:uppercase [&_th]:tracking-[0.08em] [&_th]:text-muted-foreground sm:[&_th]:px-4",
             "[&_td]:border-t [&_td]:border-border/70 [&_td]:px-3 [&_td]:py-2.5 [&_td]:align-middle sm:[&_td]:px-4 sm:[&_td]:py-3",
+            "[&_tbody_tr]:gr-motion-fast [&_tbody_tr:hover]:bg-navy/[0.02]",
             "[&_a]:rounded-sm [&_a]:focus-visible:outline-none [&_a]:focus-visible:ring-2 [&_a]:focus-visible:ring-royal/40",
             "[&_button]:focus-visible:outline-none [&_button]:focus-visible:ring-2 [&_button]:focus-visible:ring-royal/40",
             "[&_select]:focus-visible:outline-none [&_select]:focus-visible:ring-2 [&_select]:focus-visible:ring-royal/40",
@@ -512,7 +554,7 @@ export function FilterSelect({
       aria-label={label}
       value={value}
       onChange={(e) => onChange(e.target.value)}
-      className="h-10 min-h-10 rounded-md border border-input bg-white px-3 text-sm text-navy focus-visible:border-royal/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
+      className="field-control h-10 min-h-10 min-w-[8.5rem] focus-visible:border-royal/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
     >
       <option value="">{label}: All</option>
       {options.map((o) => (
@@ -521,5 +563,19 @@ export function FilterSelect({
         </option>
       ))}
     </select>
+  );
+}
+
+/** Responsive KPI grid with optional entrance stagger. */
+export function StatGrid({ children, className }: { children: ReactNode; className?: string }) {
+  return (
+    <div
+      className={cn(
+        "grid grid-cols-2 gap-3 sm:gap-3.5 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5",
+        className,
+      )}
+    >
+      {children}
+    </div>
   );
 }

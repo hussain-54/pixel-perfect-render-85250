@@ -12,6 +12,7 @@ import {
   portalErrorMessage,
   FilterSelect,
   fmtDate,
+  PortalPage,
 } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -318,7 +319,7 @@ function StudentsDirectory() {
   }
 
   return (
-    <div className="space-y-4 md:space-y-5">
+    <PortalPage>
       <PageHeader
         compact
         title={directoryTitle}
@@ -614,6 +615,6 @@ function StudentsDirectory() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PortalPage>
   );
 }

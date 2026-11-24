@@ -10,6 +10,7 @@ import {
   Panel,
   PermissionDenied,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { SearchableSelect } from "@/components/portal/SearchableSelect";
 import { Button } from "@/components/ui/button";
@@ -606,7 +607,7 @@ function FrontDeskRegisterPage() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-4 md:space-y-5">
+    <PortalPage className="mx-auto w-full max-w-6xl">
       <PageHeader
         compact
         title="Register student"
@@ -1047,6 +1048,6 @@ function FrontDeskRegisterPage() {
           </div>
         </form>
       </div>
-    </div>
+    </PortalPage>
   );
 }

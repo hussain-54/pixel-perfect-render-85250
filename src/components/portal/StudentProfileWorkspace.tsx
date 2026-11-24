@@ -2081,7 +2081,7 @@ export function StudentProfileWorkspaceView({ workspace, tab, onTabChange }: Pro
       @media print {
         @page {
           size: A4 portrait;
-          margin: 8mm;
+          margin: 10mm 12mm;
         }
         html, body {
           background: #fff !important;

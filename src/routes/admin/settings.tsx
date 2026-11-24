@@ -9,6 +9,7 @@ import {
   ErrorState,
   PermissionDenied,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { AdminModuleSubnav } from "@/components/portal/AdminModuleSubnav";
 import { Input } from "@/components/ui/input";
@@ -154,7 +155,7 @@ function AdminSettings() {
     : null;
 
   return (
-    <div className="space-y-6">
+    <PortalPage>
       <PageHeader title={pageTitle} subtitle={pageSubtitle} />
       <AdminModuleSubnav items={subnav} />
 
@@ -392,6 +393,6 @@ function AdminSettings() {
           </ul>
         </Panel>
       ) : null}
-    </div>
+    </PortalPage>
   );
 }

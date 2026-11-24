@@ -347,7 +347,7 @@ function DocumentEditorShell({
 
   return (
     <div className="space-y-3">
-      <div className="sticky top-0 z-10 -mx-1 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 px-1 py-2 backdrop-blur-sm">
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 border-b border-border bg-background/95 py-2 backdrop-blur-sm">
         <Button
           size="sm"
           variant="outline"

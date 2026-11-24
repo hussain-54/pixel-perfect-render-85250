@@ -6,6 +6,7 @@ import {
   EmptyState,
   ErrorState,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { AdminModuleSubnav } from "@/components/portal/AdminModuleSubnav";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -17,10 +18,10 @@ export const Route = createFileRoute("/admin/applications")({
 });
 
 function AdminApplications() {
-  const appsQ = useData(["applications"], getApplications);
+  const appsQ = useData(["applications"], () => getApplications());
 
   return (
-    <div>
+    <PortalPage>
       <PageHeader
         title="Admissions"
         subtitle="University applications and catalog references for admissions work."
@@ -69,6 +70,6 @@ function AdminApplications() {
           </tbody>
         </TableWrap>
       )}
-    </div>
+    </PortalPage>
   );
 }

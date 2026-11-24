@@ -12,6 +12,7 @@ import {
   TableWrap,
   fmtDate,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { DocumentSecurePreview } from "@/components/portal/DocumentSecurePreview";
@@ -176,7 +177,7 @@ export function DocumentsQueue(props?: {
   const noteReady = note.trim().length >= 3;
 
   return (
-    <div className="space-y-4 md:space-y-5">
+    <PortalPage>
       <PageHeader
         compact
         title="Documents"
@@ -552,7 +553,7 @@ export function DocumentsQueue(props?: {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PortalPage>
   );
 }
 

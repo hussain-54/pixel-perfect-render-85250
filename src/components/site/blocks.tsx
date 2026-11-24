@@ -18,7 +18,7 @@ export function CatalogueSampleNotice({ kind }: { kind: "universities" | "schola
   return (
     <p
       role="note"
-      className="mb-6 border border-border bg-surface px-4 py-3 text-sm leading-relaxed text-muted-foreground"
+      className="mb-6 rounded-lg border border-border bg-surface px-4 py-3 text-sm leading-relaxed text-muted-foreground"
     >
       These {label} entries are <strong className="font-semibold text-navy">sample listings</strong>{" "}
       for browsing this site. They are not a verified live inventory. Confirm availability,
@@ -202,7 +202,7 @@ export function ConsultationForm() {
 
   return (
     <form
-      className="panel grid gap-4 p-6 sm:grid-cols-2 md:p-8"
+      className="panel grid gap-4 p-5 sm:grid-cols-2 sm:p-6 md:gap-5 md:p-8"
       noValidate
       onSubmit={async (e) => {
         e.preventDefault();

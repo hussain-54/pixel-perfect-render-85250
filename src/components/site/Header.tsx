@@ -123,9 +123,9 @@ export function Header({ cmsHeader, cmsNav }: HeaderProps = {}) {
             <Logo className="mr-4 shrink-0 xl:mr-6" />
           )}
 
-          {/* Navigation — desktop from 1400px so items never collide with actions */}
+          {/* Navigation — desktop from xl; compact spacing keeps actions clear */}
           <nav
-            className="hidden min-w-0 flex-1 items-center justify-center gap-x-2 overflow-hidden min-[1400px]:flex 2xl:gap-x-4"
+            className="hidden min-w-0 flex-1 items-center justify-center gap-x-1 overflow-hidden xl:flex 2xl:gap-x-3"
             aria-label="Primary"
           >
             {desktopNavigation.map((item) => {
@@ -169,7 +169,7 @@ export function Header({ cmsHeader, cmsNav }: HeaderProps = {}) {
           </nav>
 
           {/* Actions — fixed right cluster with clear separation from nav */}
-          <div className="ml-auto flex shrink-0 items-center gap-2.5 border-l border-border pl-4 max-[1399px]:border-0 max-[1399px]:pl-0 min-[1400px]:ml-6 min-[1400px]:gap-3 min-[1400px]:pl-6">
+          <div className="ml-auto flex shrink-0 items-center gap-2 border-l border-border pl-3 max-xl:border-0 max-xl:pl-0 xl:ml-4 xl:gap-2.5 xl:pl-5 2xl:ml-6 2xl:gap-3 2xl:pl-6">
             <SiteSearch
               open={searchOpen}
               onOpenChange={(next) => {
@@ -183,7 +183,7 @@ export function Header({ cmsHeader, cmsNav }: HeaderProps = {}) {
               asChild
               variant="default"
               size="sm"
-              className="hidden h-10 shrink-0 whitespace-nowrap px-3 text-sm sm:inline-flex min-[1400px]:px-4"
+              className="hidden h-10 shrink-0 whitespace-nowrap px-3 text-sm sm:inline-flex xl:px-4"
             >
               {ctaHref.startsWith("/") ? (
                 <Link to={ctaHref as "/contact"} onClick={closeMenus}>
@@ -215,7 +215,7 @@ export function Header({ cmsHeader, cmsNav }: HeaderProps = {}) {
                 closeMenus();
                 setMobileOpen((v) => !v);
               }}
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-navy transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring min-[1400px]:hidden"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-navy transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring xl:hidden"
             >
               {mobileOpen ? (
                 <X className="h-5 w-5" aria-hidden />
@@ -227,7 +227,7 @@ export function Header({ cmsHeader, cmsNav }: HeaderProps = {}) {
         </div>
 
         {openMenu && (
-          <div className="absolute inset-x-0 top-full z-50 hidden min-[1400px]:block">
+          <div className="absolute inset-x-0 top-full z-50 hidden xl:block">
             <div className="mx-auto w-full max-w-[1680px] px-5 pb-4 pt-2 md:px-6 lg:px-8 xl:px-10">
               <div id={menuRegionId}>
                 <MegaMenuPanel id={openMenu} onNavigate={closeMenus} />

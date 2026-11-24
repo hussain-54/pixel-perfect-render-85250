@@ -169,6 +169,13 @@ export function CounsellingAssessmentFormA4({
         </p>
       </div>
 
+      <footer
+        className="assessment-a4-footer mx-3 mb-3 border-t px-1 pt-1.5 text-[8px] leading-snug text-slate-500"
+        style={{ borderColor: BORDER }}
+      >
+        GlobalRoots Consultants · Counselling Assessment · Case {caseId} · Confidential staff record
+      </footer>
+
       <style>{`
         .assessment-a4 {
           -webkit-print-color-adjust: exact !important;
@@ -206,7 +213,7 @@ export function CounsellingAssessmentFormA4({
         @media print {
           @page {
             size: A4 portrait;
-            margin: 8mm;
+            margin: 10mm 12mm;
           }
           .assessment-a4 {
             width: 100% !important;
@@ -217,17 +224,34 @@ export function CounsellingAssessmentFormA4({
             border-radius: 0 !important;
           }
           .assessment-a4-header {
-            padding: 0 0 6px 0 !important;
+            padding: 0 0 8px 0 !important;
+            break-inside: avoid;
+            page-break-inside: avoid;
           }
           .assessment-a4-body {
-            padding: 6px 0 0 0 !important;
+            padding: 8px 0 0 0 !important;
+          }
+          .assessment-a4 section {
+            break-inside: avoid;
+            page-break-inside: avoid;
           }
           .assessment-a4-cell {
-            padding: 3px 6px !important;
+            padding: 4px 7px !important;
           }
           .assessment-a4-banner {
-            padding: 3px 8px !important;
+            padding: 4px 8px !important;
             font-size: 9px !important;
+            letter-spacing: 0.06em !important;
+          }
+          .assessment-a4-note {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+          .assessment-a4-footer {
+            break-inside: avoid;
+            page-break-inside: avoid;
+            margin: 8px 0 0 0 !important;
+            padding-top: 6px !important;
           }
         }
       `}</style>

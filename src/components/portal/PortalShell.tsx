@@ -132,8 +132,9 @@ function SidebarNav({
             <Link
               to={item.to}
               onClick={onNavigate}
+              aria-current={active ? "page" : undefined}
               className={cn(
-                "group flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-[0.8125rem] font-medium transition-colors duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
+                "group flex min-h-11 items-center gap-2.5 rounded-lg px-2.5 py-2 text-[0.8125rem] font-medium gr-motion-fast focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/80",
                 active
                   ? "bg-bright text-white shadow-sm shadow-black/15"
                   : "text-white/70 hover:bg-white/10 hover:text-white",
@@ -141,13 +142,13 @@ function SidebarNav({
             >
               <span
                 className={cn(
-                  "flex h-7 w-7 shrink-0 items-center justify-center rounded-md",
+                  "flex h-8 w-8 shrink-0 items-center justify-center rounded-md",
                   active
                     ? "bg-white/15 text-white"
                     : "bg-white/5 text-white/75 group-hover:bg-white/10",
                 )}
               >
-                <Icon className="h-3.5 w-3.5" strokeWidth={2} />
+                <Icon className="h-4 w-4" strokeWidth={2} />
               </span>
               <span className="min-w-0 flex-1 truncate">{item.label}</span>
               {item.badge ? (
@@ -442,8 +443,10 @@ export function PortalShell({ role, nav, children, barTitle, session }: PortalSh
             {searchPanel ? <div className="mt-2">{searchPanel}</div> : null}
           </div>
         ) : null}
-        <main className="portal-main min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4 md:p-5 lg:p-6">
-          <div className="mx-auto w-full max-w-[88rem]">{children ?? <Outlet />}</div>
+        <main className="portal-main min-h-0 min-w-0 flex-1 overflow-y-auto overscroll-contain bg-surface p-3 sm:p-4 md:p-5 lg:p-6">
+          <div className="mx-auto w-full max-w-[88rem] animate-in fade-in duration-200 motion-reduce:animate-none">
+            {children ?? <Outlet />}
+          </div>
         </main>
       </div>
     </div>

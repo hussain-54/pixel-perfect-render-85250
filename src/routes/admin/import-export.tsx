@@ -2,7 +2,14 @@ import { useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useMutation } from "@tanstack/react-query";
 import { Upload, Download, FileSpreadsheet } from "lucide-react";
-import { PageHeader, Panel, TableWrap, EmptyState, portalErrorMessage } from "@/components/common";
+import {
+  PageHeader,
+  Panel,
+  TableWrap,
+  EmptyState,
+  portalErrorMessage,
+  PortalPage,
+} from "@/components/common";
 import { Button } from "@/components/ui/button";
 import {
   CATALOG_EXPORT_ENTITIES,
@@ -99,7 +106,7 @@ function AdminImportExport() {
   const otherExports = CRM_EXPORT_ENTITIES.filter((e) => e !== "universities" && e !== "programs");
 
   return (
-    <div>
+    <PortalPage>
       <PageHeader
         title="Import / Export"
         subtitle="Authorized CSV for universities and programs. Preview and confirm before writing. Student bulk import is not available."
@@ -411,6 +418,6 @@ function AdminImportExport() {
           )}
         </div>
       ) : null}
-    </div>
+    </PortalPage>
   );
 }

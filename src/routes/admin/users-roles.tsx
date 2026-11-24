@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { createFileRoute, useRouterState } from "@tanstack/react-router";
-import { PageHeader, Panel } from "@/components/common";
+import { PageHeader, Panel, PortalPage } from "@/components/common";
 import { AdminAccountManagement } from "@/components/portal/AdminAccountManagement";
 import { AdminPermissionMatrix } from "@/components/portal/AdminPermissionMatrix";
 import { AdminModuleSubnav } from "@/components/portal/AdminModuleSubnav";
@@ -42,7 +42,7 @@ function AdminUsersRoles() {
   );
 
   return (
-    <div className="space-y-6">
+    <PortalPage>
       <PageHeader
         title="Users & Roles"
         subtitle="Manage portal accounts, business-role permissions, and account actions."
@@ -86,6 +86,6 @@ function AdminUsersRoles() {
           <AdminAccountManagement focus="actions" />
         </Panel>
       ) : null}
-    </div>
+    </PortalPage>
   );
 }

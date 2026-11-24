@@ -29,14 +29,16 @@ function Page() {
           <Link to="/contact">Talk to a Visa Consultant</Link>
         </Button>
       </PageHero>
-      <section className="container-page section-y grid gap-10 lg:grid-cols-[1.2fr_0.8fr] lg:gap-14">
+      <section className="container-page section-y grid gap-8 lg:grid-cols-[1.2fr_0.8fr] lg:gap-14">
         <ol className="divide-y border-y border-border">
           {visaSteps.map((v, i) => (
-            <li key={v.title} className="py-5">
+            <li key={v.title} className="py-5 md:py-6">
               <span className="text-[0.6875rem] font-semibold uppercase tracking-[0.12em] text-royal">
                 Step {i + 1}
               </span>
-              <h2 className="mt-1.5 font-sans text-[1.05rem] font-semibold text-navy">{v.title}</h2>
+              <h2 className="mt-1.5 font-sans text-base font-semibold text-navy md:text-[1.05rem]">
+                {v.title}
+              </h2>
               <p className="mt-1.5 text-sm leading-relaxed text-muted-foreground">{v.body}</p>
             </li>
           ))}

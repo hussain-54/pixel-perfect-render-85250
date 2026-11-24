@@ -12,6 +12,7 @@ import {
   TableWrap,
   fmtDate,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -315,7 +316,7 @@ function FrontDeskIntakeListContent() {
   }
 
   return (
-    <div className="space-y-4 md:space-y-5">
+    <PortalPage>
       <div className="fd-intake-no-print space-y-4 md:space-y-5">
         <PageHeader
           compact
@@ -465,7 +466,7 @@ function FrontDeskIntakeListContent() {
                   disabled={provisionM.isPending}
                   onClick={submitCreate}
                 >
-                  {provisionM.isPending ? "Creating accountâ€¦" : "Create account"}
+                  {provisionM.isPending ? "Creating account…" : "Create account"}
                 </Button>
                 <Button
                   type="button"
@@ -495,7 +496,7 @@ function FrontDeskIntakeListContent() {
 
         {viewRow ? (
           <Panel
-            title={`Registration form â€” ${viewRow.caseId}`}
+            title={`Registration form — ${viewRow.caseId}`}
             action={
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -521,7 +522,7 @@ function FrontDeskIntakeListContent() {
             }
           >
             <p className="mb-2 text-xs text-muted-foreground">
-              Choose â€œSave as PDFâ€ and enable background graphics if colours are missing.
+              Choose “Save as PDF” and enable background graphics if colours are missing.
             </p>
             <div className="overflow-x-auto rounded-lg border border-border">
               <FrontDeskRegistrationFormA4 row={viewRow} mode="view" />
@@ -568,7 +569,7 @@ function FrontDeskIntakeListContent() {
                     })
                   }
                 >
-                  {archiveM.isPending ? "Archivingâ€¦" : "Confirm archive"}
+                  {archiveM.isPending ? "Archiving…" : "Confirm archive"}
                 </Button>
                 <Button
                   type="button"
@@ -603,145 +604,143 @@ function FrontDeskIntakeListContent() {
           ) : (
             <>
               <TableWrap>
-                <table className="w-full text-left text-sm">
-                  <thead>
-                    <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
-                      <th className="px-2 py-2 sm:px-3">Case</th>
-                      <th className="px-2 py-2 sm:px-3">Student</th>
-                      <th className="hidden px-3 py-2 md:table-cell">Registered</th>
-                      <th className="px-2 py-2 sm:px-3">Counsellor</th>
-                      <th className="px-2 py-2 sm:px-3">Fee</th>
-                      <th className="hidden px-3 py-2 xl:table-cell">Updated</th>
-                      <th className="hidden px-3 py-2 lg:table-cell">Portal</th>
-                      <th className="px-2 py-2 sm:px-3">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pageRows.map((row) => {
-                      const portalStatus = intakePortalStatusFromRow({
-                        profileId: row.profileId,
-                        portalActivatedAt: row.portalActivatedAt,
-                      });
-                      return (
-                        <tr key={row.id} className="border-b border-border/60 align-top">
-                          <td className="px-2 py-2 font-medium text-navy sm:px-3">{row.caseId}</td>
-                          <td className="px-2 py-2 sm:px-3">
-                            <div className="font-medium">{row.fullName}</div>
-                            <div className="text-xs text-muted-foreground">{row.email}</div>
-                            <div className="text-xs text-muted-foreground md:hidden">
-                              {fmtDate(row.createdAt)}
-                            </div>
-                          </td>
-                          <td className="hidden px-3 py-2 text-muted-foreground md:table-cell">
+                <thead>
+                  <tr>
+                    <th>Case</th>
+                    <th>Student</th>
+                    <th className="hidden md:table-cell">Registered</th>
+                    <th>Counsellor</th>
+                    <th>Fee</th>
+                    <th className="hidden xl:table-cell">Updated</th>
+                    <th className="hidden lg:table-cell">Portal</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {pageRows.map((row) => {
+                    const portalStatus = intakePortalStatusFromRow({
+                      profileId: row.profileId,
+                      portalActivatedAt: row.portalActivatedAt,
+                    });
+                    return (
+                      <tr key={row.id} className="align-top">
+                        <td className="font-medium text-navy">{row.caseId}</td>
+                        <td>
+                          <div className="font-medium">{row.fullName}</div>
+                          <div className="text-xs text-muted-foreground">{row.email}</div>
+                          <div className="text-xs text-muted-foreground md:hidden">
                             {fmtDate(row.createdAt)}
-                          </td>
-                          <td className="px-2 py-2 sm:px-3">
-                            {row.assignmentStatus === "assigned" ? (
-                              <span>{row.counsellorName || "Counsellor assigned"}</span>
-                            ) : (
-                              <div className="space-y-1.5">
-                                <StatusBadge status="Pending" />
-                                <select
-                                  className="flex h-8 w-full max-w-[11rem] rounded-md border border-input bg-background px-2 text-xs"
-                                  disabled={assignM.isPending}
-                                  value=""
-                                  onChange={(e) => {
-                                    const consultantId = e.target.value;
-                                    if (!consultantId) return;
-                                    setAssigningId(row.id);
-                                    assignM.mutate({ studentId: row.id, consultantId });
-                                  }}
-                                >
-                                  <option value="">
-                                    {assigningId === row.id && assignM.isPending
-                                      ? "Assigningâ€¦"
-                                      : "Assignâ€¦"}
+                          </div>
+                        </td>
+                        <td className="hidden text-muted-foreground md:table-cell">
+                          {fmtDate(row.createdAt)}
+                        </td>
+                        <td>
+                          {row.assignmentStatus === "assigned" ? (
+                            <span>{row.counsellorName || "Counsellor assigned"}</span>
+                          ) : (
+                            <div className="space-y-1.5">
+                              <StatusBadge status="Pending" />
+                              <select
+                                className="flex h-8 w-full max-w-[11rem] rounded-md border border-input bg-background px-2 text-xs"
+                                disabled={assignM.isPending}
+                                value=""
+                                onChange={(e) => {
+                                  const consultantId = e.target.value;
+                                  if (!consultantId) return;
+                                  setAssigningId(row.id);
+                                  assignM.mutate({ studentId: row.id, consultantId });
+                                }}
+                              >
+                                <option value="">
+                                  {assigningId === row.id && assignM.isPending
+                                    ? "Assigning…"
+                                    : "Assign…"}
+                                </option>
+                                {(desksQ.data?.options ?? []).map((d) => (
+                                  <option key={d.id} value={d.id}>
+                                    {d.fullName}
                                   </option>
-                                  {(desksQ.data?.options ?? []).map((d) => (
-                                    <option key={d.id} value={d.id}>
-                                      {d.fullName}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-2 py-2 text-xs sm:px-3">
-                            {describePersistedSignupFeeStatus(row.signupFeeStatus).label}
-                          </td>
-                          <td className="hidden px-3 py-2 text-muted-foreground xl:table-cell">
-                            {fmtDate(row.updatedAt)}
-                          </td>
-                          <td className="hidden px-3 py-2 lg:table-cell">
-                            <div className="text-xs font-medium text-navy">
-                              {studentPortalAccountStatusLabel(portalStatus)}
+                                ))}
+                              </select>
                             </div>
-                            {portalStatus === "not_provisioned" ? (
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                className="mt-1.5"
-                                disabled={provisionM.isPending}
-                                onClick={() => openCreateForm(row.id)}
-                              >
-                                Create portal account
-                              </Button>
-                            ) : null}
-                          </td>
-                          <td className="px-2 py-2 sm:px-3">
-                            <div className="flex min-w-[7.5rem] flex-col gap-1 sm:min-w-[9rem]">
-                              <Button asChild size="sm" variant="navy">
-                                <Link to="/staff/intake/$studentId" params={{ studentId: row.id }}>
-                                  View record
-                                </Link>
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setViewingId(row.id);
-                                  setEditingId(null);
-                                  setFormStudentId(null);
-                                  setArchiveId(null);
-                                }}
-                              >
-                                View / PDF
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="outline"
-                                onClick={() => {
-                                  setEditingId(row.id);
-                                  setViewingId(null);
-                                  setFormStudentId(null);
-                                  setArchiveId(null);
-                                }}
-                              >
-                                Edit
-                              </Button>
-                              <Button
-                                type="button"
-                                size="sm"
-                                variant="ghost"
-                                className="text-destructive"
-                                onClick={() => {
-                                  setArchiveId(row.id);
-                                  setArchiveReason("");
-                                  setEditingId(null);
-                                }}
-                              >
-                                Archive
-                              </Button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
+                          )}
+                        </td>
+                        <td className="text-xs">
+                          {describePersistedSignupFeeStatus(row.signupFeeStatus).label}
+                        </td>
+                        <td className="hidden text-muted-foreground xl:table-cell">
+                          {fmtDate(row.updatedAt)}
+                        </td>
+                        <td className="hidden lg:table-cell">
+                          <div className="text-xs font-medium text-navy">
+                            {studentPortalAccountStatusLabel(portalStatus)}
+                          </div>
+                          {portalStatus === "not_provisioned" ? (
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              className="mt-1.5"
+                              disabled={provisionM.isPending}
+                              onClick={() => openCreateForm(row.id)}
+                            >
+                              Create portal account
+                            </Button>
+                          ) : null}
+                        </td>
+                        <td>
+                          <div className="flex min-w-[7.5rem] flex-col gap-1 sm:min-w-[9rem]">
+                            <Button asChild size="sm" variant="navy">
+                              <Link to="/staff/intake/$studentId" params={{ studentId: row.id }}>
+                                View record
+                              </Link>
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setViewingId(row.id);
+                                setEditingId(null);
+                                setFormStudentId(null);
+                                setArchiveId(null);
+                              }}
+                            >
+                              View / PDF
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              onClick={() => {
+                                setEditingId(row.id);
+                                setViewingId(null);
+                                setFormStudentId(null);
+                                setArchiveId(null);
+                              }}
+                            >
+                              Edit
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="ghost"
+                              className="text-destructive"
+                              onClick={() => {
+                                setArchiveId(row.id);
+                                setArchiveReason("");
+                                setEditingId(null);
+                              }}
+                            >
+                              Archive
+                            </Button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
               </TableWrap>
               <div className="mt-3 flex items-center justify-between text-xs text-muted-foreground">
                 <span>
@@ -776,7 +775,7 @@ function FrontDeskIntakeListContent() {
       {viewRow ? (
         <style>{`
           @media print {
-            @page { size: A4 portrait; margin: 8mm; }
+            @page { size: A4 portrait; margin: 10mm 12mm; }
             html, body {
               background: #fff !important;
               height: auto !important;
@@ -812,6 +811,6 @@ function FrontDeskIntakeListContent() {
           }
         `}</style>
       ) : null}
-    </div>
+    </PortalPage>
   );
 }

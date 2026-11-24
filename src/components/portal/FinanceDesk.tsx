@@ -8,8 +8,10 @@ import {
   PageHeader,
   PageLoadState,
   Panel,
+  PortalPage,
   PermissionDenied,
   StatCard,
+  StatGrid,
   TableWrap,
   portalErrorMessage,
 } from "@/components/common";
@@ -129,7 +131,7 @@ export function FinanceDesk({ tab, onTabChange, staffShell = false, basePath }: 
   const title = FINANCE_DESK_TITLES[tab];
 
   return (
-    <div className="space-y-4">
+    <PortalPage>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageHeader
           title="Banking & Finance"
@@ -154,7 +156,8 @@ export function FinanceDesk({ tab, onTabChange, staffShell = false, basePath }: 
         <InlineFeedback kind="err">{portalErrorMessage(actionError)}</InlineFeedback>
       ) : null}
 
-      {!data.schemaReady ? (
+      {!data.schemaReady &&
+      /20261108160000|finance desk tables are not available/i.test(data.note) ? (
         <Panel compact title="Office ledger setup">
           <p className="text-sm text-muted-foreground">
             Apply <code>20261108160000_finance_desk_foundation.sql</code> to enable drafts, posting,
@@ -169,7 +172,7 @@ export function FinanceDesk({ tab, onTabChange, staffShell = false, basePath }: 
       {tab === "audit" ? <AuditView rows={data.audits} /> : null}
 
       {tab === "tax" ? (
-        <div className="grid gap-3 sm:grid-cols-3">
+        <StatGrid className="sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
           <StatCard label="Tax payable on the books" value={formatPkr(data.taxPayable)} />
           <StatCard
             label="Typed challans"
@@ -179,11 +182,11 @@ export function FinanceDesk({ tab, onTabChange, staffShell = false, basePath }: 
             label="Typed withholding"
             value={String(data.entries.filter((e) => e.kind === "withholding").length)}
           />
-        </div>
+        </StatGrid>
       ) : null}
 
       {tab === "assets" ? (
-        <div className="grid gap-3 sm:grid-cols-3">
+        <StatGrid className="sm:grid-cols-3 lg:grid-cols-3 xl:grid-cols-3">
           <StatCard
             label="Asset purchases"
             value={formatPkr(
@@ -201,7 +204,7 @@ export function FinanceDesk({ tab, onTabChange, staffShell = false, basePath }: 
             )}
           />
           <StatCard label="Pay orders not cleared" value={formatPkr(data.clearing)} />
-        </div>
+        </StatGrid>
       ) : null}
 
       {tab === "budgets" ? (
@@ -235,64 +238,62 @@ export function FinanceDesk({ tab, onTabChange, staffShell = false, basePath }: 
       {entries.length > 0 ? (
         <Panel compact title={`${entries.length} record${entries.length === 1 ? "" : "s"}`}>
           <TableWrap>
-            <table className="w-full min-w-[640px] text-left text-sm">
-              <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
-                <tr>
-                  <th className="py-2 pr-3 font-medium">Record</th>
-                  <th className="py-2 pr-3 font-medium">Kind</th>
-                  <th className="py-2 pr-3 font-medium">Amount</th>
-                  <th className="py-2 pr-3 font-medium">Status</th>
-                  <th className="py-2 font-medium">Actions</th>
+            <thead>
+              <tr>
+                <th>Record</th>
+                <th>Kind</th>
+                <th>Amount</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {entries.map((entry) => (
+                <tr key={entry.id}>
+                  <td className="font-medium text-navy">{entry.title}</td>
+                  <td className="text-muted-foreground">{entry.kind}</td>
+                  <td className="tabular-nums">{formatPkr(entry.amount)}</td>
+                  <td>
+                    {entry.status}
+                    {entry.detail.state ? ` · ${String(entry.detail.state)}` : ""}
+                    {entry.detail.external === false ? " · not filed" : ""}
+                  </td>
+                  <td>
+                    <div className="flex flex-wrap gap-1">
+                      {entry.status === "draft" && !NON_POSTABLE_KINDS.has(entry.kind) ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="navy"
+                          className="h-8"
+                          disabled={busy}
+                          onClick={() => postMut.mutate(entry.id)}
+                        >
+                          Post
+                        </Button>
+                      ) : null}
+                      {entry.status === "posted" && entry.kind !== "reversal" ? (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="h-8"
+                          disabled={busy}
+                          onClick={() => {
+                            const reason = window.prompt("Reason for the reversal");
+                            if (reason?.trim()) {
+                              reverseMut.mutate({ id: entry.id, reason: reason.trim() });
+                            }
+                          }}
+                        >
+                          Reverse
+                        </Button>
+                      ) : null}
+                    </div>
+                  </td>
                 </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {entries.map((entry) => (
-                  <tr key={entry.id}>
-                    <td className="py-2.5 pr-3 font-medium text-navy">{entry.title}</td>
-                    <td className="py-2.5 pr-3 text-muted-foreground">{entry.kind}</td>
-                    <td className="py-2.5 pr-3 tabular-nums">{formatPkr(entry.amount)}</td>
-                    <td className="py-2.5 pr-3">
-                      {entry.status}
-                      {entry.detail.state ? ` · ${String(entry.detail.state)}` : ""}
-                      {entry.detail.external === false ? " · not filed" : ""}
-                    </td>
-                    <td className="py-2.5">
-                      <div className="flex flex-wrap gap-1">
-                        {entry.status === "draft" && !NON_POSTABLE_KINDS.has(entry.kind) ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="navy"
-                            className="h-8"
-                            disabled={busy}
-                            onClick={() => postMut.mutate(entry.id)}
-                          >
-                            Post
-                          </Button>
-                        ) : null}
-                        {entry.status === "posted" && entry.kind !== "reversal" ? (
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="outline"
-                            className="h-8"
-                            disabled={busy}
-                            onClick={() => {
-                              const reason = window.prompt("Reason for the reversal");
-                              if (reason?.trim()) {
-                                reverseMut.mutate({ id: entry.id, reason: reason.trim() });
-                              }
-                            }}
-                          >
-                            Reverse
-                          </Button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+              ))}
+            </tbody>
           </TableWrap>
         </Panel>
       ) : null}
@@ -311,7 +312,7 @@ export function FinanceDesk({ tab, onTabChange, staffShell = false, basePath }: 
           }
         />
       ) : null}
-    </div>
+    </PortalPage>
   );
 }
 
@@ -393,38 +394,36 @@ function ClientsView({
         </Link>
       </p>
       <TableWrap>
-        <table className="w-full min-w-[640px] text-left text-sm">
-          <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
-            <tr>
-              <th className="py-2 pr-3 font-medium">Student</th>
-              <th className="py-2 pr-3 font-medium">Item</th>
-              <th className="py-2 pr-3 font-medium">Amount</th>
-              <th className="py-2 pr-3 font-medium">Paid</th>
-              <th className="py-2 font-medium">Outstanding</th>
+        <thead>
+          <tr>
+            <th>Student</th>
+            <th>Item</th>
+            <th>Amount</th>
+            <th>Paid</th>
+            <th>Outstanding</th>
+          </tr>
+        </thead>
+        <tbody>
+          {bills.map((bill) => (
+            <tr key={`${bill.source}-${bill.id}`}>
+              <td className="font-medium text-navy">{bill.studentName}</td>
+              <td>
+                {bill.title}
+                <span className="ml-1 text-xs text-muted-foreground">· {bill.source}</span>
+              </td>
+              <td className="tabular-nums">{formatPkr(bill.amount)}</td>
+              <td className="tabular-nums">{formatPkr(bill.paid)}</td>
+              <td className="tabular-nums">{formatPkr(bill.outstanding)}</td>
             </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {bills.map((bill) => (
-              <tr key={`${bill.source}-${bill.id}`}>
-                <td className="py-2.5 pr-3 font-medium text-navy">{bill.studentName}</td>
-                <td className="py-2.5 pr-3">
-                  {bill.title}
-                  <span className="ml-1 text-xs text-muted-foreground">· {bill.source}</span>
-                </td>
-                <td className="py-2.5 pr-3 tabular-nums">{formatPkr(bill.amount)}</td>
-                <td className="py-2.5 pr-3 tabular-nums">{formatPkr(bill.paid)}</td>
-                <td className="py-2.5 tabular-nums">{formatPkr(bill.outstanding)}</td>
-              </tr>
-            ))}
-            {bills.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="py-4 text-muted-foreground">
-                  No fee rows are visible on this plane.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+          ))}
+          {bills.length === 0 ? (
+            <tr>
+              <td colSpan={5} className="text-muted-foreground">
+                No fee rows are visible on this plane.
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
       </TableWrap>
     </Panel>
   );
@@ -454,34 +453,32 @@ function FbrView({ connections }: { connections: Record<string, boolean> }) {
 function AuditView({ rows }: { rows: Awaited<ReturnType<typeof getFinanceDesk>>["audits"] }) {
   return (
     <Panel compact title="Finance desk audit">
-      <TableWrap>
-        <table className="w-full min-w-[520px] text-left text-sm">
-          <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
-            <tr>
-              <th className="py-2 pr-3 font-medium">When</th>
-              <th className="py-2 pr-3 font-medium">Action</th>
-              <th className="py-2 font-medium">Detail</th>
+      <TableWrap compact>
+        <thead>
+          <tr>
+            <th>When</th>
+            <th>Action</th>
+            <th>Detail</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id}>
+              <td className="tabular-nums text-muted-foreground">
+                {row.createdAt.slice(0, 16).replace("T", " ")}
+              </td>
+              <td>{row.action}</td>
+              <td>{row.detail || row.target}</td>
             </tr>
-          </thead>
-          <tbody className="divide-y divide-border">
-            {rows.map((row) => (
-              <tr key={row.id}>
-                <td className="py-2.5 pr-3 tabular-nums text-muted-foreground">
-                  {row.createdAt.slice(0, 16).replace("T", " ")}
-                </td>
-                <td className="py-2.5 pr-3">{row.action}</td>
-                <td className="py-2.5">{row.detail || row.target}</td>
-              </tr>
-            ))}
-            {rows.length === 0 ? (
-              <tr>
-                <td colSpan={3} className="py-4 text-muted-foreground">
-                  No finance audit row is stored yet.
-                </td>
-              </tr>
-            ) : null}
-          </tbody>
-        </table>
+          ))}
+          {rows.length === 0 ? (
+            <tr>
+              <td colSpan={3} className="text-muted-foreground">
+                No finance audit row is stored yet.
+              </td>
+            </tr>
+          ) : null}
+        </tbody>
       </TableWrap>
     </Panel>
   );

@@ -10,6 +10,7 @@ import {
   EmptyState,
   ErrorState,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useData } from "@/lib/useData";
@@ -55,7 +56,7 @@ function StaffLeads() {
   }
 
   return (
-    <div className="space-y-4 md:space-y-5">
+    <PortalPage>
       <PageHeader compact title="Leads" subtitle="Prospects assigned to your desk." />
       {msg ? (
         <p className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
@@ -118,6 +119,6 @@ function StaffLeads() {
           </tbody>
         </TableWrap>
       )}
-    </div>
+    </PortalPage>
   );
 }

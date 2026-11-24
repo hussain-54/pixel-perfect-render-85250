@@ -11,6 +11,7 @@ import {
   Panel,
   PermissionDenied,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { AdminModuleSubnav } from "@/components/portal/AdminModuleSubnav";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -157,7 +158,7 @@ function AdminScholarships() {
   };
 
   return (
-    <div>
+    <PortalPage>
       <PageHeader
         title="Scholarships"
         subtitle="Live admissions scholarship catalog (Supabase). Publish to show on the public site."
@@ -554,6 +555,6 @@ function AdminScholarships() {
           </Button>
         </div>
       ) : null}
-    </div>
+    </PortalPage>
   );
 }

@@ -12,6 +12,7 @@ import {
   StatCard,
   TableWrap,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { AdminModuleSubnav } from "@/components/portal/AdminModuleSubnav";
 import { Button } from "@/components/ui/button";
@@ -107,7 +108,7 @@ function AdminReports() {
   }
 
   return (
-    <div>
+    <PortalPage>
       <PageHeader
         title={reportsTitle}
         subtitle={reportsSubtitle}
@@ -597,6 +598,6 @@ function AdminReports() {
           </>
         )}
       </Panel>
-    </div>
+    </PortalPage>
   );
 }

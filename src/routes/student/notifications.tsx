@@ -8,6 +8,7 @@ import {
   ErrorState,
   LoadingRows,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { useData } from "@/lib/useData";
@@ -73,7 +74,7 @@ function StudentNotifications() {
   }
 
   return (
-    <div className="space-y-4 md:space-y-5">
+    <PortalPage>
       <PageHeader
         compact
         title="Notifications"
@@ -141,6 +142,6 @@ function StudentNotifications() {
           ))}
         </ul>
       )}
-    </div>
+    </PortalPage>
   );
 }

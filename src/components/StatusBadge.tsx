@@ -73,12 +73,12 @@ const toneMap: Record<string, Tone> = {
 };
 
 const toneClass: Record<Tone, string> = {
-  success: "bg-success-soft text-success",
-  warning: "bg-warning-soft text-warning",
-  danger: "bg-danger-soft text-danger",
-  info: "bg-info-soft text-royal",
-  navy: "bg-navy/90 text-navy-foreground",
-  neutral: "bg-muted text-muted-foreground",
+  success: "status-success",
+  warning: "status-warning",
+  danger: "status-danger",
+  info: "status-info",
+  navy: "border-transparent bg-navy/90 text-navy-foreground",
+  neutral: "status-neutral",
 };
 
 /** Humanize snake_case / lowercase API statuses without altering Title Case labels. */
@@ -95,14 +95,7 @@ export function StatusBadge({ status, className }: { status: string; className?:
   const tone = toneMap[status] ?? "neutral";
   const label = formatStatusLabel(status);
   return (
-    <span
-      className={cn(
-        "inline-flex max-w-full items-center gap-1.5 rounded px-2 py-0.5 text-[0.6875rem] font-semibold tracking-wide",
-        toneClass[tone],
-        className,
-      )}
-      title={label}
-    >
+    <span className={cn("status-pill max-w-full", toneClass[tone], className)} title={label}>
       <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current opacity-80" aria-hidden />
       <span className="truncate">{label}</span>
     </span>

@@ -297,19 +297,19 @@ export function PageHero({
 }) {
   return (
     <section className="border-b border-navy-soft/30 bg-navy text-navy-foreground">
-      <div className="container-page py-12 md:py-16">
+      <div className="container-page py-11 md:py-14 lg:py-16">
         <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-bright">
           {eyebrow}
         </p>
-        <h1 className="mt-3 max-w-3xl font-display text-3xl font-semibold leading-tight text-navy-foreground md:text-4xl lg:text-[2.75rem]">
+        <h1 className="mt-3 max-w-3xl font-display text-[1.85rem] font-semibold leading-[1.15] tracking-tight text-navy-foreground sm:text-3xl md:text-4xl lg:text-[2.5rem]">
           {title}
         </h1>
         {body && (
-          <p className="mt-4 max-w-2xl text-[0.95rem] leading-relaxed text-navy-foreground/70 md:text-base">
+          <p className="mt-3.5 max-w-2xl text-sm leading-relaxed text-navy-foreground/70 md:text-[0.95rem]">
             {body}
           </p>
         )}
-        {children && <div className="mt-7">{children}</div>}
+        {children && <div className="mt-6 md:mt-7">{children}</div>}
       </div>
     </section>
   );
@@ -327,13 +327,17 @@ export function SectionHead({
   action?: ReactNode;
 }) {
   return (
-    <div className="mb-8 flex flex-col justify-between gap-4 md:mb-10 md:flex-row md:items-end">
+    <div className="mb-7 flex flex-col justify-between gap-4 md:mb-9 md:flex-row md:items-end">
       <div className="max-w-2xl">
         <p className="eyebrow">{eyebrow}</p>
-        <h2 className="mt-2.5 font-display text-[1.75rem] font-semibold text-navy md:text-3xl lg:text-[2.125rem]">
+        <h2 className="mt-2 font-display text-[1.6rem] font-semibold tracking-tight text-navy md:text-[1.85rem] lg:text-[2rem]">
           {title}
         </h2>
-        {body && <p className="mt-2.5 max-w-xl text-[0.95rem] text-muted-foreground">{body}</p>}
+        {body && (
+          <p className="mt-2 max-w-xl text-sm leading-relaxed text-muted-foreground md:text-[0.95rem]">
+            {body}
+          </p>
+        )}
       </div>
       {action}
     </div>

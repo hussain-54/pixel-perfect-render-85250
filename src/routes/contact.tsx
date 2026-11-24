@@ -55,11 +55,11 @@ function Page() {
         title="Book your free consultation"
         body="Tell us about your plans. A senior consultant will call you within one working day."
       />
-      <section className="container-page grid gap-10 py-12 md:py-16 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.4fr)] lg:gap-14">
-        <ul className="space-y-5">
+      <section className="container-page grid gap-8 py-10 md:gap-10 md:py-14 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.4fr)] lg:gap-14">
+        <ul className="space-y-4 sm:space-y-5">
           {items.map((i) => (
             <li key={i.label} className="flex gap-3.5 border-b border-border/80 pb-4 last:border-0">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded bg-accent text-royal">
+              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-accent text-royal">
                 <i.icon className="h-4 w-4" aria-hidden />
               </span>
               <div>

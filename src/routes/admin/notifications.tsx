@@ -8,6 +8,7 @@ import {
   ErrorState,
   LoadingRows,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { useData } from "@/lib/useData";
 import { shouldOfferMarkAsRead } from "@/lib/notification-rules";
@@ -41,7 +42,7 @@ function AdminNotifications() {
   });
 
   return (
-    <div>
+    <PortalPage>
       <PageHeader title="Notifications" subtitle="Alerts for your admin account." />
       {msg ? (
         <p className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
@@ -91,6 +92,6 @@ function AdminNotifications() {
           ))}
         </ul>
       )}
-    </div>
+    </PortalPage>
   );
 }

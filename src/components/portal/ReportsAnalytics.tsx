@@ -12,6 +12,7 @@ import {
   PermissionDenied,
   TableWrap,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { downloadBase64File } from "@/lib/export-formats";
@@ -108,7 +109,7 @@ export function ReportsAnalytics() {
   const am = dashQ.data?.admissionMetrics;
 
   return (
-    <div className="space-y-4 md:space-y-5">
+    <PortalPage>
       <PageHeader
         compact
         title={reportTitle}
@@ -369,6 +370,6 @@ export function ReportsAnalytics() {
           matching dimension filters. Exports use the same filters and authorization.
         </p>
       </Panel>
-    </div>
+    </PortalPage>
   );
 }

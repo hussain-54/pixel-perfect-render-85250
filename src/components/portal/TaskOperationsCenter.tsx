@@ -12,6 +12,7 @@ import {
   TableWrap,
   fmtDate,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -210,7 +211,7 @@ export function TaskOperationsCenter(props?: {
   );
 
   return (
-    <div className="space-y-4 md:space-y-5">
+    <PortalPage>
       <PageHeader
         compact
         title="Tasks"
@@ -561,7 +562,7 @@ export function TaskOperationsCenter(props?: {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PortalPage>
   );
 }
 

@@ -6,6 +6,7 @@ import {
   EmptyState,
   ErrorState,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { AdminModuleSubnav } from "@/components/portal/AdminModuleSubnav";
@@ -20,7 +21,7 @@ function AdminConsultants() {
   const consQ = useData(["consultants"], getConsultants);
 
   return (
-    <div>
+    <PortalPage>
       <PageHeader
         title="Consultants"
         subtitle="Live consultant desks with active student counts. Other performance totals stay zero until operational aggregates exist."
@@ -66,6 +67,6 @@ function AdminConsultants() {
           </tbody>
         </TableWrap>
       )}
-    </div>
+    </PortalPage>
   );
 }

@@ -10,6 +10,7 @@ import {
   LoadingRows,
   EmptyState,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -57,7 +58,7 @@ function pktTodayYmd() {
 function StaffAppointments() {
   const queryClient = useQueryClient();
   useCounsellorWorkbenchRealtime(true);
-  const apptsQ = useData(["appointments"], getAppointments);
+  const apptsQ = useData(["appointments"], () => getAppointments());
   const [message, setMessage] = useState<string | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [filter, setFilter] = useState<StatusFilter>("all");
@@ -124,7 +125,7 @@ function StaffAppointments() {
   }
 
   return (
-    <div className="space-y-4 md:space-y-5">
+    <PortalPage>
       <PageHeader
         compact
         title="Appointments"
@@ -239,7 +240,7 @@ function StaffAppointments() {
           </tbody>
         </TableWrap>
       )}
-    </div>
+    </PortalPage>
   );
 }
 

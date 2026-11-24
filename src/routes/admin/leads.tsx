@@ -9,6 +9,7 @@ import {
   EmptyState,
   ErrorState,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useData } from "@/lib/useData";
@@ -70,7 +71,7 @@ function AdminLeads() {
   const pending = assignM.isPending || statusM.isPending;
 
   return (
-    <div>
+    <PortalPage>
       <PageHeader title="Leads" subtitle="Public consultation enquiries and assigned prospects." />
       {msg ? (
         <p className="mb-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-900">
@@ -169,6 +170,6 @@ function AdminLeads() {
           </tbody>
         </TableWrap>
       )}
-    </div>
+    </PortalPage>
   );
 }

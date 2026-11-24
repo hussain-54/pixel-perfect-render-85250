@@ -4,6 +4,7 @@
  */
 import * as db from "@/data/mock";
 import { getAuthRequestHeaders } from "@/lib/auth";
+import { optionalFilters, optionalStudentId } from "@/lib/query-fn-args";
 import {
   portalGetActivity,
   portalGetAppointments,
@@ -308,12 +309,13 @@ export const getConsultant = (id: string) =>
   withAuth((opts) => portalGetConsultant({ ...opts, data: { id } }));
 
 export const getAppointments = (studentId?: string) =>
-  withAuth((opts) =>
-    portalGetAppointments({
+  withAuth((opts) => {
+    const id = optionalStudentId(studentId);
+    return portalGetAppointments({
       ...opts,
-      data: studentId ? { studentId } : {},
-    }),
-  );
+      data: id ? { studentId: id } : {},
+    });
+  });
 
 export const requestAppointment = (data: {
   date: string;
@@ -326,20 +328,22 @@ export const updateAppointmentStatus = (data: { appointmentId: string; status: s
   withAuth((opts) => portalUpdateAppointmentStatus({ ...opts, data }));
 
 export const getDocuments = (studentId?: string) =>
-  withAuth((opts) =>
-    portalGetDocuments({
+  withAuth((opts) => {
+    const id = optionalStudentId(studentId);
+    return portalGetDocuments({
       ...opts,
-      data: studentId ? { studentId } : {},
-    }),
-  );
+      data: id ? { studentId: id } : {},
+    });
+  });
 
 export const getApplications = (studentId?: string) =>
-  withAuth((opts) =>
-    portalGetApplications({
+  withAuth((opts) => {
+    const id = optionalStudentId(studentId);
+    return portalGetApplications({
       ...opts,
-      data: studentId ? { studentId } : {},
-    }),
-  );
+      data: id ? { studentId: id } : {},
+    });
+  });
 
 export const getLeads = () => withAuth((opts) => portalGetLeads(opts));
 
@@ -521,8 +525,12 @@ export const listPublishedBlogSitemapPaths = () => portalListPublishedBlogSitema
 export const getConsultantLeaderboard = (filters?: LeaderboardFilters) =>
   withAuth((opts) => portalGetConsultantLeaderboard({ ...opts, data: filters ?? {} }));
 
-export const getNotifications = (audience: "student" | "staff" | "admin") =>
-  withAuth((opts) => portalGetNotifications({ ...opts, data: { audience } }));
+export const getNotifications = (audience: "student" | "staff" | "admin") => {
+  if (audience !== "student" && audience !== "staff" && audience !== "admin") {
+    throw new Error("Invalid notification audience.");
+  }
+  return withAuth((opts) => portalGetNotifications({ ...opts, data: { audience } }));
+};
 
 export const markNotificationRead = (id: string) =>
   withAuth((opts) => portalMarkNotificationRead({ ...opts, data: { id } }));
@@ -590,7 +598,12 @@ export const createStudentApplication = (data: NewApplicationInput) =>
   withAuth((opts) => portalCreateStudentApplication({ ...opts, data }));
 
 export const getApplicationsPipeline = (filters: ApplicationPipelineFilters = {}) =>
-  withAuth((opts) => portalGetApplicationsPipeline({ ...opts, data: filters }));
+  withAuth((opts) =>
+    portalGetApplicationsPipeline({
+      ...opts,
+      data: optionalFilters(filters, {} as ApplicationPipelineFilters),
+    }),
+  );
 
 export const getApplicationDetail = (id: string) =>
   withAuth((opts) => portalGetApplicationDetail({ ...opts, data: { id } }));
@@ -611,7 +624,12 @@ export const createPipelineApplication = (data: NewPipelineApplicationInput) =>
   withAuth((opts) => portalCreatePipelineApplication({ ...opts, data }));
 
 export const getDocumentQueue = (filters: DocumentQueueFilters = {}) =>
-  withAuth((opts) => portalGetDocumentQueue({ ...opts, data: filters }));
+  withAuth((opts) =>
+    portalGetDocumentQueue({
+      ...opts,
+      data: optionalFilters(filters, {} as DocumentQueueFilters),
+    }),
+  );
 
 export const getDocumentInspection = (id: string) =>
   withAuth((opts) => portalGetDocumentInspection({ ...opts, data: { id } }));
@@ -656,7 +674,12 @@ export const saveShortlistItem = (data: {
 }) => withAuth((opts) => portalSaveShortlistItem({ ...opts, data }));
 
 export const getOffersVisa = (filters: OffersVisaFilters = {}) =>
-  withAuth((opts) => portalGetOffersVisa({ ...opts, data: filters }));
+  withAuth((opts) =>
+    portalGetOffersVisa({
+      ...opts,
+      data: optionalFilters(filters, {} as OffersVisaFilters),
+    }),
+  );
 
 export const getOfferDetail = (id: string) =>
   withAuth((opts) => portalGetOfferDetail({ ...opts, data: { id } }));
@@ -708,7 +731,12 @@ export const advanceVisaStage = (
 export const exportOffersSummary = () => withAuth((opts) => portalExportOffersSummary(opts));
 
 export const getTaskOps = (filters: TaskOpsFilters = {}) =>
-  withAuth((opts) => portalGetTaskOps({ ...opts, data: filters }));
+  withAuth((opts) =>
+    portalGetTaskOps({
+      ...opts,
+      data: optionalFilters(filters, {} as TaskOpsFilters),
+    }),
+  );
 
 export const upsertTask = (data: UpsertTaskInput) =>
   withAuth((opts) => portalUpsertTask({ ...opts, data }));
@@ -1083,13 +1111,28 @@ export const exportOfficerReports = (data: ReportsFilters & { format: ReportExpo
   withAuth((opts) => portalExportReports({ ...opts, data }));
 
 export const getModuleReports = (filters: ModuleReportsFilters = {}) =>
-  withAuth((opts) => portalGetModuleReports({ ...opts, data: filters }));
+  withAuth((opts) =>
+    portalGetModuleReports({
+      ...opts,
+      data: optionalFilters(filters, {} as ModuleReportsFilters),
+    }),
+  );
 
 export const exportModuleReports = (data: ModuleReportsFilters & { format: "csv" | "excel" }) =>
   withAuth((opts) => portalExportModuleReports({ ...opts, data }));
 
 export const getActivityLog = (filters: ActivityFilters = {}) =>
-  withAuth((opts) => portalGetActivityLog({ ...opts, data: filters }));
+  withAuth((opts) =>
+    portalGetActivityLog({
+      ...opts,
+      data: optionalFilters(filters, {} as ActivityFilters),
+    }),
+  );
 
 export const exportActivityLog = (filters: ActivityFilters = {}) =>
-  withAuth((opts) => portalExportActivityLog({ ...opts, data: filters }));
+  withAuth((opts) =>
+    portalExportActivityLog({
+      ...opts,
+      data: optionalFilters(filters, {} as ActivityFilters),
+    }),
+  );

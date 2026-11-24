@@ -10,6 +10,7 @@ import {
   LoadingRows,
   EmptyState,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { ActionRequiredBanner, isActionRequired } from "@/components/portal/ActionRequiredDocs";
@@ -131,7 +132,7 @@ function StudentDocuments() {
   const docs = docsQ.data ?? [];
 
   return (
-    <div className="space-y-4 md:space-y-5">
+    <PortalPage>
       <PageHeader
         compact
         title="Documents"
@@ -244,6 +245,6 @@ function StudentDocuments() {
           </tbody>
         </TableWrap>
       )}
-    </div>
+    </PortalPage>
   );
 }

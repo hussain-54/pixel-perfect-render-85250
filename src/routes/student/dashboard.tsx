@@ -9,7 +9,9 @@ import {
   PageHeader,
   PageLoadState,
   Panel,
+  PortalPage,
   StatCard,
+  StatGrid,
   TableWrap,
   fmtDate,
   EmptyState,
@@ -166,7 +168,7 @@ function StudentDashboard() {
   });
 
   return (
-    <div className="space-y-4 md:space-y-5">
+    <PortalPage>
       <PageHeader
         compact
         title={`Hello, ${student.name.split(" ")[0]}`}
@@ -185,7 +187,7 @@ function StudentDashboard() {
         }
       />
 
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+      <StatGrid className="gr-enter lg:grid-cols-4 xl:grid-cols-4">
         <StatCard
           label="Profile"
           value={`${profile.percent}%`}
@@ -210,7 +212,7 @@ function StudentDashboard() {
           hint="Universities in your pipeline"
           icon={<GraduationCap />}
         />
-      </div>
+      </StatGrid>
 
       {/* Banner owns urgent doc correction list — omit duplicate “docs” row from next actions. */}
       <ActionRequiredBanner docs={docs} uploadLink="/student/documents" />
@@ -464,6 +466,6 @@ function StudentDashboard() {
           icon={<Calendar />}
         />
       </div>
-    </div>
+    </PortalPage>
   );
 }

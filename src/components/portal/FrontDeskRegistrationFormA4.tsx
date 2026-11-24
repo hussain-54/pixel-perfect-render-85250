@@ -396,6 +396,14 @@ export function FrontDeskRegistrationFormA4({
         </p>
       </div>
 
+      <footer
+        className="registration-a4-footer mx-3 mb-3 border-t px-1 pt-1.5 text-[8px] leading-snug text-slate-500"
+        style={{ borderColor: BORDER }}
+      >
+        GlobalRoots Consultants · Student Registration · Case {row.caseId} · Printed for authorised
+        staff use
+      </footer>
+
       <style>{`
         .registration-a4 {
           -webkit-print-color-adjust: exact !important;
@@ -437,7 +445,7 @@ export function FrontDeskRegistrationFormA4({
         @media print {
           @page {
             size: A4 portrait;
-            margin: 8mm;
+            margin: 10mm 12mm;
           }
           .registration-a4 {
             width: 100% !important;
@@ -448,21 +456,38 @@ export function FrontDeskRegistrationFormA4({
             border-radius: 0 !important;
           }
           .registration-a4-header {
-            padding: 0 0 6px 0 !important;
+            padding: 0 0 8px 0 !important;
+            break-inside: avoid;
+            page-break-inside: avoid;
           }
           .registration-a4-body {
-            padding: 6px 0 0 0 !important;
-            gap: 4px !important;
+            padding: 8px 0 0 0 !important;
+            gap: 6px !important;
           }
           .registration-a4-body.space-y-1\\.5 > :not([hidden]) ~ :not([hidden]) {
-            margin-top: 4px !important;
+            margin-top: 6px !important;
+          }
+          .registration-a4 section {
+            break-inside: avoid;
+            page-break-inside: avoid;
           }
           .registration-a4-cell {
-            padding: 3px 6px !important;
+            padding: 4px 7px !important;
           }
           .registration-a4-banner {
-            padding: 3px 8px !important;
+            padding: 4px 8px !important;
             font-size: 9px !important;
+            letter-spacing: 0.06em !important;
+          }
+          .registration-a4-note {
+            break-inside: avoid;
+            page-break-inside: avoid;
+          }
+          .registration-a4-footer {
+            break-inside: avoid;
+            page-break-inside: avoid;
+            margin: 8px 0 0 0 !important;
+            padding-top: 6px !important;
           }
         }
       `}</style>

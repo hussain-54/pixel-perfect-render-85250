@@ -12,6 +12,7 @@ import {
   TableWrap,
   fmtDate,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -455,7 +456,7 @@ function FrontDeskIntakeRecordPage() {
     (feeStatus ?? "").toLowerCase() === "rejected";
 
   return (
-    <div className="space-y-4 md:space-y-5">
+    <PortalPage>
       <PageHeader
         compact
         title={student.fullName}
@@ -993,199 +994,191 @@ function FrontDeskIntakeRecordPage() {
           />
         ) : (
           <TableWrap>
-            <table className="w-full text-left text-sm">
-              <thead>
-                <tr className="border-b text-xs uppercase tracking-wide text-muted-foreground">
-                  <th className="px-3 py-2">Request</th>
-                  <th className="px-3 py-2">Fee</th>
-                  <th className="px-3 py-2">Status</th>
-                  <th className="px-3 py-2">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {feeRequests.map((row) => {
-                  const needsCorrection = cancelledCoordinationNeedsCorrection({
-                    status: row.status,
-                    signupFeeStatus: row.signupFeeStatus,
-                  });
-                  const isHistoricalCancelled = isHistoricalCancelledCoordination({
-                    status: row.status,
-                    signupFeeStatus: row.signupFeeStatus,
-                  });
-                  const stuck = requestStuckAfterFeeDecision({
-                    requestStatus: row.status,
-                    signupFeeStatus: row.signupFeeStatus,
-                  });
-                  const feeOk = feeStatusAllowsAdmissionHandover(row.signupFeeStatus);
-                  const claim = describeFeeClaimDisplay({
-                    signupFeeStatus: row.signupFeeStatus,
-                    feeAmount: row.feeAmount,
-                    feeCurrency: row.feeCurrency,
-                    feePaymentMethod: row.feePaymentMethod,
-                    feeReferenceReceipt: row.feeReferenceReceipt,
-                  });
-                  const forwarded = Boolean(row.forwardedAt) || row.status === "in_progress";
-                  const isFocused =
-                    search.requestId === row.id ||
-                    (search.focus === "fee" && needsCorrection && focusRequest?.id === row.id);
-                  return (
-                    <tr
-                      key={row.id}
-                      id={`fd-fee-request-${row.id}`}
-                      className={cn(
-                        "border-b border-border/60 align-top",
-                        isHistoricalCancelled && "opacity-75",
-                        isFocused && "bg-amber-50/80",
-                        needsCorrection && "bg-amber-50/40",
-                      )}
-                    >
-                      <td className="px-3 py-2">
-                        <div className="text-xs text-muted-foreground">
-                          Submitted {fmtDate(row.createdAt.slice(0, 10))}
-                          {isHistoricalCancelled ? " · Historical" : ""}
-                          {needsCorrection ? " · Needs correction" : ""}
+            <thead>
+              <tr>
+                <th>Request</th>
+                <th>Fee</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {feeRequests.map((row) => {
+                const needsCorrection = cancelledCoordinationNeedsCorrection({
+                  status: row.status,
+                  signupFeeStatus: row.signupFeeStatus,
+                });
+                const isHistoricalCancelled = isHistoricalCancelledCoordination({
+                  status: row.status,
+                  signupFeeStatus: row.signupFeeStatus,
+                });
+                const stuck = requestStuckAfterFeeDecision({
+                  requestStatus: row.status,
+                  signupFeeStatus: row.signupFeeStatus,
+                });
+                const feeOk = feeStatusAllowsAdmissionHandover(row.signupFeeStatus);
+                const claim = describeFeeClaimDisplay({
+                  signupFeeStatus: row.signupFeeStatus,
+                  feeAmount: row.feeAmount,
+                  feeCurrency: row.feeCurrency,
+                  feePaymentMethod: row.feePaymentMethod,
+                  feeReferenceReceipt: row.feeReferenceReceipt,
+                });
+                const forwarded = Boolean(row.forwardedAt) || row.status === "in_progress";
+                const isFocused =
+                  search.requestId === row.id ||
+                  (search.focus === "fee" && needsCorrection && focusRequest?.id === row.id);
+                return (
+                  <tr
+                    key={row.id}
+                    id={`fd-fee-request-${row.id}`}
+                    className={cn(
+                      "align-top",
+                      isHistoricalCancelled && "opacity-75",
+                      isFocused && "bg-amber-50/80",
+                      needsCorrection && "bg-amber-50/40",
+                    )}
+                  >
+                    <td>
+                      <div className="text-xs text-muted-foreground">
+                        Submitted {fmtDate(row.createdAt.slice(0, 10))}
+                        {isHistoricalCancelled ? " · Historical" : ""}
+                        {needsCorrection ? " · Needs correction" : ""}
+                      </div>
+                      <p className="mt-1 text-xs">{row.summary || "—"}</p>
+                      {row.coordinatorNote ? (
+                        <p className="mt-1 text-[11px] text-amber-900">
+                          Note: {row.coordinatorNote}
+                        </p>
+                      ) : null}
+                    </td>
+                    <td className="text-xs">
+                      <div className="font-medium text-navy">{claim.feeStatusLabel}</div>
+                      <div className="text-muted-foreground">{claim.claimLabel}</div>
+                      {needsCorrection ? (
+                        <div className="mt-1 text-[11px] font-medium text-amber-900">
+                          No fee ledger — issue voucher / submit proof above
                         </div>
-                        <p className="mt-1 text-xs">{row.summary || "—"}</p>
-                        {row.coordinatorNote ? (
-                          <p className="mt-1 text-[11px] text-amber-900">
-                            Note: {row.coordinatorNote}
-                          </p>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2 text-xs">
-                        <div className="font-medium text-navy">{claim.feeStatusLabel}</div>
-                        <div className="text-muted-foreground">{claim.claimLabel}</div>
+                      ) : null}
+                      {isHistoricalCancelled ? (
+                        <div className="mt-1 text-[11px] text-muted-foreground">
+                          Historical cancelled coordination
+                        </div>
+                      ) : null}
+                      {feeOk ? (
+                        <div className="mt-1 text-[11px] text-emerald-800">Fee gate satisfied</div>
+                      ) : null}
+                    </td>
+                    <td>
+                      <StatusBadge status={row.status} />
+                      {needsCorrection ? (
+                        <div className="mt-1 text-[11px] font-medium text-amber-900">
+                          Actionable correction
+                        </div>
+                      ) : null}
+                      {isHistoricalCancelled ? (
+                        <div className="mt-1 text-[11px] font-medium text-muted-foreground">
+                          Historical / cancelled
+                        </div>
+                      ) : null}
+                      {forwarded && row.status !== "resolved" && !isHistoricalCancelled ? (
+                        <div className="mt-1 text-[11px] text-muted-foreground">
+                          Forwarded
+                          {row.forwardedAt ? ` · ${fmtDate(row.forwardedAt.slice(0, 10))}` : ""}
+                        </div>
+                      ) : null}
+                      {stuck ? (
+                        <div className="mt-1 text-[11px] font-medium text-amber-900">
+                          Out of sync with fee decision
+                        </div>
+                      ) : null}
+                    </td>
+                    <td>
+                      <div className="flex flex-wrap gap-1.5">
                         {needsCorrection ? (
-                          <div className="mt-1 text-[11px] font-medium text-amber-900">
-                            No fee ledger — issue voucher / submit proof above
-                          </div>
-                        ) : null}
-                        {isHistoricalCancelled ? (
-                          <div className="mt-1 text-[11px] text-muted-foreground">
-                            Historical cancelled coordination
-                          </div>
-                        ) : null}
-                        {feeOk ? (
-                          <div className="mt-1 text-[11px] text-emerald-800">
-                            Fee gate satisfied
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2">
-                        <StatusBadge status={row.status} />
-                        {needsCorrection ? (
-                          <div className="mt-1 text-[11px] font-medium text-amber-900">
-                            Actionable correction
-                          </div>
-                        ) : null}
-                        {isHistoricalCancelled ? (
-                          <div className="mt-1 text-[11px] font-medium text-muted-foreground">
-                            Historical / cancelled
-                          </div>
-                        ) : null}
-                        {forwarded && row.status !== "resolved" && !isHistoricalCancelled ? (
-                          <div className="mt-1 text-[11px] text-muted-foreground">
-                            Forwarded
-                            {row.forwardedAt ? ` · ${fmtDate(row.forwardedAt.slice(0, 10))}` : ""}
-                          </div>
+                          <Button
+                            size="sm"
+                            variant="navy"
+                            onClick={() => {
+                              document
+                                .getElementById("fd-signup-fee-panel")
+                                ?.scrollIntoView({ behavior: "smooth", block: "start" });
+                            }}
+                          >
+                            Fix — open fee form
+                          </Button>
                         ) : null}
                         {stuck ? (
-                          <div className="mt-1 text-[11px] font-medium text-amber-900">
-                            Out of sync with fee decision
-                          </div>
-                        ) : null}
-                      </td>
-                      <td className="px-3 py-2">
-                        <div className="flex flex-wrap gap-1.5">
-                          {needsCorrection ? (
-                            <Button
-                              size="sm"
-                              variant="navy"
-                              onClick={() => {
-                                document
-                                  .getElementById("fd-signup-fee-panel")
-                                  ?.scrollIntoView({ behavior: "smooth", block: "start" });
-                              }}
-                            >
-                              Fix — open fee form
-                            </Button>
-                          ) : null}
-                          {stuck ? (
-                            <Button
-                              size="sm"
-                              variant="navy"
-                              disabled={reconcileM.isPending}
-                              onClick={() => reconcileM.mutate()}
-                            >
-                              Sync from fee
-                            </Button>
-                          ) : null}
-                          {!stuck &&
-                          !isHistoricalCancelled &&
-                          !needsCorrection &&
-                          (row.status === "open" ||
-                            (row.status === "in_progress" && !row.forwardedAt)) ? (
-                            <Button
-                              size="sm"
-                              variant="navy"
-                              disabled={forwardM.isPending}
-                              onClick={() => forwardM.mutate(row.id)}
-                            >
-                              Send to Accounts
-                            </Button>
-                          ) : null}
-                          {!stuck &&
-                          !isHistoricalCancelled &&
-                          !needsCorrection &&
-                          (row.status === "open" || row.status === "in_progress") ? (
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => {
-                                setReturnForId(row.id);
-                                setReturnReason("");
-                              }}
-                            >
-                              Return
-                            </Button>
-                          ) : null}
-                          <Button asChild size="sm" variant="ghost">
-                            <Link to="/staff/finance">Finance</Link>
+                          <Button
+                            size="sm"
+                            variant="navy"
+                            disabled={reconcileM.isPending}
+                            onClick={() => reconcileM.mutate()}
+                          >
+                            Sync from fee
                           </Button>
-                        </div>
-                        {returnForId === row.id ? (
-                          <div className="mt-2 space-y-2 rounded border border-border p-2">
-                            <Textarea
-                              placeholder="Required reason (min 5 characters)"
-                              value={returnReason}
-                              onChange={(e) => setReturnReason(e.target.value)}
-                              aria-label="Return reason"
-                            />
-                            <div className="flex gap-2">
-                              <Button
-                                size="sm"
-                                variant="destructive"
-                                disabled={returnM.isPending || returnReason.trim().length < 5}
-                                onClick={() => returnM.mutate()}
-                              >
-                                Confirm return
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => setReturnForId(null)}
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          </div>
                         ) : null}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                        {!stuck &&
+                        !isHistoricalCancelled &&
+                        !needsCorrection &&
+                        (row.status === "open" ||
+                          (row.status === "in_progress" && !row.forwardedAt)) ? (
+                          <Button
+                            size="sm"
+                            variant="navy"
+                            disabled={forwardM.isPending}
+                            onClick={() => forwardM.mutate(row.id)}
+                          >
+                            Send to Accounts
+                          </Button>
+                        ) : null}
+                        {!stuck &&
+                        !isHistoricalCancelled &&
+                        !needsCorrection &&
+                        (row.status === "open" || row.status === "in_progress") ? (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setReturnForId(row.id);
+                              setReturnReason("");
+                            }}
+                          >
+                            Return
+                          </Button>
+                        ) : null}
+                        <Button asChild size="sm" variant="ghost">
+                          <Link to="/staff/finance">Finance</Link>
+                        </Button>
+                      </div>
+                      {returnForId === row.id ? (
+                        <div className="mt-2 space-y-2 rounded border border-border p-2">
+                          <Textarea
+                            placeholder="Required reason (min 5 characters)"
+                            value={returnReason}
+                            onChange={(e) => setReturnReason(e.target.value)}
+                            aria-label="Return reason"
+                          />
+                          <div className="flex gap-2">
+                            <Button
+                              size="sm"
+                              variant="destructive"
+                              disabled={returnM.isPending || returnReason.trim().length < 5}
+                              onClick={() => returnM.mutate()}
+                            >
+                              Confirm return
+                            </Button>
+                            <Button size="sm" variant="ghost" onClick={() => setReturnForId(null)}>
+                              Cancel
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
           </TableWrap>
         )}
       </Panel>
@@ -1255,6 +1248,6 @@ function FrontDeskIntakeRecordPage() {
         Admission workflows. Front Desk coordinates intake, assignment, and fee-verification handoff
         only.
       </p>
-    </div>
+    </PortalPage>
   );
 }

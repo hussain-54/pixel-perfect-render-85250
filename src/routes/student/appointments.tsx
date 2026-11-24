@@ -11,6 +11,7 @@ import {
   EmptyState,
   portalErrorMessage,
   Panel,
+  PortalPage,
 } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -105,7 +106,7 @@ function StudentAppointments() {
   const rows = [...(apptsQ.data ?? [])].sort((a, b) => b.date.localeCompare(a.date));
 
   return (
-    <div className="space-y-4 md:space-y-5">
+    <PortalPage>
       <PageHeader
         compact
         title="Appointments"
@@ -246,6 +247,6 @@ function StudentAppointments() {
           </tbody>
         </TableWrap>
       )}
-    </div>
+    </PortalPage>
   );
 }

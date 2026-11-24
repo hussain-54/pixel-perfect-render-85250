@@ -10,6 +10,7 @@ import {
   Panel,
   PermissionDenied,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { AdminModuleSubnav } from "@/components/portal/AdminModuleSubnav";
 import { Button } from "@/components/ui/button";
@@ -131,7 +132,7 @@ function AdminPrograms() {
   };
 
   return (
-    <div>
+    <PortalPage>
       <PageHeader
         title="Programs"
         subtitle="Live programs linked to universities in Supabase (admissions module)."
@@ -371,6 +372,6 @@ function AdminPrograms() {
           </Button>
         </div>
       ) : null}
-    </div>
+    </PortalPage>
   );
 }

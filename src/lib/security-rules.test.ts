@@ -60,6 +60,19 @@ describe("demo account role source", () => {
     expect(account?.role).toBe("student");
   });
 
+  it("keeps demo student email unique to a student fixture (not a consultant)", async () => {
+    const { students, consultants, notifications } = await import("@/data/mock");
+    const email = "ayesha@globalroots.pk";
+    expect(students.filter((s) => s.email.toLowerCase() === email)).toHaveLength(1);
+    expect(consultants.every((c) => c.email.toLowerCase() !== email)).toBe(true);
+    const student = students.find((s) => s.email.toLowerCase() === email)!;
+    const counsellor = consultants.find((c) => c.id === student.consultantId);
+    expect(counsellor?.name).toBe("Usman Tariq");
+    const assignedNote = notifications.find((n) => n.id === "n4");
+    expect(assignedNote?.body).toContain("Usman Tariq");
+    expect(assignedNote?.body).not.toContain("Ayesha Khan");
+  });
+
   it("does not invent staff roles for unknown emails", () => {
     expect(findDemoAccountByEmail("attacker@example.com")).toBeNull();
   });

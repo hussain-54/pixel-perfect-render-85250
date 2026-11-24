@@ -10,6 +10,7 @@ import {
   LoadingRows,
   EmptyState,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -93,7 +94,7 @@ function StudentApplications() {
   const apps = appsQ.data ?? [];
 
   return (
-    <div className="space-y-4 md:space-y-5">
+    <PortalPage>
       <PageHeader
         compact
         title="Applications"
@@ -208,6 +209,6 @@ function StudentApplications() {
           </tbody>
         </TableWrap>
       )}
-    </div>
+    </PortalPage>
   );
 }

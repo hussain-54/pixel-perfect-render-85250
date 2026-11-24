@@ -7,6 +7,7 @@ import {
   EmptyState,
   ErrorState,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { useData } from "@/lib/useData";
@@ -17,11 +18,11 @@ export const Route = createFileRoute("/admin/appointments")({
 });
 
 function AdminAppointments() {
-  const apptsQ = useData(["appointments"], getAppointments);
+  const apptsQ = useData(["appointments"], () => getAppointments());
   const rows = [...(apptsQ.data ?? [])].sort((a, b) => b.date.localeCompare(a.date));
 
   return (
-    <div>
+    <PortalPage>
       <PageHeader title="Counselling" subtitle="Firm-wide counselling appointments and schedule." />
       {apptsQ.isLoading ? (
         <LoadingRows />
@@ -59,6 +60,6 @@ function AdminAppointments() {
           </tbody>
         </TableWrap>
       )}
-    </div>
+    </PortalPage>
   );
 }

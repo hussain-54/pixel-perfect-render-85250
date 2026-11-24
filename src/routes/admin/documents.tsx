@@ -7,6 +7,7 @@ import {
   EmptyState,
   ErrorState,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { isActionRequired } from "@/components/portal/ActionRequiredDocs";
@@ -19,10 +20,10 @@ export const Route = createFileRoute("/admin/documents")({
 });
 
 function AdminDocuments() {
-  const docsQ = useData(["documents"], getDocuments);
+  const docsQ = useData(["documents"], () => getDocuments());
 
   return (
-    <div>
+    <PortalPage>
       <PageHeader title="Documents" subtitle="Global document registry." />
       {docsQ.isLoading ? (
         <LoadingRows />
@@ -60,6 +61,6 @@ function AdminDocuments() {
           </tbody>
         </TableWrap>
       )}
-    </div>
+    </PortalPage>
   );
 }

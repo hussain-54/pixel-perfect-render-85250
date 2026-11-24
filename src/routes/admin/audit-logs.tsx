@@ -7,6 +7,7 @@ import {
   EmptyState,
   ErrorState,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { useData } from "@/lib/useData";
 import { getAuditLogs } from "@/services";
@@ -19,7 +20,7 @@ function AdminAuditLogs() {
   const auditQ = useData(["audit"], getAuditLogs);
 
   return (
-    <div>
+    <PortalPage>
       <PageHeader
         title="Audit logs"
         subtitle="Firm-wide activity trail from authorized audit events (same source as Activity). Demo sessions show sample rows only."
@@ -59,6 +60,6 @@ function AdminAuditLogs() {
           </tbody>
         </TableWrap>
       )}
-    </div>
+    </PortalPage>
   );
 }

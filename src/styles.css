@@ -224,6 +224,14 @@
   }
 }
 
+/* Compact filter / action toolbar for desks */
+@utility portal-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 0.75rem;
+}
+
 @utility field-control {
   height: 2.5rem;
   min-height: 2.5rem;
@@ -233,6 +241,51 @@
   padding-inline: 0.75rem;
   font-size: 0.875rem;
   color: var(--navy);
+}
+
+/* Semantic status chips — use with StatusBadge / tables */
+@utility status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: var(--radius-md);
+  border-width: 1px;
+  padding: 0.125rem 0.5rem;
+  font-size: 0.6875rem;
+  font-weight: 650;
+  letter-spacing: 0.02em;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+
+@utility status-success {
+  border-color: oklch(0.48 0.1 160 / 0.28);
+  background: var(--success-soft);
+  color: var(--success);
+}
+
+@utility status-warning {
+  border-color: oklch(0.55 0.12 70 / 0.3);
+  background: var(--warning-soft);
+  color: var(--warning);
+}
+
+@utility status-danger {
+  border-color: oklch(0.52 0.18 27 / 0.28);
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+@utility status-info {
+  border-color: oklch(0.5 0.19 257 / 0.25);
+  background: var(--info-soft);
+  color: var(--royal);
+}
+
+@utility status-neutral {
+  border-color: var(--border);
+  background: var(--muted);
+  color: var(--muted-foreground);
 }
 
 @utility prose-narrow {
@@ -289,13 +342,52 @@
 /* Controlled portal / UI motion budget (150–250ms) when motion is allowed */
 @media (prefers-reduced-motion: no-preference) {
   .gr-motion-fast {
+    transition-property: color, background-color, border-color, box-shadow, opacity, transform;
     transition-duration: 150ms;
+    transition-timing-function: var(--ease-premium);
   }
   .gr-motion {
+    transition-property: color, background-color, border-color, box-shadow, opacity, transform;
     transition-duration: 200ms;
+    transition-timing-function: var(--ease-premium);
   }
   .gr-motion-slow {
+    transition-property: color, background-color, border-color, box-shadow, opacity, transform;
     transition-duration: 250ms;
+    transition-timing-function: var(--ease-premium);
+  }
+  /* Staggered KPI / panel entrance — apply to grids, not data tables */
+  .gr-enter {
+    animation: gr-fade-up 220ms var(--ease-premium) both;
+  }
+  .gr-enter-delay-1 {
+    animation-delay: 40ms;
+  }
+  .gr-enter-delay-2 {
+    animation-delay: 80ms;
+  }
+  .gr-enter-delay-3 {
+    animation-delay: 120ms;
+  }
+}
+
+@keyframes gr-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gr-enter,
+  .gr-enter-delay-1,
+  .gr-enter-delay-2,
+  .gr-enter-delay-3 {
+    animation: none !important;
   }
 }
 

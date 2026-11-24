@@ -76,20 +76,20 @@ function Home() {
             className="absolute inset-0 h-full w-full object-cover object-[center_30%]"
           />
           <div className="bg-hero-overlay absolute inset-0" />
-          <div className="container-page relative py-20 md:py-24 lg:py-28">
-            <p className="font-display text-2xl font-semibold tracking-tight text-navy-foreground md:text-3xl">
+          <div className="container-page relative py-16 md:py-20 lg:py-24">
+            <p className="font-display text-xl font-semibold tracking-tight text-navy-foreground sm:text-2xl md:text-[1.75rem]">
               Global Roots Consultants
             </p>
             <p className="mt-2 text-[0.6875rem] font-semibold uppercase tracking-[0.18em] text-bright">
               {heroEyebrow}
             </p>
-            <h1 className="mt-6 max-w-2xl font-display text-[2.35rem] font-semibold leading-[1.08] text-navy-foreground md:text-5xl lg:text-[3.4rem]">
+            <h1 className="mt-5 max-w-2xl font-display text-[2rem] font-semibold leading-[1.1] tracking-tight text-navy-foreground sm:text-[2.35rem] md:text-5xl lg:text-[3.15rem]">
               {heroTitle}
             </h1>
-            <p className="mt-5 max-w-lg text-base leading-relaxed text-navy-foreground/80 md:text-[1.05rem]">
+            <p className="mt-4 max-w-lg text-sm leading-relaxed text-navy-foreground/80 sm:text-base md:text-[1.05rem]">
               {heroBody}
             </p>
-            <div className="mt-8 flex flex-wrap gap-3">
+            <div className="mt-7 flex flex-wrap gap-3">
               <Button asChild variant="bright" size="lg">
                 {heroCtaHref.startsWith("/") ? (
                   <Link to={heroCtaHref as "/contact"}>{heroCtaLabel}</Link>

@@ -8,6 +8,7 @@ import {
   PageLoadState,
   PermissionDenied,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -116,7 +117,7 @@ export function ActivityAuditLog() {
   }
 
   return (
-    <div className="space-y-4 md:space-y-5">
+    <PortalPage>
       <PageHeader
         compact
         title={activityTitle}
@@ -297,6 +298,6 @@ export function ActivityAuditLog() {
           </Button>
         </div>
       ) : null}
-    </div>
+    </PortalPage>
   );
 }

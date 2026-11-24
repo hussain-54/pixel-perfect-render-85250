@@ -12,6 +12,7 @@ import {
   TableWrap,
   fmtDate,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -146,7 +147,7 @@ export function MarketingModulePage() {
     : null;
 
   return (
-    <div>
+    <PortalPage>
       <PageHeader
         title="Digital Marketing"
         subtitle="Campaigns and inquiry attribution — reuses consultation requests (no second CRM)."
@@ -349,42 +350,44 @@ export function MarketingModulePage() {
                   <td title={c.registeredStudentsUnavailable ?? undefined}>
                     {formatMetricValue(c.registeredStudents)}
                   </td>
-                  <td className="space-x-1">
-                    {data.canMutate ? (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          onClick={() =>
-                            setForm({
-                              id: c.id,
-                              name: c.name,
-                              channel: c.channel,
-                              status: c.status as MarketingCampaignStatus,
-                              startsOn: c.startsOn ?? "",
-                              endsOn: c.endsOn ?? "",
-                              budgetNote: c.budgetNote ?? "",
-                            })
-                          }
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={archiveM.isPending}
-                          onClick={() => {
-                            setMsg(null);
-                            archiveM.mutate({
-                              campaignId: c.id,
-                              archive: !c.archivedAt,
-                            });
-                          }}
-                        >
-                          {c.archivedAt ? "Unarchive" : "Archive"}
-                        </Button>
-                      </>
-                    ) : null}
+                  <td>
+                    <div className="flex flex-wrap gap-1">
+                      {data.canMutate ? (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() =>
+                              setForm({
+                                id: c.id,
+                                name: c.name,
+                                channel: c.channel,
+                                status: c.status as MarketingCampaignStatus,
+                                startsOn: c.startsOn ?? "",
+                                endsOn: c.endsOn ?? "",
+                                budgetNote: c.budgetNote ?? "",
+                              })
+                            }
+                          >
+                            Edit
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            disabled={archiveM.isPending}
+                            onClick={() => {
+                              setMsg(null);
+                              archiveM.mutate({
+                                campaignId: c.id,
+                                archive: !c.archivedAt,
+                              });
+                            }}
+                          >
+                            {c.archivedAt ? "Unarchive" : "Archive"}
+                          </Button>
+                        </>
+                      ) : null}
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -479,6 +482,6 @@ export function MarketingModulePage() {
           </TableWrap>
         )}
       </Panel>
-    </div>
+    </PortalPage>
   );
 }

@@ -24,12 +24,12 @@ function Page() {
         title="Study destinations worldwide."
         body="Compare work rights, intakes and opportunities across our partner countries, then let our specialists build your plan."
       />
-      <section className="container-page space-y-10 py-12 md:space-y-14 md:py-16">
+      <section className="container-page space-y-10 py-10 md:space-y-12 md:py-14">
         {destinations.map((d, i) => (
           <article
             key={d.name}
             id={d.name.toLowerCase().replace(/\s/g, "-")}
-            className="grid scroll-mt-24 gap-6 border-b border-border pb-10 last:border-0 md:grid-cols-2 md:gap-10 md:pb-14"
+            className="grid scroll-mt-28 gap-5 border-b border-border pb-10 last:border-0 sm:gap-6 md:grid-cols-2 md:gap-10 md:pb-12"
           >
             <img
               src={d.img}
@@ -37,11 +37,11 @@ function Page() {
               loading="lazy"
               width={1024}
               height={768}
-              className={`aspect-[16/10] w-full rounded-lg object-cover ${i % 2 ? "md:order-2" : ""}`}
+              className={`aspect-[16/10] w-full rounded-lg object-cover shadow-soft ${i % 2 ? "md:order-2" : ""}`}
             />
             <div className="flex flex-col justify-center">
               <p className="eyebrow">Study in</p>
-              <h2 className="mt-2 font-display text-2xl font-semibold text-navy md:text-3xl">
+              <h2 className="mt-2 font-display text-[1.65rem] font-semibold tracking-tight text-navy md:text-[1.85rem]">
                 {d.name}
               </h2>
               <p className="mt-3 max-w-lg text-[0.95rem] leading-relaxed text-muted-foreground">

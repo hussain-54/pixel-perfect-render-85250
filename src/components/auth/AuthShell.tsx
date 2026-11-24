@@ -61,14 +61,15 @@ export function AuthShell({
         </header>
 
         <div className="mx-auto flex w-full max-w-[440px] flex-1 flex-col justify-center px-5 pb-10 pt-2 sm:px-8 lg:px-0 lg:pb-16">
-          <div key={title} className="animate-in fade-in slide-in-from-bottom-1 duration-300">
-            <div className="mb-8">
-              <h2 className="font-display text-[1.75rem] font-semibold tracking-tight text-navy text-balance sm:text-[2rem]">
+          <div
+            key={title}
+            className="animate-in fade-in slide-in-from-bottom-1 duration-300 motion-reduce:animate-none"
+          >
+            <div className="mb-7 sm:mb-8">
+              <h2 className="font-display text-[1.65rem] font-semibold tracking-tight text-navy text-balance sm:text-[1.85rem]">
                 {title}
               </h2>
-              <p className="mt-2 text-sm leading-relaxed text-muted-foreground sm:text-[0.9375rem]">
-                {subtitle}
-              </p>
+              <p className="mt-2 text-sm leading-relaxed text-muted-foreground">{subtitle}</p>
             </div>
 
             {children}

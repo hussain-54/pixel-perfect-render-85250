@@ -7,8 +7,10 @@ import {
   LoadingRows,
   PageHeader,
   Panel,
+  PortalPage,
   PermissionDenied,
   StatCard,
+  StatGrid,
   TableWrap,
   fmtDate,
   portalErrorMessage,
@@ -193,20 +195,20 @@ export function HrModulePage() {
   const s = data.summaries;
 
   return (
-    <div>
+    <PortalPage>
       <PageHeader
         title="HR & Attendance"
         subtitle="Employee directory, attendance and leave — separate from student CRM and finance."
       />
       {msg ? <p className="mb-3 text-sm text-navy">{msg}</p> : null}
 
-      <div className="mb-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+      <StatGrid className="lg:grid-cols-5 xl:grid-cols-5">
         <StatCard label="Employees" value={employees.length} />
         <StatCard label="Present (recent)" value={s.present} />
         <StatCard label="Absent" value={s.absent} />
         <StatCard label="Late" value={s.late} />
         <StatCard label="Leave days logged" value={s.leave} />
-      </div>
+      </StatGrid>
 
       <div className="mb-6 grid gap-4 lg:grid-cols-2">
         <Panel title={data.canMutate ? "Create / update employee" : "Employee form (view only)"}>
@@ -495,7 +497,7 @@ export function HrModulePage() {
                     <td className="max-w-xs truncate text-xs">{l.reason}</td>
                     <td>
                       {data.canDecideLeave ? (
-                        <div className="flex gap-1">
+                        <div className="flex flex-wrap gap-1">
                           <Button
                             size="sm"
                             variant="navy"
@@ -651,6 +653,6 @@ export function HrModulePage() {
           </TableWrap>
         )}
       </Panel>
-    </div>
+    </PortalPage>
   );
 }

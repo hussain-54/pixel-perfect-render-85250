@@ -12,6 +12,7 @@ import {
   TableWrap,
   fmtDate,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -241,7 +242,7 @@ export function OffersVisaWorkspace(props?: {
   const detail = detailQ.data;
 
   return (
-    <div className="space-y-4 md:space-y-5">
+    <PortalPage>
       <PageHeader
         compact
         title="Offers & visa"
@@ -845,7 +846,7 @@ export function OffersVisaWorkspace(props?: {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </PortalPage>
   );
 }
 

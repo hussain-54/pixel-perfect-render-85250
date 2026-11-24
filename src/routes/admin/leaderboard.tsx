@@ -9,6 +9,7 @@ import {
   ErrorState,
   PermissionDenied,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import {
   LEADERBOARD_METRIC_LABELS,
@@ -51,7 +52,7 @@ function AdminLeaderboard() {
   const metricUnavailable = payload?.metricAvailability[metric] === "unavailable";
 
   return (
-    <div className="space-y-4">
+    <PortalPage>
       <PageHeader
         title="Consultant leaderboard"
         subtitle="Firm ranking from live Supabase counts. No invented scores — unavailable sources show as Not available."
@@ -160,6 +161,6 @@ function AdminLeaderboard() {
           </TableWrap>
         </div>
       )}
-    </div>
+    </PortalPage>
   );
 }

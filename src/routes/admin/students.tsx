@@ -9,6 +9,7 @@ import {
   ErrorState,
   PermissionDenied,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { AdminModuleSubnav } from "@/components/portal/AdminModuleSubnav";
 import { Button } from "@/components/ui/button";
@@ -39,7 +40,7 @@ function AdminStudents() {
   });
 
   return (
-    <div>
+    <PortalPage>
       <PageHeader
         title="Students"
         subtitle="Full student roster. Related workspace tools stay inside this module."
@@ -131,6 +132,6 @@ function AdminStudents() {
           ) : null}
         </>
       ) : null}
-    </div>
+    </PortalPage>
   );
 }

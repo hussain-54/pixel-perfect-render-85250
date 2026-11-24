@@ -9,6 +9,7 @@ import {
   ErrorState,
   LoadingRows,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -129,7 +130,7 @@ function StudentProfile() {
   ];
 
   return (
-    <div className="space-y-4 md:space-y-5">
+    <PortalPage>
       <PageHeader
         compact
         title="Profile"
@@ -196,6 +197,6 @@ function StudentProfile() {
           ))}
         </dl>
       </Panel>
-    </div>
+    </PortalPage>
   );
 }

@@ -10,6 +10,7 @@ import {
   Panel,
   PermissionDenied,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { AdminModuleSubnav } from "@/components/portal/AdminModuleSubnav";
 import { Button } from "@/components/ui/button";
@@ -113,7 +114,7 @@ function AdminUniversities() {
   };
 
   return (
-    <div>
+    <PortalPage>
       <PageHeader
         title="Universities"
         subtitle="Live partner university catalog (Supabase). Website field only — no ranking column in schema."
@@ -344,6 +345,6 @@ function AdminUniversities() {
           </Button>
         </div>
       ) : null}
-    </div>
+    </PortalPage>
   );
 }

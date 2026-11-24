@@ -30,4 +30,8 @@ describe("demo auth gating", () => {
     expect(DEMO_ACCOUNTS.some((a) => a.email === "admission@globalroots.pk")).toBe(false);
     expect(DEMO_ACCOUNTS.some((a) => a.businessRole === "admission_team")).toBe(false);
   });
+
+  it("never ships a Front Desk demo account (FD is live Supabase only)", () => {
+    expect(DEMO_ACCOUNTS.some((a) => a.businessRole === "front_desk_student_affairs")).toBe(false);
+  });
 });

@@ -10,6 +10,7 @@ import {
   StatCard,
   fmtDate,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { AdminModuleSubnav } from "@/components/portal/AdminModuleSubnav";
 import { Button } from "@/components/ui/button";
@@ -72,7 +73,7 @@ function AdminBlogPage() {
   });
 
   return (
-    <div className="space-y-4">
+    <PortalPage>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <PageHeader title="Blog" subtitle="Write, schedule and publish articles." />
         <div className="flex flex-wrap gap-2">
@@ -127,7 +128,7 @@ function AdminBlogPage() {
       {tab === "categories" ? <CategoriesTab enabled={Boolean(dashQ.data?.schemaReady)} /> : null}
       {tab === "tags" ? <TagsTab enabled={Boolean(dashQ.data?.schemaReady)} /> : null}
       {tab === "authors" ? <AuthorsTab enabled={Boolean(dashQ.data?.schemaReady)} /> : null}
-    </div>
+    </PortalPage>
   );
 }
 

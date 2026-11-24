@@ -11,6 +11,7 @@ import {
   TableWrap,
   fmtDate,
   portalErrorMessage,
+  PortalPage,
 } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Button } from "@/components/ui/button";
@@ -390,7 +391,7 @@ export function ApplicationsPipeline({
   const submittedCount = data.counts.Submitted ?? 0;
 
   return (
-    <div className="space-y-4">
+    <PortalPage>
       <PageHeader
         compact
         title="Admission Team Workspace"
@@ -1115,7 +1116,7 @@ export function ApplicationsPipeline({
           ) : null}
         </DialogContent>
       </Dialog>
-    </div>
+    </PortalPage>
   );
 }
 

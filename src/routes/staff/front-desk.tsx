@@ -10,6 +10,7 @@ import {
   PageHeader,
   PageLoadState,
   Panel,
+  PortalPage,
   PermissionDenied,
   StatCard,
   TableWrap,
@@ -358,7 +359,7 @@ function FrontDeskDashboardPage() {
   const activeFeeTabLabel = FEE_TABS.find((t) => t.id === tab)?.label ?? tab;
 
   return (
-    <div className="mx-auto w-full max-w-7xl space-y-4 md:space-y-5">
+    <PortalPage className="mx-auto w-full max-w-7xl">
       <PageHeader
         compact
         title={fdTitle}
@@ -1077,6 +1078,6 @@ function FrontDeskDashboardPage() {
           </div>
         </SheetContent>
       </Sheet>
-    </div>
+    </PortalPage>
   );
 }

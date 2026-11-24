@@ -71,7 +71,8 @@ export const consultants: Consultant[] = [
     name: "Ayesha Khan",
     role: "Senior Consultant",
     department: "UK & Europe",
-    email: "ayesha@globalroots.pk",
+    // Distinct from DEMO student email (ayesha@) — consultant ≠ student identity.
+    email: "ayesha.khan@globalroots.pk",
     phone: "+92 300 1112233",
     status: "Active",
     metrics: {
@@ -238,16 +239,20 @@ export const students: Student[] = [
     "c3",
     "2026-09-22",
   ),
-  s(
-    10,
-    "Ayesha Butt",
-    "Finland",
-    "BSc Nursing",
-    "Bachelor's",
-    "profile_submitted",
-    "c4",
-    "2026-09-20",
-  ),
+  {
+    // Must match DEMO_ACCOUNTS student email (demo-auth) — never leave demo student unlinked.
+    ...s(
+      10,
+      "Ayesha Butt",
+      "Finland",
+      "BSc Nursing",
+      "Bachelor's",
+      "profile_submitted",
+      "c4",
+      "2026-09-20",
+    ),
+    email: "ayesha@globalroots.pk",
+  },
   s(11, "Sara Iqbal", "UK", "MSc Data Science", "Master's", "offer_received", "c1", "2026-09-18"),
   s(12, "Usman Ali", "UK", "MSc Finance", "Master's", "visa_preparation", "c1", "2026-09-15"),
 ];
@@ -1083,10 +1088,11 @@ export const scholarships: Scholarship[] = [
 
 export const notifications: Notification[] = [
   {
+    // Demo student (s10 / ayesha@) is assigned to Usman Tariq (c4) — keep copy consistent.
     id: "n1",
     audience: "student",
     title: "Appointment confirmed",
-    body: "Application Review with Ayesha Khan on 1 Oct, 11:00.",
+    body: "Free Consultation with Usman Tariq on 3 Oct, 10:00.",
     time: "2h ago",
     read: false,
   },
@@ -1110,7 +1116,7 @@ export const notifications: Notification[] = [
     id: "n4",
     audience: "student",
     title: "Consultant assigned",
-    body: "Ayesha Khan is now your consultant.",
+    body: "Usman Tariq is now your consultant.",
     time: "3w ago",
     read: true,
   },
