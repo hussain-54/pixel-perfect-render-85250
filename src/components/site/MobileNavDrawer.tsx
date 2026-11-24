@@ -1,24 +1,37 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ChevronDown, Mail, MapPin, MessageCircle, Phone, Search, X } from "lucide-react";
+import { Mail, MapPin, MessageCircle, Phone, Search, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SocialLinks } from "@/components/site/SocialLinks";
+import { WhatsAppGlyph } from "@/components/site/WhatsAppFloat";
 import { siteContact } from "@/data/contact";
-import { mainNavigation, megaMenus, type MegaMenuId } from "@/data/navigation";
+import { FREE_CONSULTATION_HASH, primaryNavigation } from "@/data/navigation";
 import type { CmsNavSettings } from "@/lib/cms-types";
-import { cn } from "@/lib/utils";
-
-const sectionLabels: Record<MegaMenuId, string[]> = {
-  programs: ["Study Levels", "Popular Fields", "Quick Links"],
-  universities: ["Study by Country", "Featured Universities"],
-  scholarships: ["Scholarship Types", "Popular Scholarships", "Quick Links"],
-  destinations: ["Study Destinations"],
-  services: ["Study Abroad Services", "Visa Services", "Student Support"],
-  resources: ["Guides", "Explore", "Get Help"],
-};
 
 const FOCUSABLE =
   'a[href], button:not([disabled]), textarea, input, select, [tabindex]:not([tabindex="-1"])';
+
+/** Always keep the audit six-link primary set; CMS may only override matching labels. */
+function resolvePrimaryNav(cmsNav?: CmsNavSettings) {
+  if (!cmsNav?.items?.length) return primaryNavigation;
+
+  const labelByPath = new Map<string, string>();
+  for (const item of cmsNav.items) {
+    if (item.visible === false) continue;
+    const href = item.href?.trim();
+    const label = item.label?.trim();
+    if (href?.startsWith("/") && label) labelByPath.set(href, label);
+    if (item.id === "success" && label) labelByPath.set("/success-stories", label);
+    if (item.id === "destinations" && label) labelByPath.set("/destinations", label);
+    if (item.id === "services" && label) labelByPath.set("/services", label);
+    if (item.id === "home" && label) labelByPath.set("/", label);
+  }
+
+  return primaryNavigation.map((item) => ({
+    ...item,
+    label: labelByPath.get(item.to) || item.label,
+  }));
+}
 
 export function MobileNavDrawer({
   open,
@@ -31,45 +44,17 @@ export function MobileNavDrawer({
   id?: string;
   cmsNav?: CmsNavSettings;
 }) {
-  const [expanded, setExpanded] = useState<MegaMenuId | null>(null);
   const [q, setQ] = useState("");
   const navigate = useNavigate();
   const panelRef = useRef<HTMLDivElement>(null);
   const closeBtnRef = useRef<HTMLButtonElement>(null);
   const restoreFocusRef = useRef<HTMLElement | null>(null);
   const titleId = useId();
-
-  const navItems = (() => {
-    if (!cmsNav?.items?.length) return mainNavigation;
-    return cmsNav.items
-      .filter((item) => item.visible !== false)
-      .map((item) => {
-        const base = mainNavigation.find((m) => m.id === item.id);
-        if (item.type === "link" || base?.type === "link") {
-          const to = item.href || (base && base.type === "link" ? base.to : "/") || "/";
-          return {
-            id: item.id,
-            label: item.label || base?.label || item.id,
-            type: "link" as const,
-            to: to as "/",
-          };
-        }
-        const megaId = (item.megaId || item.id) as MegaMenuId;
-        return {
-          id: megaId,
-          label: item.label || base?.label || item.id,
-          type: "mega" as const,
-        };
-      })
-      .filter((item) => {
-        if (item.type === "mega") return Boolean(megaMenus[item.id as MegaMenuId]);
-        return true;
-      });
-  })();
+  const navItems = resolvePrimaryNav(cmsNav);
+  const showWhatsApp = !siteContact.whatsapp.placeholder;
 
   useEffect(() => {
     if (!open) {
-      setExpanded(null);
       setQ("");
       return;
     }
@@ -85,7 +70,6 @@ export function MobileNavDrawer({
       body.style.paddingRight = `${scrollbarWidth}px`;
     }
 
-    // Focus close control after paint for screen readers / keyboard users
     const focusTimer = window.setTimeout(() => {
       closeBtnRef.current?.focus();
     }, 0);
@@ -131,7 +115,7 @@ export function MobileNavDrawer({
 
   return (
     <div
-      className="fixed inset-0 z-50 xl:hidden"
+      className="fixed inset-0 z-50 lg:hidden"
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
@@ -191,107 +175,18 @@ export function MobileNavDrawer({
             </div>
           </form>
 
-          {navItems.map((item) => {
-            if (item.type === "link") {
-              return (
-                <Link
-                  key={item.id}
-                  to={item.to as "/"}
-                  onClick={onClose}
-                  className="block rounded-md px-3 py-3 text-[0.95rem] font-semibold text-navy transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  {item.label}
-                </Link>
-              );
-            }
-
-            const megaId = item.id as MegaMenuId;
-            const isOpen = expanded === megaId;
-            const menu = megaMenus[megaId];
-            const allowed = sectionLabels[megaId];
-            const panelId = `mobile-submenu-${megaId}`;
-            if (!menu || !allowed) return null;
-
-            return (
-              <div key={item.id} className="border-b border-border/70 last:border-0">
-                <button
-                  type="button"
-                  aria-expanded={isOpen}
-                  aria-controls={panelId}
-                  onClick={() => setExpanded(isOpen ? null : megaId)}
-                  className={cn(
-                    "flex w-full items-center justify-between gap-3 rounded-md px-3 py-3 text-left text-[0.95rem] font-semibold text-navy transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    isOpen && "bg-accent/70 text-navy",
-                  )}
-                >
-                  <span className="min-w-0 truncate">{item.label}</span>
-                  <ChevronDown
-                    className={cn(
-                      "h-4 w-4 shrink-0 text-royal transition-transform duration-200",
-                      isOpen && "rotate-180",
-                    )}
-                    aria-hidden
-                  />
-                </button>
-
-                <div
-                  id={panelId}
-                  className={cn(
-                    "grid transition-[grid-template-rows] duration-200 ease-out",
-                    isOpen ? "grid-rows-[1fr]" : "grid-rows-[0fr]",
-                  )}
-                  inert={isOpen ? undefined : true}
-                  aria-hidden={!isOpen}
-                >
-                  <div className="overflow-hidden">
-                    <div className="space-y-4 pb-3 pl-2 pr-1 pt-1">
-                      {menu.columns
-                        .filter((c) => allowed.includes(c.heading))
-                        .map((column) => {
-                          const limit =
-                            column.heading.includes("Popular") ||
-                            column.heading.includes("Featured")
-                              ? 8
-                              : undefined;
-                          const links = limit ? column.links.slice(0, limit) : column.links;
-                          return (
-                            <div key={column.heading}>
-                              <p className="mb-1.5 px-2 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-royal">
-                                {column.heading}
-                              </p>
-                              <ul className="space-y-0.5">
-                                {links.map((link) => (
-                                  <li key={`${column.heading}-${link.label}`}>
-                                    <Link
-                                      to={link.to}
-                                      {...(link.search ? { search: link.search } : {})}
-                                      {...(link.hash ? { hash: link.hash } : {})}
-                                      onClick={onClose}
-                                      tabIndex={isOpen ? undefined : -1}
-                                      className="block rounded-md px-2 py-2 text-sm text-navy/90 transition-colors hover:bg-accent hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                                    >
-                                      {link.label}
-                                    </Link>
-                                  </li>
-                                ))}
-                              </ul>
-                            </div>
-                          );
-                        })}
-                      <Link
-                        to={menu.cta.primary.to}
-                        onClick={onClose}
-                        tabIndex={isOpen ? undefined : -1}
-                        className="mx-2 inline-flex text-sm font-semibold text-royal transition-colors hover:text-navy"
-                      >
-                        {menu.cta.primary.label} →
-                      </Link>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          {navItems.map((item) => (
+            <Link
+              key={item.id}
+              to={item.to}
+              onClick={onClose}
+              activeOptions={{ exact: item.to === "/" }}
+              activeProps={{ className: "bg-accent text-navy" }}
+              className="block rounded-md px-3 py-3 text-[0.95rem] font-semibold text-navy transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              {item.label}
+            </Link>
+          ))}
 
           <div className="mt-5 border-t border-border pt-4">
             <p className="mb-2 px-3 text-[0.7rem] font-semibold uppercase tracking-[0.12em] text-royal">
@@ -309,7 +204,7 @@ export function MobileNavDrawer({
                   </a>
                 </li>
               ) : null}
-              {!siteContact.whatsapp.placeholder ? (
+              {showWhatsApp ? (
                 <li>
                   <a
                     href={siteContact.whatsapp.href}
@@ -317,8 +212,8 @@ export function MobileNavDrawer({
                     rel="noopener noreferrer"
                     className="flex items-center gap-2.5 rounded-md px-3 py-2.5 text-sm text-navy/90 transition-colors hover:bg-accent hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                   >
-                    <MessageCircle className="h-4 w-4 shrink-0 text-[#25D366]" aria-hidden />
-                    <span>WhatsApp {siteContact.whatsapp.display}</span>
+                    <WhatsAppGlyph className="h-4 w-4 shrink-0 text-[#25D366]" />
+                    <span>Need Help? WhatsApp</span>
                   </a>
                 </li>
               ) : null}
@@ -369,10 +264,27 @@ export function MobileNavDrawer({
           </div>
         </nav>
 
-        <div className="shrink-0 border-t border-border bg-white p-4">
+        <div className="shrink-0 space-y-2 border-t border-border bg-white p-4">
+          {showWhatsApp ? (
+            <Button
+              asChild
+              variant="outline"
+              className="h-12 w-full border-[#25D366]/40 text-base font-semibold text-[#128C7E] hover:bg-[#25D366] hover:text-white"
+            >
+              <a
+                href={siteContact.whatsapp.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={onClose}
+              >
+                <MessageCircle className="h-4 w-4" aria-hidden />
+                Need Help? WhatsApp
+              </a>
+            </Button>
+          ) : null}
           <Button asChild className="h-12 w-full text-base font-semibold">
-            <Link to="/contact" onClick={onClose}>
-              Book Consultation
+            <Link to="/" hash={FREE_CONSULTATION_HASH} onClick={onClose}>
+              Free Consultation
             </Link>
           </Button>
         </div>

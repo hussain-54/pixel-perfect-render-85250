@@ -6,13 +6,79 @@ import { cn } from "@/lib/utils";
 
 type OfficeLocationMapProps = {
   className?: string | undefined;
-  /** Compact footer-adjacent treatment vs full homepage section. */
-  variant?: "section" | "compact" | undefined;
+  /**
+   * `section` — full homepage band
+   * `compact` — shorter standalone band
+   * `panel` — embed + address only (for side-by-side consultation layout)
+   */
+  variant?: "section" | "compact" | "panel" | undefined;
 };
 
 export function OfficeLocationMap({ className, variant = "section" }: OfficeLocationMapProps) {
   const { location } = siteContact;
   const compact = variant === "compact";
+  const panel = variant === "panel";
+
+  if (panel) {
+    return (
+      <div className={cn("flex h-full flex-col", className)}>
+        <div className="mb-4">
+          <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-royal">
+            Visit us
+          </p>
+          <h2 className="mt-2 font-display text-xl font-semibold text-navy md:text-2xl">
+            GlobalRoots Office Location
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed text-muted-foreground">
+            {location.fullDisplay}
+          </p>
+          <p className="mt-1 text-xs text-muted-foreground">Hours: {siteContact.hours}</p>
+        </div>
+        <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-border bg-background shadow-[0_1px_0_rgb(0_0_0_/0.04)]">
+          <div className="relative aspect-[4/3] w-full bg-muted/40 sm:aspect-auto sm:min-h-[280px] sm:flex-1">
+            <iframe
+              title={`Google Map — ${siteContact.brandName}, ${location.display}`}
+              src={location.embedSrc}
+              className="absolute inset-0 h-full w-full border-0"
+              loading="lazy"
+              referrerPolicy="no-referrer-when-downgrade"
+              allowFullScreen
+            />
+          </div>
+          <div className="flex flex-col gap-3 border-t border-border px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="flex items-start gap-2 text-sm text-navy">
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0 text-royal" aria-hidden />
+              <span className="font-semibold">{siteContact.brandName}</span>
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <Button asChild size="sm" variant="navy">
+                <a
+                  href={location.directionsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Get directions to Global Roots Consultants on Google Maps"
+                >
+                  <Navigation className="h-4 w-4" aria-hidden />
+                  Directions
+                </a>
+              </Button>
+              <Button asChild size="sm" variant="outline">
+                <a
+                  href={location.href ?? undefined}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Open office location in Google Maps"
+                >
+                  Open Maps
+                  <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+                </a>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <section

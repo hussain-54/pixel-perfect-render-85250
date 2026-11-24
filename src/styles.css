@@ -409,3 +409,14 @@
   background: oklch(1 0 0 / 32%);
   border-radius: 999px;
 }
+
+/* Public header WhatsApp “Need Help?” — subtle lift without noisy motion */
+.gr-whatsapp-help:hover {
+  transform: translateY(-1px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gr-whatsapp-help:hover {
+    transform: none;
+  }
+}

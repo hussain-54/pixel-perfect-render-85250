@@ -146,10 +146,13 @@ export const socialLinks: SocialLink[] = [
 ];
 
 /** Compact utility links that already exist as routes (not main-nav duplicates). */
-export const utilityQuickLinks: UtilityQuickLink[] = [
-  { label: "Sign In", to: "/sign-in" },
-  { label: "Free Consultation", to: "/contact" },
-];
+export const utilityQuickLinks: UtilityQuickLink[] = [{ label: "Sign In", to: "/sign-in" }];
+
+/**
+ * Free Consultation CTA target — homepage section `#free-consultation`.
+ * Prefer hash navigation so every page lands on the working form + map band.
+ */
+export const FREE_CONSULTATION_HREF = "/#free-consultation" as const;
 
 /** Social channels that currently have a live URL. */
 export function getConfiguredSocialLinks(): SocialLink[] {

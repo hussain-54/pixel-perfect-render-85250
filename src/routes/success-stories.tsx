@@ -1,8 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { Quote } from "lucide-react";
 import { SiteLayout, PageHero } from "@/components/site/SiteLayout";
-import { CtaBand } from "@/components/site/blocks";
-import { Initials } from "@/components/common";
+import { CtaBand, SuccessStoryCard } from "@/components/site/blocks";
 import { stories } from "@/data/site";
 import { pageHead } from "@/lib/seo";
 
@@ -12,7 +10,7 @@ export const Route = createFileRoute("/success-stories")({
       path: "/success-stories",
       title: "Success Stories — Global Roots Consultants",
       description:
-        "Real students who reached top universities in the UK, Canada, Germany and Australia.",
+        "Authentic student journeys guided by Global Roots Consultants — admissions and study-abroad pathways shared for public display.",
     }),
   component: Page,
 });
@@ -20,28 +18,24 @@ export const Route = createFileRoute("/success-stories")({
 function Page() {
   return (
     <SiteLayout>
-      <PageHero eyebrow="Success stories" title="250+ students guided. Countless journeys." />
-      <section className="container-page section-y grid gap-10 md:grid-cols-2 md:gap-x-12 md:gap-y-14">
-        {stories.map((s) => (
-          <figure key={s.name} className="border-t border-royal/25 pt-6">
-            <Quote className="h-5 w-5 text-bright" aria-hidden />
-            <blockquote className="mt-3 font-display text-lg leading-snug text-navy md:text-xl">
-              “{s.quote}”
-            </blockquote>
-            <figcaption className="mt-5 flex items-center gap-3">
-              <Initials name={s.name} />
-              <div className="text-sm">
-                <p className="font-semibold text-navy">
-                  {s.name} <span className="font-normal text-muted-foreground">from {s.from}</span>
-                </p>
-                <p className="text-muted-foreground">
-                  {s.program} · {s.to}
-                </p>
-              </div>
-            </figcaption>
-          </figure>
-        ))}
-      </section>
+      <PageHero
+        eyebrow="Success stories"
+        title="Students guided toward global education"
+        body="These stories use approved public testimonials already published on this website. We do not invent visa outcomes or present stock photos as real students."
+      />
+      {stories.length > 0 ? (
+        <section className="container-page section-y grid gap-5 sm:grid-cols-2 lg:grid-cols-2 lg:gap-6">
+          {stories.map((s) => (
+            <SuccessStoryCard key={s.name} story={s} />
+          ))}
+        </section>
+      ) : (
+        <section className="container-page section-y">
+          <p className="text-sm text-muted-foreground">
+            Success stories will appear here once approved public content is available.
+          </p>
+        </section>
+      )}
       <CtaBand />
     </SiteLayout>
   );

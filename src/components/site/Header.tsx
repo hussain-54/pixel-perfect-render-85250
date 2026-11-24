@@ -1,58 +1,65 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { ChevronDown, Menu, UserRound, X } from "lucide-react";
+import { Menu, UserRound, X } from "lucide-react";
 import { Logo } from "@/components/Logo";
 import { Button } from "@/components/ui/button";
-import { MegaMenuPanel } from "@/components/site/MegaMenuPanel";
 import { MobileNavDrawer } from "@/components/site/MobileNavDrawer";
 import { SiteSearch } from "@/components/site/SiteSearch";
 import { UtilityBar } from "@/components/site/UtilityBar";
-import { mainNavigation, type MegaMenuId } from "@/data/navigation";
+import { WhatsAppGlyph } from "@/components/site/WhatsAppFloat";
+import { FREE_CONSULTATION_HREF, siteContact } from "@/data/contact";
+import { FREE_CONSULTATION_HASH, primaryNavigation } from "@/data/navigation";
 import type { CmsHeaderSettings, CmsNavSettings } from "@/lib/cms-types";
 import { cn } from "@/lib/utils";
 
 const navItemClass =
-  "inline-flex shrink-0 items-center gap-1 whitespace-nowrap rounded-md px-1.5 py-2 text-[0.8125rem] font-medium leading-none text-navy/75 transition-colors hover:bg-accent/70 hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring 2xl:gap-1.5 2xl:px-2.5 2xl:text-sm";
+  "inline-flex shrink-0 items-center whitespace-nowrap rounded-md px-2 py-2 text-[0.8125rem] font-medium leading-none text-navy/75 transition-colors duration-150 hover:bg-accent/70 hover:text-navy focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring 2xl:px-2.5 2xl:text-sm";
 
 type HeaderProps = {
   cmsHeader?: CmsHeaderSettings;
   cmsNav?: CmsNavSettings;
 };
 
+/** Always keep the audit six-link primary set; CMS may only override matching labels. */
+function resolvePrimaryNav(cmsNav?: CmsNavSettings) {
+  if (!cmsNav?.items?.length) return primaryNavigation;
+
+  const labelByPath = new Map<string, string>();
+  for (const item of cmsNav.items) {
+    if (item.visible === false) continue;
+    const href = item.href?.trim();
+    const label = item.label?.trim();
+    if (href?.startsWith("/") && label) labelByPath.set(href, label);
+    if (item.id === "success" && label) labelByPath.set("/success-stories", label);
+    if (item.id === "destinations" && label) labelByPath.set("/destinations", label);
+    if (item.id === "services" && label) labelByPath.set("/services", label);
+    if (item.id === "home" && label) labelByPath.set("/", label);
+  }
+
+  return primaryNavigation.map((item) => ({
+    ...item,
+    label: labelByPath.get(item.to) || item.label,
+  }));
+}
+
 export function Header({ cmsHeader, cmsNav }: HeaderProps = {}) {
-  const [openMenu, setOpenMenu] = useState<MegaMenuId | null>(null);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [searchOpen, setSearchOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
-  const menuRegionId = useId();
   const mobileDrawerId = useId();
 
   const sticky = cmsHeader?.sticky !== false;
   const showUtilityBar = cmsHeader?.showUtilityBar !== false;
-  const ctaLabel = cmsHeader?.cta.label?.trim() || "Book Consultation";
-  const ctaHref = cmsHeader?.cta.href?.trim() || "/contact";
-
-  const desktopNavigation = (cmsNav?.items?.length ? cmsNav.items : null)
-    ? cmsNav!.items
-        .filter((item) => item.visible !== false && item.id !== "home")
-        .map((item) => {
-          const base = mainNavigation.find((m) => m.id === item.id);
-          if (item.type === "link") {
-            return {
-              id: item.id,
-              label: item.label || base?.label || item.id,
-              type: "link" as const,
-              to: (item.href || (base && base.type === "link" ? base.to : "/")) as "/",
-            };
-          }
-          return {
-            id: (item.megaId || item.id) as MegaMenuId,
-            label: item.label || base?.label || item.id,
-            type: "mega" as const,
-          };
-        })
-    : mainNavigation.filter((item) => item.id !== "home");
+  const ctaLabel = cmsHeader?.cta.label?.trim() || "Free Consultation";
+  const cmsCta = cmsHeader?.cta.href?.trim();
+  const ctaIsHash =
+    !cmsCta ||
+    cmsCta === "/contact" ||
+    cmsCta === FREE_CONSULTATION_HREF ||
+    cmsCta.endsWith(`#${FREE_CONSULTATION_HASH}`);
+  const desktopNavigation = resolvePrimaryNav(cmsNav);
+  const showWhatsApp = !siteContact.whatsapp.placeholder;
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -62,37 +69,25 @@ export function Header({ cmsHeader, cmsNav }: HeaderProps = {}) {
   }, []);
 
   useEffect(() => {
-    if (!openMenu && !searchOpen) return;
+    if (!searchOpen) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setOpenMenu(null);
-        setSearchOpen(false);
-      }
+      if (e.key === "Escape") setSearchOpen(false);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [openMenu, searchOpen]);
+  }, [searchOpen]);
 
   useEffect(() => {
-    if (!openMenu && !searchOpen) return;
+    if (!searchOpen) return;
     const onPointer = (e: MouseEvent) => {
       const el = headerRef.current;
-      if (el && !el.contains(e.target as Node)) {
-        setOpenMenu(null);
-        setSearchOpen(false);
-      }
+      if (el && !el.contains(e.target as Node)) setSearchOpen(false);
     };
     document.addEventListener("mousedown", onPointer);
     return () => document.removeEventListener("mousedown", onPointer);
-  }, [openMenu, searchOpen]);
-
-  const toggleMenu = (id: MegaMenuId) => {
-    setSearchOpen(false);
-    setOpenMenu((current) => (current === id ? null : id));
-  };
+  }, [searchOpen]);
 
   const closeMenus = () => {
-    setOpenMenu(null);
     setSearchOpen(false);
   };
 
@@ -109,7 +104,6 @@ export function Header({ cmsHeader, cmsNav }: HeaderProps = {}) {
         {showUtilityBar ? <UtilityBar /> : null}
 
         <div className="mx-auto flex h-[68px] w-full max-w-[1680px] items-center px-5 md:px-6 lg:px-8 xl:px-10">
-          {/* Logo */}
           {cmsHeader?.logoUrl ? (
             <Link to="/" className="mr-4 shrink-0 xl:mr-6" onClick={closeMenus}>
               <img
@@ -123,61 +117,51 @@ export function Header({ cmsHeader, cmsNav }: HeaderProps = {}) {
             <Logo className="mr-4 shrink-0 xl:mr-6" />
           )}
 
-          {/* Navigation — desktop from xl; compact spacing keeps actions clear */}
           <nav
-            className="hidden min-w-0 flex-1 items-center justify-center gap-x-1 overflow-hidden xl:flex 2xl:gap-x-3"
+            className="hidden min-w-0 flex-1 items-center justify-center gap-x-0.5 overflow-hidden lg:flex xl:gap-x-1 2xl:gap-x-2"
             aria-label="Primary"
           >
-            {desktopNavigation.map((item) => {
-              if (item.type === "link") {
-                return (
-                  <Link
-                    key={item.id}
-                    to={item.to as "/"}
-                    activeOptions={{ exact: item.to === "/" }}
-                    onClick={closeMenus}
-                    className={navItemClass}
-                    activeProps={{ className: "text-navy" }}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              }
-
-              const isOpen = openMenu === item.id;
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  aria-expanded={isOpen}
-                  aria-haspopup="true"
-                  aria-controls={isOpen ? menuRegionId : undefined}
-                  onClick={() => toggleMenu(item.id)}
-                  className={cn(navItemClass, isOpen && "bg-accent text-navy")}
-                >
-                  <span>{item.label}</span>
-                  <ChevronDown
-                    className={cn(
-                      "h-3.5 w-3.5 shrink-0 opacity-70 transition-transform duration-200",
-                      isOpen && "rotate-180",
-                    )}
-                    aria-hidden
-                  />
-                </button>
-              );
-            })}
+            {desktopNavigation.map((item) => (
+              <Link
+                key={item.id}
+                to={item.to}
+                activeOptions={{ exact: item.to === "/" }}
+                onClick={closeMenus}
+                className={navItemClass}
+                activeProps={{ className: "bg-accent/80 text-navy" }}
+              >
+                {item.label}
+              </Link>
+            ))}
           </nav>
 
-          {/* Actions — fixed right cluster with clear separation from nav */}
-          <div className="ml-auto flex shrink-0 items-center gap-2 border-l border-border pl-3 max-xl:border-0 max-xl:pl-0 xl:ml-4 xl:gap-2.5 xl:pl-5 2xl:ml-6 2xl:gap-3 2xl:pl-6">
+          <div className="ml-auto flex shrink-0 items-center gap-2 border-l border-border pl-3 max-lg:border-0 max-lg:pl-0 lg:ml-4 lg:gap-2.5 lg:pl-5">
             <SiteSearch
               open={searchOpen}
               onOpenChange={(next) => {
                 setSearchOpen(next);
-                if (next) setOpenMenu(null);
               }}
               className="hidden 2xl:inline-flex"
             />
+
+            {showWhatsApp ? (
+              <a
+                href={siteContact.whatsapp.href}
+                target="_blank"
+                rel="noopener noreferrer"
+                className={cn(
+                  "gr-whatsapp-help hidden h-10 items-center gap-1.5 rounded-md border border-[#25D366]/35 bg-[#25D366]/10 px-2.5 text-sm font-semibold text-[#128C7E] transition-[background-color,transform,box-shadow] duration-200",
+                  "hover:bg-[#25D366] hover:text-white hover:shadow-sm",
+                  "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#25D366] focus-visible:ring-offset-1",
+                  "motion-reduce:transition-none motion-reduce:hover:transform-none",
+                  "md:inline-flex",
+                )}
+                aria-label="Need help? Chat on WhatsApp with Global Roots Consultants"
+              >
+                <WhatsAppGlyph className="h-4 w-4 shrink-0" />
+                <span className="hidden whitespace-nowrap xl:inline">Need Help?</span>
+              </a>
+            ) : null}
 
             <Button
               asChild
@@ -185,12 +169,16 @@ export function Header({ cmsHeader, cmsNav }: HeaderProps = {}) {
               size="sm"
               className="hidden h-10 shrink-0 whitespace-nowrap px-3 text-sm sm:inline-flex xl:px-4"
             >
-              {ctaHref.startsWith("/") ? (
-                <Link to={ctaHref as "/contact"} onClick={closeMenus}>
+              {ctaIsHash ? (
+                <Link to="/" hash={FREE_CONSULTATION_HASH} onClick={closeMenus}>
+                  {ctaLabel}
+                </Link>
+              ) : cmsCta!.startsWith("/") ? (
+                <Link to={cmsCta as "/contact"} onClick={closeMenus}>
                   {ctaLabel}
                 </Link>
               ) : (
-                <a href={ctaHref} onClick={closeMenus}>
+                <a href={cmsCta} onClick={closeMenus}>
                   {ctaLabel}
                 </a>
               )}
@@ -215,7 +203,7 @@ export function Header({ cmsHeader, cmsNav }: HeaderProps = {}) {
                 closeMenus();
                 setMobileOpen((v) => !v);
               }}
-              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-navy transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring xl:hidden"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-md text-navy transition-colors hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring lg:hidden"
             >
               {mobileOpen ? (
                 <X className="h-5 w-5" aria-hidden />
@@ -225,16 +213,6 @@ export function Header({ cmsHeader, cmsNav }: HeaderProps = {}) {
             </button>
           </div>
         </div>
-
-        {openMenu && (
-          <div className="absolute inset-x-0 top-full z-50 hidden xl:block">
-            <div className="mx-auto w-full max-w-[1680px] px-5 pb-4 pt-2 md:px-6 lg:px-8 xl:px-10">
-              <div id={menuRegionId}>
-                <MegaMenuPanel id={openMenu} onNavigate={closeMenus} />
-              </div>
-            </div>
-          </div>
-        )}
       </header>
 
       <MobileNavDrawer

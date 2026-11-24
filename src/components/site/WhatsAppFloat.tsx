@@ -38,9 +38,10 @@ export function WhatsAppFloat({ className }: WhatsAppFloatProps) {
         "bottom-[max(1.25rem,env(safe-area-inset-bottom))] right-[max(1.25rem,env(safe-area-inset-right))]",
         "transition-[transform,background-color,box-shadow] duration-200 ease-out",
         "hover:scale-105 hover:bg-[#1EBE57] hover:shadow-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#25D366] focus-visible:ring-offset-2",
-        "active:scale-95 md:bottom-7 md:right-7",
+        "active:scale-95 motion-reduce:transition-none motion-reduce:hover:scale-100 md:bottom-7 md:right-7",
         className,
       )}
+      title="Need Help? WhatsApp"
     >
       <WhatsAppGlyph className="h-7 w-7" />
     </a>

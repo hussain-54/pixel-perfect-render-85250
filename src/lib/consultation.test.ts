@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   CONSULTATION_PERSISTENCE_ERROR,
   isConsultationReference,
+  mapConsultationFormToPayload,
   newConsultationReference,
   publicConsultationErrorMessage,
   resolveConsultationReference,
@@ -21,6 +22,38 @@ const validPayload = {
   message: "Hello",
   whatsapp: "",
 };
+
+describe("consultation form field mapping", () => {
+  it("maps audit UI fields into the existing backend contract", () => {
+    const mapped = mapConsultationFormToPayload({
+      firstName: "Sara",
+      lastName: "Khan",
+      email: "sara@example.com",
+      phone: "+92 300 1234567",
+      qualification: "Bachelor's",
+      destination: "UK",
+      program: "Computer Science & IT",
+      languageTest: "IELTS",
+      counsellingMode: "Online / Video call",
+      fundingMode: "Scholarship / funding search",
+      marketingConsent: "on",
+      notes: "Prefer evenings",
+    });
+    expect(mapped["name"]).toBe("Sara Khan");
+    expect(mapped["email"]).toBe("sara@example.com");
+    expect(mapped["phone"]).toBe("+92 300 1234567");
+    expect(mapped["whatsapp"]).toBe("+92 300 1234567");
+    expect(mapped["destination"]).toBe("UK");
+    expect(mapped["level"]).toBe("Bachelor's");
+    expect(mapped["program"]).toBe("Computer Science & IT");
+    expect(mapped["message"]).toContain("Language test: IELTS");
+    expect(mapped["message"]).toContain("Mode of counselling:");
+    expect(mapped["message"]).toContain("Mode of funding:");
+    expect(mapped["message"]).toContain("Marketing updates: opted in");
+    expect(mapped["message"]).toContain("Prefer evenings");
+    expect(validateConsultationRequest(mapped).success).toBe(true);
+  });
+});
 
 describe("consultation validation", () => {
   it("rejects incomplete submissions", () => {

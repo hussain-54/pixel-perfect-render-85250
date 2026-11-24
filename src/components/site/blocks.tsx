@@ -1,16 +1,19 @@
 import { useState } from "react";
 import { Link } from "@tanstack/react-router";
-import { ArrowRight, CheckCircle2, MapPin, Award, CalendarDays } from "lucide-react";
+import { ArrowRight, CheckCircle2, MapPin, Award, CalendarDays, Quote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { Initials, fmtDate } from "@/components/common";
 import { StatusBadge } from "@/components/StatusBadge";
-import { fmtDate } from "@/components/common";
 import { siteContact } from "@/data/contact";
+import { FREE_CONSULTATION_HASH } from "@/data/navigation";
+import { mapConsultationFormToPayload } from "@/lib/consultation";
 import { submitConsultationRequest } from "@/services";
-import { destinations } from "@/data/site";
+import { destinations, programCategories, stories } from "@/data/site";
 import type { University, Scholarship } from "@/types";
+import { cn } from "@/lib/utils";
 
 /** Honest disclosure for mock/sample catalogue listings (not a live CMS inventory). */
 export function CatalogueSampleNotice({ kind }: { kind: "universities" | "scholarships" }) {
@@ -166,7 +169,42 @@ export function ScholarshipCard({ s }: { s: Scholarship }) {
 }
 
 const field = "h-11";
-export function ConsultationForm() {
+const selectClass =
+  "h-11 w-full rounded-md border border-input bg-white px-3 text-sm text-navy focus-visible:border-royal/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30";
+
+const QUALIFICATIONS = [
+  "Matric / O-Levels",
+  "Intermediate / A-Levels",
+  "Bachelor's",
+  "Master's",
+  "PhD",
+  "Other",
+] as const;
+
+const LANGUAGE_TESTS = [
+  "Not taken yet",
+  "IELTS",
+  "TOEFL",
+  "PTE",
+  "Duolingo",
+  "Other / Not required",
+] as const;
+
+const COUNSELLING_MODES = [
+  "In-person (Faisalabad office)",
+  "Online / Video call",
+  "Phone",
+] as const;
+
+const FUNDING_MODES = [
+  "Self-funded",
+  "Family support",
+  "Scholarship / funding search",
+  "Education loan",
+  "Not sure yet",
+] as const;
+
+export function ConsultationForm({ className }: { className?: string }) {
   const [doneRef, setDoneRef] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -176,7 +214,7 @@ export function ConsultationForm() {
   if (doneRef)
     return (
       <div
-        className="panel flex flex-col items-center p-8 text-center md:p-10"
+        className={cn("panel flex flex-col items-center p-8 text-center md:p-10", className)}
         role="status"
         aria-live="polite"
       >
@@ -202,14 +240,20 @@ export function ConsultationForm() {
 
   return (
     <form
-      className="panel grid gap-4 p-5 sm:grid-cols-2 sm:p-6 md:gap-5 md:p-8"
+      className={cn("panel grid gap-4 p-5 sm:grid-cols-2 sm:p-6 md:gap-5 md:p-8", className)}
       noValidate
       onSubmit={async (e) => {
         e.preventDefault();
         setError(null);
         setBusy(true);
         try {
-          const data = Object.fromEntries(new FormData(e.currentTarget)) as Record<string, string>;
+          const form = e.currentTarget;
+          const raw = Object.fromEntries(new FormData(form));
+          if (raw["privacyConsent"] !== "on" && raw["privacyConsent"] !== "true") {
+            setError("Please accept the Terms and Privacy Policy to continue.");
+            return;
+          }
+          const data = mapConsultationFormToPayload(raw);
           const {
             validateConsultationRequest,
             resolveConsultationReference,
@@ -233,20 +277,38 @@ export function ConsultationForm() {
           setError(ui.error ?? "Unable to save your request. Please try again.");
         } catch (err) {
           const { publicConsultationErrorMessage } = await import("@/lib/consultation");
-          const raw = err instanceof Error ? err.message : "";
-          setError(publicConsultationErrorMessage(raw));
+          const rawMsg = err instanceof Error ? err.message : "";
+          setError(publicConsultationErrorMessage(rawMsg));
         } finally {
           setBusy(false);
         }
       }}
     >
       <div className="sm:col-span-2">
-        <h3 className="font-display text-2xl font-semibold text-navy">Book Free Consultation</h3>
-        <p className="mt-1 text-sm text-muted-foreground">Takes less than two minutes.</p>
+        <h3 className="font-display text-2xl font-semibold text-navy">Get Free Consultation</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Share your goals — a consultant will respond within one working day.
+        </p>
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="name">Full Name</Label>
-        <Input id="name" name="name" required autoComplete="name" className={field} />
+        <Label htmlFor="firstName">First Name</Label>
+        <Input
+          id="firstName"
+          name="firstName"
+          required
+          autoComplete="given-name"
+          className={field}
+        />
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="lastName">Last Name</Label>
+        <Input
+          id="lastName"
+          name="lastName"
+          required
+          autoComplete="family-name"
+          className={field}
+        />
       </div>
       <div className="space-y-1.5">
         <Label htmlFor="email">Email</Label>
@@ -260,48 +322,112 @@ export function ConsultationForm() {
         />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="phone">Phone</Label>
+        <Label htmlFor="phone">Mobile Number</Label>
         <Input id="phone" name="phone" type="tel" required autoComplete="tel" className={field} />
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="wa">WhatsApp</Label>
-        <Input id="wa" name="whatsapp" type="tel" className={field} />
+        <Label htmlFor="qualification">Last Qualification</Label>
+        <select id="qualification" name="qualification" className={selectClass} required>
+          <option value="">Select qualification</option>
+          {QUALIFICATIONS.map((q) => (
+            <option key={q} value={q}>
+              {q}
+            </option>
+          ))}
+        </select>
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="dest">Preferred Destination</Label>
-        <select
-          id="dest"
-          name="destination"
-          className="h-11 w-full rounded-md border border-input bg-white px-3 text-sm text-navy focus-visible:border-royal/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-        >
+        <Label htmlFor="dest">Preferred Country</Label>
+        <select id="dest" name="destination" className={selectClass} required>
+          <option value="">Select country</option>
           {destinations.map((d) => (
-            <option key={d.name}>{d.name}</option>
+            <option key={d.name} value={d.name}>
+              {d.name}
+            </option>
           ))}
         </select>
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="level">Study Level</Label>
-        <select
-          id="level"
-          name="level"
-          className="h-11 w-full rounded-md border border-input bg-white px-3 text-sm text-navy focus-visible:border-royal/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/30"
-        >
-          {["Foundation", "Bachelor's", "Master's", "PhD"].map((l) => (
-            <option key={l}>{l}</option>
+        <Label htmlFor="prog">Field of Interest</Label>
+        <select id="prog" name="program" className={selectClass}>
+          <option value="">Select field</option>
+          {programCategories.map((p) => (
+            <option key={p.name} value={p.name}>
+              {p.name}
+            </option>
           ))}
         </select>
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="prog">Interested Program</Label>
-        <Input id="prog" name="program" className={field} />
+        <Label htmlFor="languageTest">Language Test</Label>
+        <select id="languageTest" name="languageTest" className={selectClass}>
+          {LANGUAGE_TESTS.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </select>
       </div>
       <div className="space-y-1.5">
-        <Label htmlFor="date">Preferred Date</Label>
-        <Input id="date" name="date" type="date" className={field} />
+        <Label htmlFor="counsellingMode">Mode of Counselling</Label>
+        <select id="counsellingMode" name="counsellingMode" className={selectClass}>
+          {COUNSELLING_MODES.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
+      </div>
+      <div className="space-y-1.5">
+        <Label htmlFor="fundingMode">Mode of Funding</Label>
+        <select id="fundingMode" name="fundingMode" className={selectClass}>
+          {FUNDING_MODES.map((m) => (
+            <option key={m} value={m}>
+              {m}
+            </option>
+          ))}
+        </select>
       </div>
       <div className="space-y-1.5 sm:col-span-2">
-        <Label htmlFor="msg">Message</Label>
-        <Textarea id="msg" name="message" rows={3} />
+        <Label htmlFor="notes">Additional notes (optional)</Label>
+        <Textarea id="notes" name="notes" rows={2} />
+      </div>
+      <div className="space-y-3 sm:col-span-2">
+        <label className="flex items-start gap-2.5 text-sm text-navy">
+          <input
+            type="checkbox"
+            name="privacyConsent"
+            value="on"
+            required
+            className="mt-1 h-4 w-4 shrink-0 rounded border-input"
+          />
+          <span>
+            I agree to the{" "}
+            <Link
+              to="/terms"
+              className="font-semibold text-royal underline-offset-2 hover:underline"
+            >
+              Terms
+            </Link>{" "}
+            and{" "}
+            <Link
+              to="/privacy"
+              className="font-semibold text-royal underline-offset-2 hover:underline"
+            >
+              Privacy Policy
+            </Link>
+            .
+          </span>
+        </label>
+        <label className="flex items-start gap-2.5 text-sm text-muted-foreground">
+          <input
+            type="checkbox"
+            name="marketingConsent"
+            value="on"
+            className="mt-1 h-4 w-4 shrink-0 rounded border-input"
+          />
+          <span>Send me study-abroad updates and reminders (optional).</span>
+        </label>
       </div>
       {error && (
         <div className="space-y-2 sm:col-span-2" role="alert" aria-live="assertive">
@@ -309,13 +435,34 @@ export function ConsultationForm() {
         </div>
       )}
       <Button type="submit" size="lg" className="sm:col-span-2" disabled={busy} aria-busy={busy}>
-        {busy ? "Sending…" : error ? "Try again" : "Request Consultation"}
+        {busy ? "Sending…" : error ? "Try again" : "Enquire Now"}
       </Button>
       <p className="text-xs text-muted-foreground sm:col-span-2">
-        We validate your details before sending. Your request is only confirmed after it is saved
-        securely.
+        Your enquiry is only confirmed after it is saved securely. We never claim success without a
+        confirmed submission.
       </p>
     </form>
+  );
+}
+
+export function SuccessStoryCard({ story }: { story: (typeof stories)[number] }) {
+  return (
+    <figure className="flex h-full flex-col border border-border bg-background p-5 md:p-6">
+      <Quote className="h-5 w-5 text-bright" aria-hidden />
+      <blockquote className="mt-3 flex-1 font-display text-lg leading-snug text-navy md:text-xl">
+        “{story.quote}”
+      </blockquote>
+      <figcaption className="mt-6 flex items-center gap-3 border-t border-border pt-4">
+        <Initials name={story.name} />
+        <div className="min-w-0 text-sm">
+          <p className="font-semibold text-navy">{story.name}</p>
+          <p className="text-muted-foreground">
+            {story.from} → {story.to}
+          </p>
+          <p className="mt-0.5 text-xs font-medium text-royal">{story.program}</p>
+        </div>
+      </figcaption>
+    </figure>
   );
 }
 
@@ -335,7 +482,9 @@ export function CtaBand() {
         </div>
         <div className="flex flex-wrap gap-3">
           <Button asChild variant="bright" size="lg">
-            <Link to="/contact">Book Free Consultation</Link>
+            <Link to="/" hash={FREE_CONSULTATION_HASH}>
+              Free Consultation
+            </Link>
           </Button>
           {showWhatsApp ? (
             <Button
@@ -349,7 +498,7 @@ export function CtaBand() {
                 rel="noopener noreferrer"
                 aria-label="Chat on WhatsApp with Global Roots Consultants"
               >
-                WhatsApp us
+                Need Help? WhatsApp
               </a>
             </Button>
           ) : (

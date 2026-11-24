@@ -147,8 +147,22 @@ function Footer({ cmsFooter }: { cmsFooter?: CmsFooterSettings }) {
                   </Link>
                 </li>
                 <li>
-                  <Link to="/contact" className="transition-colors hover:text-bright">
-                    Consultation
+                  <Link
+                    to="/"
+                    hash="free-consultation"
+                    className="transition-colors hover:text-bright"
+                  >
+                    Free Consultation
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/universities" className="transition-colors hover:text-bright">
+                    Universities
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/programs" className="transition-colors hover:text-bright">
+                    Programs
                   </Link>
                 </li>
               </ul>
@@ -169,8 +183,22 @@ function Footer({ cmsFooter }: { cmsFooter?: CmsFooterSettings }) {
                   </Link>
                 </li>
                 <li>
+                  <Link
+                    to="/blog"
+                    search={{ category: "", q: "", page: 1 }}
+                    className="transition-colors hover:text-bright"
+                  >
+                    Blog
+                  </Link>
+                </li>
+                <li>
                   <Link to="/resources" className="transition-colors hover:text-bright">
                     Resources
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/scholarships" className="transition-colors hover:text-bright">
+                    Scholarships
                   </Link>
                 </li>
               </ul>

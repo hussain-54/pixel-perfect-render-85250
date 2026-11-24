@@ -2,6 +2,7 @@ import { Link } from "@tanstack/react-router";
 import { Mail, MapPin, Phone } from "lucide-react";
 import { SocialLinks } from "@/components/site/SocialLinks";
 import { getConfiguredSocialLinks, siteContact, utilityQuickLinks } from "@/data/contact";
+import { FREE_CONSULTATION_HASH } from "@/data/navigation";
 import { cn } from "@/lib/utils";
 
 export function UtilityBar({ className }: { className?: string }) {
@@ -68,6 +69,13 @@ export function UtilityBar({ className }: { className?: string }) {
           ) : null}
 
           <div className="hidden items-center gap-3 xl:flex">
+            <Link
+              to="/"
+              hash={FREE_CONSULTATION_HASH}
+              className="whitespace-nowrap font-medium text-navy-foreground/85 transition-colors hover:text-bright"
+            >
+              Free Consultation
+            </Link>
             {utilityQuickLinks.map((link) => (
               <Link
                 key={link.to}

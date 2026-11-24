@@ -64,6 +64,29 @@ export type MainNavItem =
   | { id: "success"; label: string; type: "link"; to: AppPath }
   | { id: "blog"; label: string; type: "link"; to: AppPath };
 
+/**
+ * Audit-aligned primary header navigation (six simple links).
+ * Mega menus remain available for footer / secondary discovery via `megaMenus`.
+ */
+export type PrimaryNavItem = {
+  id: "home" | "about" | "services" | "destinations" | "success" | "contact";
+  label: string;
+  to: AppPath;
+};
+
+export const primaryNavigation: PrimaryNavItem[] = [
+  { id: "home", label: "Home", to: "/" },
+  { id: "about", label: "About Us", to: "/about" },
+  { id: "services", label: "Services", to: "/services" },
+  { id: "destinations", label: "Destinations", to: "/destinations" },
+  { id: "success", label: "Success Stories", to: "/success-stories" },
+  { id: "contact", label: "Contact Us", to: "/contact" },
+];
+
+/** Homepage free-consultation anchor — used by header CTA and utility links. */
+export const FREE_CONSULTATION_HASH = "free-consultation" as const;
+
+/** Legacy mega-oriented navigation (kept for CMS mega panels / secondary menus). */
 export const mainNavigation: MainNavItem[] = [
   { id: "home", label: "Home", type: "link", to: "/" },
   { id: "programs", label: "Programs", type: "mega" },

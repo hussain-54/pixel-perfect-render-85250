@@ -66,6 +66,44 @@ export function validateConsultationRequest(data: Record<string, string>) {
   });
 }
 
+/**
+ * Map audit-aligned public form fields into the existing consultation_requests contract.
+ * Extra UI fields are folded into `message` — no new DB columns.
+ */
+export function mapConsultationFormToPayload(
+  raw: Record<string, FormDataEntryValue>,
+): Record<string, string> {
+  const str = (key: string) => String(raw[key] ?? "").trim();
+  const first = str("firstName");
+  const last = str("lastName");
+  const name = [first, last].filter(Boolean).join(" ").trim() || str("name");
+  const phone = str("phone");
+  const whatsapp = str("whatsapp") || phone;
+  const extras = [
+    str("languageTest") ? `Language test: ${str("languageTest")}` : "",
+    str("counsellingMode") ? `Mode of counselling: ${str("counsellingMode")}` : "",
+    str("fundingMode") ? `Mode of funding: ${str("fundingMode")}` : "",
+    raw["marketingConsent"] === "on" || raw["marketingConsent"] === "true"
+      ? "Marketing updates: opted in"
+      : "",
+    str("notes"),
+  ]
+    .filter(Boolean)
+    .join("\n");
+
+  return {
+    name,
+    email: str("email"),
+    phone,
+    whatsapp,
+    destination: str("destination"),
+    level: str("qualification") || str("level"),
+    program: str("program"),
+    date: str("date"),
+    message: extras,
+  };
+}
+
 export function newConsultationReference(): string {
   const token = Math.random().toString(36).slice(2, 8).toUpperCase();
   return `REQ-${token}`;

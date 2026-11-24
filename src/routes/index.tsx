@@ -1,37 +1,14 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { ArrowRight, Quote, ShieldCheck } from "lucide-react";
+import { ArrowRight, ShieldCheck } from "lucide-react";
 import hero from "@/assets/hero.jpg";
-import consult from "@/assets/consult.jpg";
 import { SiteLayout, SectionHead } from "@/components/site/SiteLayout";
-import { DestinationCard, CtaBand } from "@/components/site/blocks";
-import { GoogleReviewsSection } from "@/components/site/GoogleReviewsSection";
+import { ConsultationForm, DestinationCard, SuccessStoryCard } from "@/components/site/blocks";
 import { OfficeLocationMap } from "@/components/site/OfficeLocationMap";
-import { UniversityLogoCarousel } from "@/components/site/UniversityLogoCarousel";
 import { Button } from "@/components/ui/button";
 import { siteContact } from "@/data/contact";
+import { FREE_CONSULTATION_HASH } from "@/data/navigation";
 import { usePublishedCms } from "@/hooks/use-published-cms";
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from "@/components/ui/accordion";
-import {
-  topDestinations,
-  europeanDestinations,
-  programCategories,
-  services,
-  visaSteps,
-  howItWorks,
-  whyUs,
-  stories,
-  faqs,
-  resources,
-  stats,
-  trustSignals,
-  featuredScholarships,
-} from "@/data/site";
-import { fmtDate } from "@/components/common";
+import { topDestinations, services, howItWorks, stories, stats, trustSignals } from "@/data/site";
 import { pageHead } from "@/lib/seo";
 
 export const Route = createFileRoute("/")({
@@ -58,10 +35,16 @@ function Home() {
     heroSection?.body ||
     "Discover universities abroad and get clear guidance from application through visa — starting with a free consultation.";
   const heroEyebrow = heroSection?.eyebrow || "Global Education & Visa Consultants";
-  const heroCtaLabel = heroSection?.primaryCta?.label || "Book Free Consultation";
-  const heroCtaHref = heroSection?.primaryCta?.href || "/contact";
+  const heroCtaHref = heroSection?.primaryCta?.href || `/#${FREE_CONSULTATION_HASH}`;
   const heroSecondaryLabel = heroSection?.secondaryCta?.label || "Explore Study Destinations";
   const heroSecondaryHref = heroSection?.secondaryCta?.href || "/destinations";
+  const useConsultHash =
+    !heroSection?.primaryCta?.href ||
+    heroCtaHref === "/contact" ||
+    heroCtaHref.endsWith(`#${FREE_CONSULTATION_HASH}`);
+  const heroCtaLabel = useConsultHash
+    ? "Free Consultation"
+    : heroSection?.primaryCta?.label || "Free Consultation";
 
   return (
     <SiteLayout>
@@ -91,7 +74,11 @@ function Home() {
             </p>
             <div className="mt-7 flex flex-wrap gap-3">
               <Button asChild variant="bright" size="lg">
-                {heroCtaHref.startsWith("/") ? (
+                {useConsultHash ? (
+                  <Link to="/" hash={FREE_CONSULTATION_HASH}>
+                    {heroCtaLabel}
+                  </Link>
+                ) : heroCtaHref.startsWith("/") ? (
                   <Link to={heroCtaHref as "/contact"}>{heroCtaLabel}</Link>
                 ) : (
                   <a href={heroCtaHref}>{heroCtaLabel}</a>
@@ -107,9 +94,9 @@ function Home() {
                     href={siteContact.whatsapp.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label="Chat on WhatsApp with Global Roots Consultants"
+                    aria-label="Need help? Chat on WhatsApp with Global Roots Consultants"
                   >
-                    WhatsApp us
+                    Need Help? WhatsApp
                   </a>
                 </Button>
               ) : null}
@@ -142,10 +129,10 @@ function Home() {
         </section>
       ) : null}
 
-      {/* Trust */}
+      {/* Compact trust — does not interrupt the audit sequence */}
       {sectionVisible("trust") ? (
         <section className="border-b">
-          <div className="container-page flex flex-wrap items-center justify-center gap-x-10 gap-y-3 py-6 text-sm font-semibold text-muted-foreground">
+          <div className="container-page flex flex-wrap items-center justify-center gap-x-10 gap-y-3 py-5 text-sm font-semibold text-muted-foreground">
             {trustSignals.map((signal, i) => (
               <span key={signal} className="flex items-center gap-2">
                 {i === 0 ? <ShieldCheck className="h-4 w-4 text-royal" aria-hidden /> : null}
@@ -156,23 +143,16 @@ function Home() {
         </section>
       ) : null}
 
-      {/* Destinations */}
+      {/* 1. Study Destinations */}
       {sectionVisible("destinations") ? (
         <section className="container-page section-y">
           <SectionHead
-            eyebrow={
-              cms.home.sections.find((s) => s.id === "destinations")?.eyebrow ||
-              "Top study destinations"
-            }
-            title={
-              cms.home.sections.find((s) => s.id === "destinations")?.title ||
-              "Where will your degree take you?"
-            }
+            eyebrow={sectionOf("destinations")?.eyebrow || "Study destinations"}
+            title={sectionOf("destinations")?.title || "Where will your degree take you?"}
             action={
               <Button asChild variant="outline">
                 <Link to="/destinations">
-                  {cms.home.sections.find((s) => s.id === "destinations")?.primaryCta?.label ||
-                    "All destinations"}{" "}
+                  {sectionOf("destinations")?.primaryCta?.label || "Explore destinations"}{" "}
                   <ArrowRight />
                 </Link>
               </Button>
@@ -186,149 +166,7 @@ function Home() {
         </section>
       ) : null}
 
-      {/* European destinations — blue-hour card treatment */}
-      {sectionVisible("european_destinations") ? (
-        <section className="section-y bg-surface">
-          <div className="container-page">
-            <SectionHead
-              eyebrow={sectionOf("european_destinations")?.eyebrow || "European destinations"}
-              title={sectionOf("european_destinations")?.title || "Study in Europe with confidence"}
-              body={
-                sectionOf("european_destinations")?.body ||
-                "Explore English-taught programmes, scholarships, and post-study pathways across key European destinations."
-              }
-              action={
-                <Button asChild variant="outline">
-                  <Link to="/destinations">
-                    {sectionOf("european_destinations")?.primaryCta?.label || "All destinations"}{" "}
-                    <ArrowRight />
-                  </Link>
-                </Button>
-              }
-            />
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:gap-5">
-              {europeanDestinations.map((d) => (
-                <DestinationCard key={`eu-${d.name}`} d={d} variant="feature" />
-              ))}
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      {/* Why */}
-      {sectionVisible("why_us") ? (
-        <section className="section-y bg-surface">
-          <div className="container-page grid items-center gap-10 lg:grid-cols-2 lg:gap-14">
-            <img
-              src={consult}
-              alt="Consultant advising a student"
-              loading="lazy"
-              width={1024}
-              height={768}
-              className="aspect-[4/3] w-full rounded-lg object-cover"
-            />
-            <div>
-              <SectionHead
-                eyebrow={sectionOf("why_us")?.eyebrow || "Why Global Roots"}
-                title={sectionOf("why_us")?.title || "A consultancy built on trust and results"}
-              />
-              <div className="grid gap-5 sm:grid-cols-2">
-                {whyUs.map((w, i) => (
-                  <div key={w.title} className="border-t border-royal/40 pt-3.5">
-                    <span className="text-[0.6875rem] font-semibold text-royal">0{i + 1}</span>
-                    <h3 className="mt-1 font-sans text-[0.95rem] font-semibold text-navy">
-                      {w.title}
-                    </h3>
-                    <p className="mt-1 text-sm leading-relaxed text-muted-foreground">{w.body}</p>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      {/* Partnered universities carousel */}
-      {sectionVisible("partners") ? <UniversityLogoCarousel /> : null}
-
-      {/* Programs */}
-      {sectionVisible("programs") ? (
-        <section className="section-y bg-surface">
-          <div className="container-page">
-            <SectionHead
-              eyebrow={sectionOf("programs")?.eyebrow || "Popular programs"}
-              title={sectionOf("programs")?.title || "Find the field that fits your future"}
-              action={
-                <Button asChild variant="outline">
-                  <Link to="/programs">
-                    {sectionOf("programs")?.primaryCta?.label || "All programs"} <ArrowRight />
-                  </Link>
-                </Button>
-              }
-            />
-            <div className="grid gap-px overflow-hidden rounded-lg border border-border bg-border sm:grid-cols-2 lg:grid-cols-4">
-              {programCategories.map((p) => (
-                <Link
-                  key={p.name}
-                  to="/programs"
-                  className="group bg-background p-5 transition-colors hover:bg-accent/70 md:p-6"
-                >
-                  <p className="text-[0.6875rem] font-medium text-muted-foreground">
-                    {p.count.toLocaleString()} programs
-                  </p>
-                  <h3 className="mt-1.5 font-sans text-[0.95rem] font-semibold text-navy">
-                    {p.name}
-                  </h3>
-                  <p className="mt-1 text-sm text-muted-foreground">{p.examples}</p>
-                </Link>
-              ))}
-            </div>
-          </div>
-        </section>
-      ) : null}
-
-      {/* Scholarships — editorial list, not identical card grid */}
-      {sectionVisible("scholarships") ? (
-        <section className="container-page section-y">
-          <SectionHead
-            eyebrow={sectionOf("scholarships")?.eyebrow || "Featured Scholarships"}
-            title={sectionOf("scholarships")?.title || "Funding that makes it possible"}
-            body={
-              sectionOf("scholarships")?.body ||
-              "Sample funding highlights for exploration — confirm eligibility and deadlines with a consultant."
-            }
-            action={
-              <Button asChild variant="outline">
-                <Link to="/scholarships">
-                  {sectionOf("scholarships")?.primaryCta?.label || "All scholarships"}{" "}
-                  <ArrowRight />
-                </Link>
-              </Button>
-            }
-          />
-          <ul className="divide-y border-y border-border">
-            {featuredScholarships.map((s) => (
-              <li
-                key={s.name}
-                className="flex flex-col gap-3 py-5 sm:flex-row sm:items-center sm:justify-between"
-              >
-                <div className="min-w-0">
-                  <p className="mb-1.5 text-xs font-semibold uppercase tracking-[0.12em] text-royal">
-                    {s.country}
-                  </p>
-                  <p className="font-semibold text-navy">{s.name}</p>
-                  <p className="mt-0.5 text-sm text-muted-foreground">{s.summary}</p>
-                </div>
-                <Button asChild variant="outline" size="sm" className="shrink-0 self-start">
-                  <Link to="/contact">Enquire</Link>
-                </Button>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {/* Services */}
+      {/* 2. Our Services */}
       {sectionVisible("services") ? (
         <section className="section-y bg-navy text-navy-foreground">
           <div className="container-page">
@@ -350,51 +188,27 @@ function Home() {
                 </div>
               ))}
             </div>
+            <div className="mt-8">
+              <Button asChild variant="outline-light">
+                <Link to="/services">
+                  View all services <ArrowRight />
+                </Link>
+              </Button>
+            </div>
           </div>
         </section>
       ) : null}
 
-      {/* Visa */}
-      {sectionVisible("visa") ? (
-        <section className="container-page section-y grid gap-10 lg:grid-cols-[1fr_1.15fr] lg:gap-14">
-          <div>
-            <SectionHead
-              eyebrow={sectionOf("visa")?.eyebrow || "Student visa support"}
-              title={sectionOf("visa")?.title || "Embassy-ready files, every time"}
-              body={
-                sectionOf("visa")?.body ||
-                "Our visa officers handle the details that decide outcomes."
-              }
-            />
-            <Button asChild>
-              <Link to="/student-visa">
-                {sectionOf("visa")?.primaryCta?.label || "Talk to a Visa Consultant"}
-              </Link>
-            </Button>
-          </div>
-          <ol className="space-y-0 divide-y border-y border-border">
-            {visaSteps.map((v, i) => (
-              <li key={v.title} className="flex gap-4 py-4">
-                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent text-xs font-bold text-royal">
-                  {i + 1}
-                </span>
-                <div>
-                  <h3 className="font-sans text-sm font-semibold text-navy">{v.title}</h3>
-                  <p className="mt-0.5 text-sm text-muted-foreground">{v.body}</p>
-                </div>
-              </li>
-            ))}
-          </ol>
-        </section>
-      ) : null}
-
-      {/* How it works */}
+      {/* 3. Our Process — Step by Step */}
       {sectionVisible("how_it_works") ? (
         <section className="section-y bg-surface">
           <div className="container-page">
             <SectionHead
-              eyebrow={sectionOf("how_it_works")?.eyebrow || "How it works"}
-              title={sectionOf("how_it_works")?.title || "Four clear steps"}
+              eyebrow={sectionOf("how_it_works")?.eyebrow || "Our process"}
+              title={
+                sectionOf("how_it_works")?.title || "Step by step — how GlobalRoots assists you"
+              }
+              body="Clear guidance at every stage. We do not guarantee admission or visa outcomes — we prepare strong, complete applications."
             />
             <div className="grid gap-8 md:grid-cols-4 md:gap-6">
               {howItWorks.map((h, i) => (
@@ -414,91 +228,57 @@ function Home() {
         </section>
       ) : null}
 
-      {/* Stories */}
-      {sectionVisible("stories") ? (
+      {/* 4. Student Success Stories */}
+      {sectionVisible("stories") && stories.length > 0 ? (
         <section className="container-page section-y">
           <SectionHead
-            eyebrow={sectionOf("stories")?.eyebrow || "Success stories"}
-            title={sectionOf("stories")?.title || "Students who made it"}
+            eyebrow={sectionOf("stories")?.eyebrow || "Student success stories"}
+            title={sectionOf("stories")?.title || "Students who made it abroad"}
+            body="Authentic student journeys shared for public display. No fabricated visas or stock photos presented as real students."
             action={
               <Button asChild variant="outline">
                 <Link to="/success-stories">
-                  More stories <ArrowRight />
+                  View all success stories <ArrowRight />
                 </Link>
               </Button>
             }
           />
-          <div className="grid gap-6 md:grid-cols-2 md:gap-10">
-            {stories.slice(0, 2).map((s) => (
-              <figure key={s.name} className="border-t border-royal/30 pt-6">
-                <Quote className="h-5 w-5 text-bright" aria-hidden />
-                <blockquote className="mt-3 font-display text-lg leading-snug text-navy md:text-xl">
-                  “{s.quote}”
-                </blockquote>
-                <figcaption className="mt-5 text-sm">
-                  <b className="font-semibold text-navy">{s.name}</b>{" "}
-                  <span className="text-muted-foreground">
-                    · {s.program}, {s.to}
-                  </span>
-                </figcaption>
-              </figure>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 lg:gap-5">
+            {stories.slice(0, 4).map((s) => (
+              <SuccessStoryCard key={s.name} story={s} />
             ))}
           </div>
         </section>
       ) : null}
 
-      {sectionVisible("reviews") ? <GoogleReviewsSection /> : null}
-
-      {/* Resources + FAQ */}
-      {sectionVisible("faq") ? (
-        <section className="section-y bg-surface">
-          <div className="container-page grid gap-10 lg:grid-cols-2 lg:gap-14">
-            <div>
-              <SectionHead eyebrow="Resources" title="Guides & insights" />
-              <ul className="divide-y border-y border-border bg-background">
-                {resources.slice(0, 4).map((r) => (
-                  <li key={r.title}>
-                    <Link
-                      to="/resources"
-                      className="flex items-center justify-between gap-4 py-4 transition-colors hover:bg-accent/50"
-                    >
-                      <div>
-                        <p className="text-[0.6875rem] font-semibold text-royal">
-                          {r.tag} · {fmtDate(r.date)}
-                        </p>
-                        <p className="mt-0.5 font-semibold text-navy">{r.title}</p>
-                      </div>
-                      <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground" />
-                    </Link>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <SectionHead
-                eyebrow={sectionOf("faq")?.eyebrow || "FAQ"}
-                title={sectionOf("faq")?.title || "Questions students ask"}
-              />
-              <Accordion type="single" collapsible className="border-y border-border bg-background">
-                {faqs.map((f, i) => (
-                  <AccordionItem key={i} value={`f${i}`} className="border-border px-0">
-                    <AccordionTrigger className="py-4 text-left text-sm font-semibold text-navy hover:no-underline">
-                      {f.q}
-                    </AccordionTrigger>
-                    <AccordionContent className="pb-4 text-sm text-muted-foreground">
-                      {f.a}
-                    </AccordionContent>
-                  </AccordionItem>
-                ))}
-              </Accordion>
-            </div>
+      {/* 5. Free Consultation + Google Maps */}
+      <section
+        id={FREE_CONSULTATION_HASH}
+        className="section-y scroll-mt-24 border-t border-border bg-surface"
+        aria-labelledby="free-consultation-heading"
+      >
+        <div className="container-page">
+          <div className="mb-8 max-w-2xl md:mb-10">
+            <p className="text-[0.6875rem] font-semibold uppercase tracking-[0.16em] text-royal">
+              Visit & enquire
+            </p>
+            <h2
+              id="free-consultation-heading"
+              className="mt-2.5 font-display text-2xl font-semibold text-navy md:text-3xl"
+            >
+              Free consultation at our Faisalabad office
+            </h2>
+            <p className="mt-2 text-sm text-muted-foreground md:text-base">
+              Meet us in person or enquire online. One official office location —{" "}
+              {siteContact.location.fullDisplay}.
+            </p>
           </div>
-        </section>
-      ) : null}
-
-      {sectionVisible("map") ? <OfficeLocationMap /> : null}
-
-      {sectionVisible("cta") ? <CtaBand /> : null}
+          <div className="grid items-stretch gap-8 lg:grid-cols-2 lg:gap-10">
+            <OfficeLocationMap variant="panel" />
+            <ConsultationForm />
+          </div>
+        </div>
+      </section>
     </SiteLayout>
   );
 }
